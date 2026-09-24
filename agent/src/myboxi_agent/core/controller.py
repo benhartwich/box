@@ -176,6 +176,10 @@ class Controller:
         if success:
             self.announcer.announce(Prompt.PAIRING_DONE)
 
+    def save_position(self) -> None:
+        """Persist the current position, e.g. on shutdown (CLAUDE.md rule 5)."""
+        self._save(emit=False)
+
     # --- state ------------------------------------------------------------------------------
 
     def status(self) -> Status:

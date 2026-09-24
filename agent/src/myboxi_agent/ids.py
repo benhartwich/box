@@ -17,3 +17,13 @@ def uuid7() -> uuid.UUID:
     rand_b = rand & ((1 << 62) - 1)  # 62 bits
     value = ((ts_ms & ((1 << 48) - 1)) << 80) | (0x7 << 76) | (rand_a << 64) | (0b10 << 62) | rand_b
     return uuid.UUID(int=value)
+
+
+_CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+
+
+def ulid(ms: int | None = None) -> str:
+    """ULID for event ids (SPEC §6.0): 48-bit milliseconds + 80 random bits, Crockford Base32."""
+    stamp = (time.time_ns() // 1_000_000) if ms is None else ms
+    value = ((stamp & ((1 << 48) - 1)) << 80) | int.from_bytes(os.urandom(10), "big")
+    return "".join(_CROCKFORD[(value >> (5 * i)) & 31] for i in reversed(range(26)))

@@ -1,0 +1,47 @@
+[tool.uv.workspace]
+members = ["server"]
+
+[tool.uv]
+python-preference = "only-system"
+python-downloads = "never"
+
+[dependency-groups]
+dev = [
+  "pytest>=8.4",
+  "pytest-asyncio>=1.2",
+  "ruff>=0.13",
+  "pyright[nodejs]>=1.1.405",
+  "httpx>=0.28",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+extend-exclude = ["server/migrations/versions"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "ASYNC", "S", "DTZ", "RUF", "PT", "TID", "C4", "RET", "PTH"]
+ignore = ["S311"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["box_server", "box_protocol"]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["S101", "S105", "S106", "S603", "S607"]
+"tools/**" = ["S101", "S603", "S607"]
+
+[tool.pyright]
+typeCheckingMode = "strict"
+pythonVersion = "3.13"
+venvPath = "."
+venv = ".venv"
+include = ["server", "tools"]
+exclude = ["**/__pycache__", ".venv", "server/migrations/versions"]
+reportMissingTypeStubs = false
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+testpaths = ["server/tests"]
+addopts = "--import-mode=importlib"

@@ -10,7 +10,7 @@ dependencies = [
   "sqlalchemy[asyncio]>=2.0.43",
   "asyncpg>=0.30",
   "alembic>=1.16",
-  "procrastinate>=3.5",
+  "procrastinate==3.10.0",  # schema vendored in migrations/sql
   "argon2-cffi>=25.1",
   "jinja2>=3.1.6",
   "pydantic>=2.11",

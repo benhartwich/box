@@ -1,4 +1,4 @@
-# Box — Spezifikation v0.2: Datenmodell & Geräteprotokoll
+# Box — Spezifikation v0.3: Datenmodell & Geräteprotokoll
 
 Status: Entwurf · Stand: 2026-09-24 · Änderungen: §14
 Scope: Der Vertrag zwischen **Box-Agent** (Raspberry Pi) und **Server**.
@@ -79,10 +79,11 @@ Alle IDs sind UUIDv7 (zeitlich sortierbar), außer wo angegeben. Alle Tabellen h
 |---|---|---|---|
 | max_volume | int 0–100 | 55 | Harte Obergrenze, auch für Tasten |
 | start_volume | int 0–100 | 35 | Lautstärke nach Figur-Auflegen |
-| quiet_hours | json | null | `{ "start": "19:30", "end": "06:30", "max_volume": 25 }` oder `"lock": true` |
+| quiet_hours | json | null | `{ "start": "19:30", "end": "06:30", "max_volume": 25 }` oder `{ "start": "19:30", "end": "06:30", "lock": true }` — genau eines von `max_volume` und `lock`; `lock` = keine Wiedergabe |
 | sleep_timer_min | int | null | Automatisch pausieren nach N Minuten |
 | on_token_removed | enum | `pause` | `pause` \| `continue` |
 | locale | text | `de-AT` | Für TTS-Ansagen |
+| timezone | text | `Europe/Vienna` | IANA-Zeitzone, in der `quiet_hours` gelten |
 | providers_enabled | text[] | `["local","podcast"]` | `spotify` nur wenn auf der Box eingerichtet |
 
 ### 3.5 `token` (Figur)
@@ -123,9 +124,12 @@ content_id, position (int), asset_id, title, duration_ms.
 | id | uuid | |
 | tenant_id | uuid | |
 | sha256 | text | Hex. Primärer Identifier für Box und Cache |
-| mime | text | Auslieferungsformat: `audio/ogg; codecs=opus` |
+| mime | text | Auslieferungsformat: `audio/ogg; codecs=opus`; Cover-Bilder: `image/jpeg` |
 | bytes | bigint | |
-| storage_path | text | Relativer Pfad im Asset-Store, content-adressiert: `ab/cd/<sha256>.opus` |
+| storage_path | text | Relativer Pfad im Asset-Store, content-adressiert: `ab/cd/<sha256>.opus` (Cover: `ab/cd/<sha256>.jpg`) |
+| duration_ms | int | Nur Audio |
+
+Cover (`content.cover_asset_id`) sind Bild-Assets (JPEG, 512×512) und nur für die App bestimmt; sie erscheinen nicht im State (§5.4), weil die Box kein Display hat.
 
 Uploads werden serverseitig auf Opus (Mono, 48 kbit/s für Sprache, 96 kbit/s Stereo für Musik) transkodiert und loudness-normalisiert (EBU R128, −16 LUFS). Die Box bekommt nur transkodierte Assets.
 
@@ -206,17 +210,27 @@ Eine Änderung, deren Assets noch nicht vollständig vorliegen, landet in `stage
   "device_rev": 7,
   "upserts": {
     "token":        [ { "id": "...", "uid": "04A2B3C4D5E680", "label": "Bibi" } ],
-    "content":      [ { "id": "...", "kind": "collection", "title": "...", "rev": 3 } ],
-    "content_item": [ { "content_id": "...", "position": 0, "asset_sha256": "...", "title": "...", "duration_ms": 612000 } ],
+    "content":      [ { "id": "...", "kind": "collection", "title": "...", "rev": 3, "source": {} } ],
+    "content_item": [ { "content_id": "...", "position": 0, "asset_sha256": "...", "bytes": 3702144, "title": "...", "duration_ms": 612000 } ],
     "binding":      [ { "token_id": "...", "content_id": "...", "resume": true, "shuffle": false, "repeat": "off" } ]
   },
   "deletes": {
     "token": ["..."], "content": ["..."], "binding": ["token_id..."]
   },
-  "device_config": { "max_volume": 55, "start_volume": 35, "quiet_hours": null }
+  "device_config": {
+    "max_volume": 55, "start_volume": 35, "quiet_hours": null, "sleep_timer_min": null,
+    "on_token_removed": "pause", "locale": "de-AT", "timezone": "Europe/Vienna",
+    "providers_enabled": ["local", "podcast"]
+  }
 }
 ```
 Bei `full: true` ersetzt die Box ihren gesamten Mandanten-Ausschnitt; `deletes` fehlt dann.
+- Ein Snapshot enthält **alle** Figuren, Inhalte, Content-Items und Bindings des Mandanten. Welche Assets sie lädt, entscheidet die Box nach §4.1.
+- `content.source` wird immer mitgeliefert (§3.6); die Box braucht Feed-URL, Spotify-URI bzw. Stream-URL.
+- `content_item.bytes` ist die Größe des Assets, damit die Box Speicher planen und `storage_full.needed_mb` berechnen kann.
+- `device_config` wird immer vollständig übertragen (alle Felder aus §3.4).
+- `token.icon` und Cover werden nicht übertragen. Resume-Positionen sind (noch) nicht Teil des States.
+- Ein Server darf immer mit `full: true` antworten. Der Server-MVP (M1) liefert ausschließlich Snapshots.
 `content_item` wird pro `content` immer vollständig ersetzt, nicht einzeln gepatcht.
 
 ### 5.5 Konfliktregeln
@@ -233,7 +247,7 @@ Die Box hat keine eigene Konfigurations-UI, dadurch gibt es kaum echte Konflikte
 Pi Zero 2 W und Pi 4 haben keine Echtzeituhr. Nach einem Offline-Boot ist die Uhrzeit falsch.
 - Die Box führt ein Flag `time_trusted` (true nach erfolgreichem NTP-Sync seit dem Boot).
 - **Ruhezeiten** gelten nur bei `time_trusted`. Sonst gilt als sichere Rückfallebene `min(max_volume, quiet_hours.max_volume)` für die gesamte Laufzeit.
-- Events tragen immer `boot_id` + monotone Millisekunden seit Boot zusätzlich zu `device_ts`. Der Server korrigiert Zeitstempel nachträglich, sobald die Box eine vertrauenswürdige Zeit meldet.
+- Events tragen immer `boot_id` + monotone Millisekunden seit Boot (`mono_ms`, Envelope-Felder, §6.0) zusätzlich zu `device_ts` (= Envelope-`ts`). Der Server speichert beide und korrigiert Zeitstempel nachträglich, sobald die Box eine vertrauenswürdige Zeit meldet (Korrektur folgt nach M1).
 - Optional: DS3231-RTC-Modul als Hardware-Upgrade.
 
 ---
@@ -250,6 +264,8 @@ ACL: Eine Box darf ausschließlich unter ihrem eigenen Präfix lesen und schreib
 ```json
 { "v": 1, "id": "01J8Z...ULID", "ts": "2026-09-24T18:02:11Z", "type": "…", "data": { } }
 ```
+Optional (Pflicht für Events nach §6.5, siehe §5.6): `"boot_id": "<uuid>"`, `"mono_ms": 123456` (Millisekunden seit Boot).
+`id` ist eine ULID (26 Zeichen, Crockford-Base32), `ts` ein RFC-3339-Zeitstempel in UTC.
 
 ### 6.1 `notify` — Server → Box, QoS 1
 ```json
@@ -280,7 +296,7 @@ Standard-TTL: 60 Sekunden.
 `result`: `ok` \| `expired` \| `rejected` \| `error`, optional `message`.
 
 ### 6.4 `reported` — Box → Server, QoS 1, retained
-Bei Änderung, höchstens alle 30 s, mindestens alle 10 min.
+Bei Änderung, höchstens alle 30 s, mindestens alle 10 min. Ohne MQTT-Verbindung sendet die Box denselben Envelope per `POST /device/reported` (§7.3).
 ```json
 {
   "type": "reported",
@@ -314,6 +330,7 @@ Die Box schreibt Events zuerst in die `outbox` und löscht sie erst nach PUBACK.
 | `resume_position` | `token_id`, `item_index`, `position_ms` |
 
 Mehr wird nicht gemeldet. Kein Protokoll über Hördauer oder Tageszeiten jenseits dieser Events.
+Der Envelope-`type` ist der Event-Typ aus der Tabelle. `resume_position` aktualisiert serverseitig §3.10 nach Last-Writer-Wins über `ts`.
 
 ### 6.6 `online` — Last Will, retained
 Box setzt beim Verbinden `"1"`, Broker setzt bei Verbindungsabbruch `"0"`.
@@ -336,10 +353,30 @@ Die Box hat kein Display, der Kopplungscode wird **per Sprachausgabe** angesagt.
    Nach Claim: `{ "device_secret": "...", "tenant_id": "...", "mqtt": { "host": "...", "port": 8883, "username": "<device_id>", "password": "..." } }`
    Secret und MQTT-Passwort werden **genau einmal** ausgeliefert. `mqtt` fehlt, wenn der Server ohne Broker betrieben wird.
 
-Schutz: Codes 6-stellig, 10 min gültig, einmal verwendbar. Claim-Versuche pro Nutzer rate-limitiert (5/min, 20/h).
+Antworten auf `/pairing/poll`:
+
+| Lage | Status | Body |
+|---|---|---|
+| Noch nicht beansprucht | 202 | `{ "status": "pending", "expires_in": 412 }` |
+| Beansprucht | 200 | wie oben (einmalig) |
+| Abgelaufen / Secret bereits ausgeliefert / durch anderen Claim entwertet | 410 | Fehler `pairing_expired` bzw. `pairing_consumed` |
+| Unbekannter `poll_token` | 404 | Fehler `not_found` |
+| Schneller als alle 2 s gepollt | 429 | Fehler `rate_limited` |
+
+Claim-Antwort: `200 { "device_id": "...", "name": "Kinderzimmer" }`. Der Claim-Endpunkt ist ein Nutzer-Endpunkt (Sitzungs-Cookie + CSRF-Header).
+
+Schutz: Codes 6-stellig, 10 min gültig, einmal verwendbar. Claim-Versuche pro Nutzer rate-limitiert (5/min, 20/h), zusätzlich 30/h pro Mandant. `/pairing/start` höchstens 10/h pro IP.
+Das Device-Secret entsteht erst beim ausliefernden Poll und wird nur als Argon2id-Hash gespeichert.
+
+Erneutes Pairing:
+- Eine bereits gekoppelte Box darf `/pairing/start` erneut aufrufen (z. B. wenn die Poll-Antwort verloren ging). Beanspruchen darf den Code dann nur derselbe Mandant, sonst `409 device_paired_elsewhere`. Ein Mandantenwechsel erfordert vorher `unpair` (durch die Box oder in der App).
+- Pro Box dürfen mehrere Codes gleichzeitig offen sein; ein erfolgreicher Claim entwertet alle anderen offenen Codes dieser Box.
+- Nach erneutem Pairing sind alle vorher ausgestellten Tokens der Box ungültig.
 
 ### 7.2 Authentifizierung
-`POST /device/token` mit `{ "device_id", "device_secret" }` → kurzlebiges JWT (1 h).
+`POST /device/token` mit `{ "device_id", "device_secret" }` → `{ "access_token": "<JWT>", "token_type": "Bearer", "expires_in": 3600 }`.
+Unbekannte Box, falsches Secret und entkoppelte Box ergeben einheitlich `401 invalid_credentials`. Höchstens 10 Versuche pro Minute und Box.
+Alle weiteren Geräte-Endpunkte erwarten `Authorization: Bearer <JWT>`. Nach `unpair` oder erneutem Pairing werden bestehende Tokens sofort abgelehnt (`401 unauthorized`).
 Das JWT gilt nur für HTTPS. MQTT nutzt die beim Pairing angelegten eigenen Zugangsdaten (§6), damit der Broker ohne Auth-Plugin auskommt.
 
 ### 7.3 Endpunkte
@@ -348,7 +385,27 @@ Das JWT gilt nur für HTTPS. MQTT nutzt die beim Pairing angelegten eigenen Zuga
 | GET | `/device/state?config_rev=&device_rev=` | Delta oder Snapshot (§5.4) |
 | GET | `/device/assets/{sha256}` | Audiodatei; `ETag` = sha256, Range-Requests Pflicht |
 | POST | `/device/events` | Fallback, falls MQTT dauerhaft nicht erreichbar; Batch bis 100 Events |
-| POST | `/device/unpair` | Box verlässt den Mandanten, lokaler Mandanten-Ausschnitt wird gelöscht |
+| POST | `/device/reported` | Fallback für `reported` (§6.4) ohne MQTT; Body = Envelope, Antwort `204` |
+| POST | `/device/unpair` | Box verlässt den Mandanten, lokaler Mandanten-Ausschnitt wird gelöscht; Antwort `204` |
+
+`/device/events`:
+```json
+{ "events": [ { "v": 1, "id": "01J8Z...", "ts": "...", "type": "token_unknown", "boot_id": "...", "mono_ms": 81234, "data": { "uid": "04A2B3C4D5E680" } } ] }
+```
+Antwort `200`:
+```json
+{ "results": [ { "id": "01J8Z...", "status": "accepted" } ] }
+```
+`status`: `accepted` \| `duplicate` \| `rejected` (dann mit `code`). Die Box entfernt **alle** in `results` genannten IDs aus der `outbox`; `rejected` ist endgültig (z. B. unbekannter Typ).
+
+`/device/assets/{sha256}`: `ETag: "<sha256>"`, `If-None-Match` → `304`. Eine Box erhält jedes Asset ihres Mandanten, fremde Assets ergeben `404`.
+
+### 7.4 Fehlerformat
+Alle Fehlerantworten der Geräte-API:
+```json
+{ "error": { "code": "pairing_expired", "message": "Pairing code expired" } }
+```
+Codes: `invalid_request`, `unauthorized`, `invalid_credentials`, `not_found`, `rate_limited` (mit `Retry-After`), `pairing_expired`, `pairing_consumed`, `code_invalid`, `device_paired_elsewhere`.
 
 ---
 
@@ -442,6 +499,17 @@ Der Agent wird in M0 gegen einen **Mock-Server** entwickelt, der die Endpunkte a
 ---
 
 ## 14. Änderungen
+
+**v0.3 (2026-09-24)** — Klarstellungen für den Server-MVP (M1); Protokollversion bleibt `v1`, alle Änderungen additiv.
+- §3.4: `quiet_hours` genau spezifiziert (`max_volume` oder `lock`); neues Feld `timezone`.
+- §3.8: Cover als Bild-Assets (`image/jpeg`, `.jpg`), nicht im State; `duration_ms`.
+- §5.4: Snapshot-Umfang; `content.source` und `content_item.bytes` im State; `device_config` immer vollständig.
+- §5.6, §6.0: Envelope-Felder `boot_id` und `mono_ms`.
+- §6.4, §7.3: `POST /device/reported` als HTTP-Fallback.
+- §7.1: Poll-Antworten, Claim-Antwort, erneutes Pairing, zusätzliche Rate-Limits.
+- §7.2: Token-Antwort, einheitliches `invalid_credentials`, Token-Entwertung nach Unpair/Re-Pairing.
+- §7.3: Format von `/device/events`; `/device/assets` mit `ETag`/`304`.
+- §7.4: Fehlerformat.
 
 **v0.2 (2026-09-24)**
 - §3.3: `mqtt_provisioned` ergänzt.

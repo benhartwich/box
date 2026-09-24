@@ -141,4 +141,4 @@ Vor jedem Commit: Tests, ruff und pyright grün.
 
 ## Aktueller Stand
 
-Agent: **M0** · Server: **M1** (siehe SPEC §12). Offene Punkte: SPEC §13. Spec-Version: v0.2.
+Agent: **M0** · Server: **M1** (siehe SPEC §12). Offene Punkte: SPEC §13. Spec-Version: v0.3.

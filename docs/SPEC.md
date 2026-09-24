@@ -455,7 +455,7 @@ Nur im Setup-Modus erreichbar (Tastenkombination 5 s halten oder beim Erststart 
 
 Details:
 - Der Setup-Modus startet automatisch, wenn kein WLAN konfiguriert ist oder das konfigurierte WLAN 2 min lang nicht erreichbar ist und keine Ethernet-Verbindung besteht; außerdem mit `volume_up` + `volume_down` 5 s gehalten (§9.4).
-- Offenes WLAN `Myboxi-XXXX` (letzte vier Stellen der Seriennummer), Seite unter `http://10.42.0.1/`; alle DNS-Anfragen zeigen dorthin (Captive Portal).
+- Offenes WLAN `Myboxi-NNNN` (vier Ziffern aus der Seriennummer, damit die Box den Namen mit ihren Ziffern-Ansagen vorlesen kann), Seite unter `http://10.42.0.1/`; alle DNS-Anfragen zeigen dorthin (Captive Portal).
 - Felder: WLAN (Liste oder manuell) und Server-URL (Vorgabe `https://app.myboxi.eu`). Das Feld für den Spotify-Key kommt mit M4.
 - Die Box sagt Beginn und Ende des Setup-Modus an und ob die Verbindung geklappt hat.
 

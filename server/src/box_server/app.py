@@ -25,7 +25,7 @@ from box_server.api.web.templating import STATIC_DIR
 from box_server.db import create_engine, create_sessionmaker
 from box_server.domain.authz import PermissionDeniedError
 from box_server.domain.errors import NotFoundError
-from box_server.jobs.app import connected_job_app
+from box_server.jobs.app import open_job_app
 from box_server.settings import Settings, get_settings
 from box_server.storage.filesystem import FilesystemAssetStore
 
@@ -155,13 +155,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         engine = create_engine(settings)
         app.state.engine = engine
         app.state.sessionmaker = create_sessionmaker(engine)
-        job_app = connected_job_app(settings)
-        await job_app.open_async()
-        app.state.job_app = job_app
         try:
-            yield
+            async with open_job_app(settings) as job_app:
+                app.state.job_app = job_app
+                yield
         finally:
-            await job_app.close_async()
             await engine.dispose()
 
     app = FastAPI(

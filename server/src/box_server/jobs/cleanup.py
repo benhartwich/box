@@ -6,9 +6,10 @@ import logging
 
 from procrastinate import JobContext, builtin_tasks
 
-from box_server.domain.retention import purge_expired
+from box_server.domain.assets import collect_garbage
+from box_server.domain.retention import purge_expired, purge_tmp_files
 from box_server.jobs.app import job_app
-from box_server.jobs.context import job_sessionmaker
+from box_server.jobs.context import job_sessionmaker, job_settings, job_store
 
 log = logging.getLogger(__name__)
 
@@ -20,6 +21,8 @@ async def purge_expired_task(timestamp: int) -> None:
     async with job_sessionmaker()() as db:
         counts = await purge_expired(db)
         await db.commit()
+        counts["tmp_files"] = await purge_tmp_files(db, job_settings().tmp_dir)
+    counts["assets"] = await collect_garbage(job_sessionmaker(), job_store())
     log.info("purged expired rows", extra={"counts": counts, "scheduled_at": timestamp})
 
 

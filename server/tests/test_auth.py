@@ -16,7 +16,7 @@ from box_server.cli import main as cli_main
 from box_server.domain.authz import MIN_ROLE, Perm, role_can
 from box_server.models import Invitation, Membership, User, WebSession
 from box_server.models.enums import Role, RoleRank
-from box_server.settings import get_settings
+from box_server.settings import Settings, get_settings
 
 from .helpers import (
     PASSWORD,
@@ -324,3 +324,40 @@ def test_create_admin_cli(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None
     finally:
         get_settings.cache_clear()
     assert rc == 0
+
+
+async def test_smtp_invitation_is_sent_by_worker_with_rotated_token(
+    app: FastAPI, client: httpx.AsyncClient, settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """SMTP mode: the page shows no link; the job rotates the token and mails the new link."""
+    from box_server.auth import mail as mail_module
+    from box_server.jobs import context as job_context
+
+    sent: list[mail_module.Mail] = []
+
+    def fake_send(_settings: Settings, mail: mail_module.Mail) -> None:
+        sent.append(mail)
+
+    monkeypatch.setattr("box_server.jobs.mail.send_smtp", fake_send)
+    smtp_settings = settings.model_copy(update={"mail_backend": "smtp", "smtp_host": "localhost"})
+    app.state.settings = smtp_settings
+    job_context.configure(smtp_settings)
+    try:
+        t = await make_tenant(app)
+        csrf = await login(client, t.owner_email)
+        r = await client.post(
+            f"/t/{t.tenant_id}/members/invite",
+            data={"email": "opa@example.org", "role": "viewer", "csrf_token": csrf},
+        )
+        assert r.status_code == 200
+        assert "/invite?token=" not in r.text
+        await app.state.job_app.run_worker_async(
+            queues=["mail"], wait=False, install_signal_handlers=False
+        )
+    finally:
+        await job_context.dispose()
+    assert len(sent) == 1
+    assert sent[0].to == "opa@example.org"
+    token = sent[0].body.split("token=", 1)[1].split()[0]
+    async with new_client(app) as guest:
+        assert (await guest.get("/invite", params={"token": token})).status_code == 200

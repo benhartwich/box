@@ -60,15 +60,22 @@ def _cmd_serve(args: argparse.Namespace) -> int:
 
 
 def _cmd_worker(args: argparse.Namespace) -> int:
-    from box_server.jobs.app import connected_job_app
+    from box_server.jobs import context
+    from box_server.jobs.app import open_job_app
 
     settings = get_settings()
     configure_logging(settings.log_level, settings.log_format)
-    app = connected_job_app(settings)
+    context.configure(settings)
+    settings.tmp_dir.mkdir(parents=True, exist_ok=True)
 
     async def run() -> None:
-        async with app.open_async():
-            await app.run_worker_async(concurrency=args.concurrency or settings.worker_concurrency)
+        try:
+            async with open_job_app(settings) as app:
+                await app.run_worker_async(
+                    concurrency=args.concurrency or settings.worker_concurrency
+                )
+        finally:
+            await context.dispose()
 
     asyncio.run(run())
     return 0

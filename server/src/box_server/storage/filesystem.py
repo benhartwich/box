@@ -30,20 +30,26 @@ class FilesystemAssetStore:
 
     @staticmethod
     def _put(src: Path, dest: Path) -> None:
+        """Write a fresh file next to ``dest`` and rename it into place.
+
+        A new file in the setgid asset directory inherits its group (www-data), which nginx
+        needs for reading; a file renamed from the tmp dir would keep the service's group.
+        """
         if dest.exists():
             src.unlink(missing_ok=True)
             return
         dest.parent.mkdir(parents=True, exist_ok=True)
-        with src.open("rb") as fh:
-            os.fsync(fh.fileno())
+        part = dest.with_name(f".{dest.name}.{os.getpid()}.part")
         try:
-            src.replace(dest)  # atomic on the same filesystem
-        except OSError:
-            tmp = dest.with_suffix(dest.suffix + ".part")
-            shutil.copyfile(src, tmp)
-            tmp.replace(dest)
-            src.unlink(missing_ok=True)
-        dest.chmod(0o640)
+            with src.open("rb") as fin, part.open("wb") as fout:
+                shutil.copyfileobj(fin, fout, 1024 * 1024)
+                fout.flush()
+                os.fsync(fout.fileno())
+            part.chmod(0o640)
+            part.replace(dest)  # atomic within the directory
+        finally:
+            part.unlink(missing_ok=True)
+        src.unlink(missing_ok=True)
         dir_fd = os.open(dest.parent, os.O_RDONLY)
         try:
             os.fsync(dir_fd)

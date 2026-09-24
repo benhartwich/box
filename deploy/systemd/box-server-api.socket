@@ -1,0 +1,11 @@
+[Unit]
+Description=Box server API socket (nginx proxies to it)
+
+[Socket]
+ListenStream=/run/box-server/api.sock
+SocketUser=box-server
+SocketGroup=www-data
+SocketMode=0660
+
+[Install]
+WantedBy=sockets.target

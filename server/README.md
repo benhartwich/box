@@ -32,3 +32,11 @@ das Schema `public` neu auf. Niemals auf eine produktive Datenbank zeigen lassen
 
 Alle Einstellungen kommen aus Umgebungsvariablen mit Präfix `BOX_SERVER_`
 (siehe `src/box_server/settings.py` und `deploy/box-server.env.example`).
+
+## Deployment prüfen
+
+```bash
+tools/debian13-check/run.sh          # frisches Debian 13 in Docker, Installation nach docs/betrieb-debian13.md
+```
+
+Das Skript führt die Shell-Blöcke der Betriebsanleitung in einem Container mit systemd aus. Statt certbot kommt ein selbstsigniertes Zertifikat zum Einsatz. Danach prüft es HTTPS, Upload und Transkodierung durch die Worker-Unit, den kompletten Geräteablauf über nginx/`X-Accel-Redirect` und dass die Logs keine Secrets enthalten. Es lauscht nur auf `127.0.0.1:18443`.

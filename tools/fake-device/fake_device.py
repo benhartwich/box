@@ -66,6 +66,7 @@ class Report:
     tenant_id: uuid.UUID | None = None
     config_rev: int | None = None
     assets: dict[str, int] = field(default_factory=dict[str, int])
+    asset_headers: dict[str, str] = field(default_factory=dict[str, str])
     steps: list[str] = field(default_factory=list[str])
 
     def step(self, text: str) -> None:
@@ -234,6 +235,7 @@ async def run(
         check(r.headers.get("etag") == f'"{item.asset_sha256}"', "ETag must be the sha256")
         report.assets[item.asset_sha256] = len(r.content)
         if len(report.assets) == 1:
+            report.asset_headers = {k.lower(): v for k, v in r.headers.items()}
             ranged = await client.get(
                 f"{API}/device/assets/{item.asset_sha256}", headers=auth | {"Range": "bytes=0-99"}
             )

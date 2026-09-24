@@ -494,7 +494,7 @@ Der Agent wird in M0 gegen einen **Mock-Server** entwickelt, der die Endpunkte a
 - [ ] Resume bei Spotify-Inhalten: `play` mit URI, danach `seek` — zuverlässig?
 - [ ] TTS offline für Ansagen: Piper mit deutscher Stimme, Speicherbedarf auf Zero 2 W prüfen.
 - [x] Tech-Stack festgelegt (siehe `CLAUDE.md`).
-- [ ] Lizenz: AGPL-3.0 für Server; Agent AGPL-3.0 oder GPL-3.0.
+- [x] Lizenz: Server AGPL-3.0-or-later, Agent GPL-3.0-or-later, `packages/protocol` Apache-2.0, Spezifikation und Doku CC BY 4.0 (siehe `REUSE.toml`).
 - [ ] Rechtliche Einordnung Gehäuseverkauf (Produktsicherheit, Spielzeugrecht) — außerhalb dieser Spec.
 
 ---
@@ -505,6 +505,7 @@ Der Agent wird in M0 gegen einen **Mock-Server** entwickelt, der die Endpunkte a
 - §6, §11: MQTT-Topic-Präfix `myboxi/v1/{device_id}/` statt `box/v1/…`. MQTT ist noch nicht implementiert (M2), daher ohne Migrationsbedarf.
 - §4: SQLite der Box unter `/var/lib/myboxi/myboxi.db`.
 - Technische Namen: Pakete `myboxi_protocol`, `myboxi_server`, `myboxi_agent`; JWT-Audience `myboxi-device`.
+- §13: Lizenzen festgelegt.
 
 **v0.3 (2026-09-24)** — Klarstellungen für den Server-MVP (M1); Protokollversion bleibt `v1`, alle Änderungen additiv.
 - §3.4: `quiet_hours` genau spezifiziert (`max_volume` oder `lock`); neues Feld `timezone`.

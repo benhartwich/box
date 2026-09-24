@@ -87,6 +87,7 @@ uv run pytest                            # alle Tests
 uv run pytest agent                      # nur Agent
 uv run ruff check . && uv run ruff format --check .
 uv run pyright
+uvx --from 'reuse[charset-normalizer]' reuse lint   # Lizenzangaben (REUSE)
 uv run myboxi-agent --sim                   # Agent mit simulierter Hardware am Laptop
 uv run myboxi-agent sim place 04A2B3C4D5E680
 uv run myboxi-agent sim remove
@@ -97,7 +98,7 @@ uv run myboxi-server dev                    # Dev-Server ohne nginx
 uv run myboxi-server worker                 # Job-Worker
 ```
 
-Vor jedem Commit: Tests, ruff und pyright grün.
+Vor jedem Commit: Tests, ruff, pyright und `reuse lint` grün.
 
 ## Architekturregeln
 
@@ -129,6 +130,7 @@ Vor jedem Commit: Tests, ruff und pyright grün.
 
 ## Konventionen
 
+- Lizenzen je Pfad in `REUSE.toml`: Server, `tools/`, `deploy/` AGPL-3.0-or-later; `agent/` GPL-3.0-or-later; `packages/protocol/` Apache-2.0; `docs/`, README, CLAUDE.md CC BY 4.0. Beim ersten Agent-Commit `reuse download GPL-3.0-or-later` ausführen. Fremdcode nur mit eigener Annotation in `REUSE.toml` und kompatibler Lizenz.
 - Code, Identifier, Kommentare, Commit-Messages: Englisch. Doku unter `docs/`: Deutsch.
 - Commits: Conventional Commits (`feat(agent): …`, `fix(protocol): …`).
 - Kleine, reviewbare Schritte. Nach jedem abgeschlossenen Schritt kurz zusammenfassen, was fertig ist und was als Nächstes kommt.

@@ -1,0 +1,62 @@
+# Checks required before merging (CLAUDE.md): ruff, pyright strict, pytest, REUSE.
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  UV_VERSION: "0.12.18"
+  UV_FROZEN: "1"
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v10
+        with:
+          version: ${{ env.UV_VERSION }}
+      - run: uv sync
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run pyright
+      - run: uvx --from 'reuse[charset-normalizer]' reuse lint
+
+  test:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: myboxi
+          POSTGRES_PASSWORD: myboxi
+          POSTGRES_DB: myboxi_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U myboxi" --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      MYBOXI_SERVER_TEST_DATABASE_URL: postgresql://myboxi:myboxi@127.0.0.1:5432/myboxi_test
+    steps:
+      - uses: actions/checkout@v7
+      - name: ffmpeg (transcoding tests) and mpv (real player test)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg mpv
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v10
+        with:
+          version: ${{ env.UV_VERSION }}
+      - run: uv sync
+      - run: uv run pytest -q -rs

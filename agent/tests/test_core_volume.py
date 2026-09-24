@@ -55,3 +55,15 @@ def test_in_quiet_hours_same_day_window() -> None:
     q = QuietHours(start="12:00", end="14:00", max_volume=10)
     assert volume.in_quiet_hours(q, dt.datetime(2026, 1, 1, 13, 59, tzinfo=dt.UTC))
     assert not volume.in_quiet_hours(q, dt.datetime(2026, 1, 1, 14, 0, tzinfo=dt.UTC))
+
+
+def test_prompt_volume_is_audible_but_capped() -> None:
+    """Prompts never silent (SPEC §1.7), never above the ceiling (§9.2)."""
+    assert volume.prompt_volume(0, cfg(), VIENNA_NOON_UTC, True) == volume.PROMPT_MINIMUM
+    assert volume.prompt_volume(45, cfg(), VIENNA_NOON_UTC, True) == 45
+    assert volume.prompt_volume(90, cfg(), VIENNA_NOON_UTC, True) == 55
+    assert volume.prompt_volume(0, cfg(max_volume=10), VIENNA_NOON_UTC, True) == 10
+    quiet = cfg(quiet_hours={"start": "19:30", "end": "06:30", "max_volume": 15})
+    assert volume.prompt_volume(50, quiet, VIENNA_2030_UTC, True) == 15
+    locked = cfg(quiet_hours={"start": "19:30", "end": "06:30", "lock": True})
+    assert volume.prompt_volume(0, locked, VIENNA_2030_UTC, True) == volume.PROMPT_MINIMUM

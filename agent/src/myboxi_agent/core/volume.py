@@ -64,3 +64,19 @@ def effective(requested: int, config: DeviceConfig, now: dt.datetime, time_trust
     if lim.locked:
         return 0
     return max(0, min(requested, lim.ceiling, 100))
+
+
+PROMPT_MINIMUM = 20
+
+
+def prompt_volume(
+    requested: int, config: DeviceConfig, now: dt.datetime, time_trusted: bool
+) -> int:
+    """Prompts must be audible (SPEC §1.7) even at volume 0 or during a quiet-hour lock, but
+    never louder than the ceiling (max_volume and the quiet-hour cap)."""
+    lim = limits(config, now, time_trusted)
+    ceiling = min(config.max_volume, lim.ceiling) if not lim.locked else config.max_volume
+    if lim.locked and config.quiet_hours and config.quiet_hours.max_volume is not None:
+        ceiling = min(ceiling, config.quiet_hours.max_volume)
+    wanted = max(effective(requested, config, now, time_trusted), PROMPT_MINIMUM)
+    return max(0, min(wanted, ceiling))

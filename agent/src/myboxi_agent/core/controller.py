@@ -196,6 +196,11 @@ class Controller:
 
     # --- internals --------------------------------------------------------------------------
 
+    def prompt_volume(self) -> int:
+        return volume.prompt_volume(
+            self.requested_volume, self.config(), self.clock.now(), self.clock.time_trusted()
+        )
+
     def _effective(self) -> int:
         return volume.effective(
             self.requested_volume, self.config(), self.clock.now(), self.clock.time_trusted()

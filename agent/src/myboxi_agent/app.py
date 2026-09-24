@@ -5,25 +5,16 @@ from __future__ import annotations
 import asyncio
 import logging
 import random
-from dataclasses import dataclass
 from typing import Any
 
-from myboxi_agent.adapters.base import Buttons, Placed, Reader
-from myboxi_agent.adapters.clock import SystemClock
+from myboxi_agent.adapters.base import Placed
+from myboxi_agent.adapters.bundle import Adapters, sim_adapters
 from myboxi_agent.adapters.outbox import EventOutbox, read_boot_id
-from myboxi_agent.adapters.sim import (
-    SimAnnouncer,
-    SimButtons,
-    SimPlayer,
-    SimReader,
-    SimSystem,
-)
+from myboxi_agent.adapters.sim import SimButtons, SimPlayer, SimReader
 from myboxi_agent.config import Settings
 from myboxi_agent.control import ControlServer
 from myboxi_agent.core.buttons import ButtonTracker
-from myboxi_agent.core.clock import Clock
 from myboxi_agent.core.controller import Controller
-from myboxi_agent.core.ports import Announcer, Player, System
 from myboxi_agent.store.db import connect
 from myboxi_agent.store.repos import (
     AssetRepo,
@@ -40,31 +31,12 @@ TICK_S = 0.1
 CONTROLLER_TICK_S = 1.0
 
 
-@dataclass
-class Adapters:
-    clock: Clock
-    reader: Reader
-    buttons: Buttons
-    player: Player
-    announcer: Announcer
-    system: System
-
-
-def sim_adapters() -> Adapters:
-    return Adapters(
-        clock=SystemClock(assume_trusted=True),
-        reader=SimReader(),
-        buttons=SimButtons(),
-        player=SimPlayer(),
-        announcer=SimAnnouncer(),
-        system=SimSystem(),
-    )
-
-
 def build_adapters(settings: Settings) -> Adapters:
     if settings.sim:
         return sim_adapters()
-    raise RuntimeError("hardware adapters are not available yet; use --sim")
+    from myboxi_agent.adapters.hardware import hardware_adapters
+
+    return hardware_adapters(settings)
 
 
 class App:
@@ -78,10 +50,11 @@ class App:
         self.assets = AssetRepo(self.db)
         self.outbox_repo = OutboxRepo(self.db)
         self.outbox = EventOutbox(self.outbox_repo, clock, read_boot_id())
+        self.announcer = self.adapters.announcer_factory(lambda: self.controller.prompt_volume())
         self.controller = Controller(
             clock=clock,
             player=self.adapters.player,
-            announcer=self.adapters.announcer,
+            announcer=self.announcer,
             outbox=self.outbox,
             resume_store=ResumeRepo(self.db),
             library=self.library,
@@ -111,6 +84,8 @@ class App:
                 tg.create_task(self._tick_loop())
                 tg.create_task(self.control.serve())
                 tg.create_task(self._stop_on_request())
+                for background in self.adapters.background:
+                    tg.create_task(background())
         except* _Stop:
             pass
         finally:

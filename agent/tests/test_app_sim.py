@@ -14,8 +14,9 @@ from typing import Any
 
 import pytest
 
+from myboxi_agent.adapters.bundle import sim_adapters
 from myboxi_agent.adapters.sim import SimAnnouncer, SimPlayer, SimSystem
-from myboxi_agent.app import App, sim_adapters
+from myboxi_agent.app import App
 from myboxi_agent.config import Settings
 from myboxi_agent.control import request
 from myboxi_agent.core.model import Prompt
@@ -64,7 +65,7 @@ async def test_control_socket_is_private(running: App) -> None:
 
 async def test_place_play_pause_remove(running: App) -> None:
     player = running.adapters.player
-    announcer = running.adapters.announcer
+    announcer = running.announcer
     assert isinstance(player, SimPlayer)
     assert isinstance(announcer, SimAnnouncer)
     status = await ctl(running, cmd="place", uid=UID.lower())

@@ -1,6 +1,6 @@
-# CLAUDE.md — Projekt Box
+# CLAUDE.md — Projekt Myboxi
 
-Offline-first Audiobox für Kleinkinder (Toniebox-Prinzip): NFC-Figur auflegen → Inhalt spielt. Raspberry Pi als Box, optionaler Server mit Mandanten für zentrale Verwaltung. Open Source.
+**Myboxi** – Offline-first Audiobox für Kleinkinder (Toniebox-Prinzip): NFC-Figur auflegen → Inhalt spielt. Raspberry Pi als Box, optionaler Server mit Mandanten für zentrale Verwaltung. Open Source.
 
 ## Verbindlicher Vertrag
 
@@ -25,7 +25,7 @@ Pakete aus den Debian-Repos haben Vorrang vor Fremdquellen. Kein Docker für den
 ### Gemeinsam
 - `uv`-Workspace, `ruff` (lint + format), `pyright` strict, `pytest` + `pytest-asyncio`
 - `packages/protocol`: Pydantic-v2-Modelle, von Agent **und** Server genutzt
-- Konfiguration: `pydantic-settings`, Env-Dateien unter `/etc/box-*/`
+- Konfiguration: `pydantic-settings`, Env-Dateien unter `/etc/myboxi-*/`
 - Logging: strukturiert (JSON) nach journald, mit Secret-Filter
 
 ### Server
@@ -57,7 +57,7 @@ Neue Abhängigkeiten nur mit Begründung. Auf dem Agent zählt jedes MB (Zielhar
 docs/SPEC.md            Vertrag
 packages/protocol/      Pydantic-Modelle: Envelope, Delta, reported, events, cmd
 agent/                  Box-Agent
-  src/box_agent/
+  src/myboxi_agent/
     core/               Reine Logik: Playback-Zustandsautomat, Lautstärke-Policy, Resume, Sync-Anwendung
     adapters/           Hardware & I/O hinter Interfaces: reader, buttons, player, battery, clock, announcer
     store/              SQLite-Schema und Repositories
@@ -65,7 +65,7 @@ agent/                  Box-Agent
     sync/               HTTPS-Client, MQTT, Outbox
   tests/
 server/                 FastAPI-Server (ab M1)
-  src/box_server/
+  src/myboxi_server/
     api/device/         Geräte-API (SPEC §7)
     api/web/            Web-UI (Jinja2 + HTMX)
     domain/             Mandanten, Figuren, Inhalte, Bindings, Revisionen
@@ -87,14 +87,14 @@ uv run pytest                            # alle Tests
 uv run pytest agent                      # nur Agent
 uv run ruff check . && uv run ruff format --check .
 uv run pyright
-uv run box-agent --sim                   # Agent mit simulierter Hardware am Laptop
-uv run box-agent sim place 04A2B3C4D5E680
-uv run box-agent sim remove
-uv run box-agent sim press volume_up
+uv run myboxi-agent --sim                   # Agent mit simulierter Hardware am Laptop
+uv run myboxi-agent sim place 04A2B3C4D5E680
+uv run myboxi-agent sim remove
+uv run myboxi-agent sim press volume_up
 uv run pytest server                     # braucht lokales PostgreSQL, siehe server/README.md
 uv run alembic -c server/alembic.ini upgrade head
-uv run box-server dev                    # Dev-Server ohne nginx
-uv run box-server worker                 # Job-Worker
+uv run myboxi-server dev                    # Dev-Server ohne nginx
+uv run myboxi-server worker                 # Job-Worker
 ```
 
 Vor jedem Commit: Tests, ruff und pyright grün.
@@ -141,4 +141,4 @@ Vor jedem Commit: Tests, ruff und pyright grün.
 
 ## Aktueller Stand
 
-Agent: **M0** · Server: **M1** (siehe SPEC §12). Offene Punkte: SPEC §13. Spec-Version: v0.3.
+Agent: **M0** · Server: **M1** (siehe SPEC §12). Offene Punkte: SPEC §13. Spec-Version: v0.4.

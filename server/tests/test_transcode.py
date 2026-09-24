@@ -13,14 +13,14 @@ import pytest
 from fastapi import FastAPI
 from sqlalchemy import delete, func, select, update
 
-from box_server.domain import assets, uploads
-from box_server.domain.errors import InvalidInputError
-from box_server.domain.revisions import tenant_config_rev
-from box_server.jobs import context as job_context
-from box_server.models import Asset, Content, ContentItem, Upload
-from box_server.models.enums import ContentKind, UploadProfile, UploadStatus
-from box_server.settings import Settings
-from box_server.storage.filesystem import FilesystemAssetStore
+from myboxi_server.domain import assets, uploads
+from myboxi_server.domain.errors import InvalidInputError
+from myboxi_server.domain.revisions import tenant_config_rev
+from myboxi_server.jobs import context as job_context
+from myboxi_server.models import Asset, Content, ContentItem, Upload
+from myboxi_server.models.enums import ContentKind, UploadProfile, UploadStatus
+from myboxi_server.settings import Settings
+from myboxi_server.storage.filesystem import FilesystemAssetStore
 
 from .helpers import make_tenant, owner_ctx, sessionmaker_of
 from .media import color_png, loudness, probe, silence_wav, sine_mp3
@@ -169,7 +169,7 @@ async def test_same_file_twice_is_one_asset(app: FastAPI, media_dir: Path) -> No
 
 async def test_output_is_deterministic(app: FastAPI, media_dir: Path, tmp_path: Path) -> None:
     """Dedup relies on bit-exact output: same input and profile → same SHA-256."""
-    from box_server.media import ffmpeg
+    from myboxi_server.media import ffmpeg
 
     src = media_dir / "other.mp3"
     shas: list[str] = []
@@ -247,8 +247,8 @@ async def test_missing_source_fails_with_message(app: FastAPI, media_dir: Path) 
 
 
 async def test_worker_runs_deferred_job(app: FastAPI, settings: Settings, media_dir: Path) -> None:
-    """The procrastinate task processes a deferred upload (as box-server worker would)."""
-    from box_server.jobs.transcode import queueing_lock
+    """The procrastinate task processes a deferred upload (as myboxi-server worker would)."""
+    from myboxi_server.jobs.transcode import queueing_lock
 
     job_context.configure(settings)
     try:

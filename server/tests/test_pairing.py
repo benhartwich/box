@@ -13,16 +13,17 @@ import pytest
 from fastapi import FastAPI
 from sqlalchemy import select, text, update
 
-from box_protocol.errors import ErrorCode, ErrorResponse
-from box_protocol.pairing import ClaimResponse, PairingClaimed, PairingPending
-from box_server.logconfig import JsonFormatter
-from box_server.models import Device, DeviceConfig, Pairing
-from box_server.models.enums import Role
+from myboxi_protocol.errors import ErrorCode, ErrorResponse
+from myboxi_protocol.pairing import ClaimResponse, PairingClaimed, PairingPending
+from myboxi_server.logconfig import JsonFormatter
+from myboxi_server.models import Device, DeviceConfig, Pairing
+from myboxi_server.models.enums import Role
 
 from .helpers import (
     add_member,
     claim_code,
     device_of_code,
+    fresh_window,
     login,
     make_tenant,
     pair_device,
@@ -141,6 +142,7 @@ async def test_claim_brute_force_is_rate_limited(app: FastAPI, client: httpx.Asy
     started = await start_pairing(client)
     csrf = await login(client, t.owner_email)
     wrong = f"{(int(started.code) + 1) % 1_000_000:06d}"
+    await fresh_window(60, 5)
     statuses = [(await _claim_api(client, t.tenant_id, csrf, wrong)).status_code for _ in range(5)]
     assert statuses == [400] * 5
     r = await _claim_api(client, t.tenant_id, csrf, started.code)
@@ -225,6 +227,7 @@ async def test_claim_invalidates_other_open_codes(app: FastAPI, client: httpx.As
 
 async def test_poll_rate_limited(app: FastAPI, client: httpx.AsyncClient) -> None:
     started = await start_pairing(client)
+    await fresh_window(2, 1)
     assert (await client.get(POLL, params={"poll_token": started.poll_token})).status_code == 202
     r = await client.get(POLL, params={"poll_token": started.poll_token})
     assert r.status_code == 429
@@ -237,6 +240,7 @@ async def test_unknown_poll_token(client: httpx.AsyncClient) -> None:
 
 
 async def test_pairing_start_rate_limited_per_ip(client: httpx.AsyncClient) -> None:
+    await fresh_window(3600, 10)
     for _ in range(10):
         await start_pairing(client)
     r = await client.post(
@@ -262,6 +266,7 @@ async def test_device_token_errors_are_uniform(app: FastAPI, client: httpx.Async
 
 async def test_device_token_rate_limited(app: FastAPI, client: httpx.AsyncClient) -> None:
     t = await make_tenant(app)
+    await fresh_window(60, 10)
     dev = await pair_device(app, client, t.tenant_id)  # one successful token request
     body = {"device_id": str(dev.device_id), "device_secret": "w" * 43}
     statuses = [
@@ -275,7 +280,7 @@ async def test_jwt_validation(app: FastAPI, client: httpx.AsyncClient) -> None:
     t = await make_tenant(app)
     dev = await pair_device(app, client, t.tenant_id)
     claims = jwt.decode(dev.access_token, options={"verify_signature": False})
-    assert claims["aud"] == "box-device"
+    assert claims["aud"] == "myboxi-device"
     assert claims["exp"] - claims["iat"] == 3600
     key = app.state.settings.device_jwt_key.get_secret_value()
     forged = jwt.encode(claims | {"tid": str(uuid.uuid4())}, "another key of at least 32 bytes!!")
@@ -334,7 +339,7 @@ async def test_secret_only_as_argon2id_and_never_logged(
 
     # Server-side records (the test's own httpx client logs its request URLs).
     server_records = [rec for rec in caplog.records if not rec.name.startswith("httpx")]
-    assert any(rec.name == "box_server.access" for rec in server_records)
+    assert any(rec.name == "myboxi_server.access" for rec in server_records)
     raw = "\n".join(rec.getMessage() + repr(rec.__dict__) for rec in server_records)
     assert secret not in raw
     assert started.poll_token not in raw

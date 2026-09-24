@@ -26,7 +26,7 @@ ignore = ["S311"]
 allowed-confusables = ["–", "„", "“", "×"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["box_server", "box_protocol"]
+known-first-party = ["myboxi_server", "myboxi_protocol"]
 
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**" = ["S101", "S105", "S106", "S603", "S607"]

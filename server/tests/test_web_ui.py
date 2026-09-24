@@ -12,12 +12,12 @@ import pytest
 from fastapi import FastAPI
 from sqlalchemy import func, select
 
-from box_protocol.state import StateResponse
-from box_server.domain.revisions import device_rev, tenant_config_rev
-from box_server.jobs import context as job_context
-from box_server.models import Binding, Content, ContentItem, Device, Event, Token, Upload
-from box_server.models.enums import ContentKind, RepeatMode, Role, UploadStatus
-from box_server.settings import Settings
+from myboxi_protocol.state import StateResponse
+from myboxi_server.domain.revisions import device_rev, tenant_config_rev
+from myboxi_server.jobs import context as job_context
+from myboxi_server.models import Binding, Content, ContentItem, Device, Event, Token, Upload
+from myboxi_server.models.enums import ContentKind, RepeatMode, Role, UploadStatus
+from myboxi_server.settings import Settings
 
 from .helpers import (
     Library,

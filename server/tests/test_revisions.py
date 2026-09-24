@@ -11,7 +11,7 @@ import pytest
 from sqlalchemy import delete, insert, select, text, update
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
-from box_server.models import (
+from myboxi_server.models import (
     Asset,
     Binding,
     Content,

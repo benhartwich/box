@@ -8,10 +8,10 @@ import httpx
 import pytest
 from pydantic import ValidationError
 
-from box_server.cli import build_parser
-from box_server.ids import uuid7
-from box_server.logconfig import REDACTED, JsonFormatter, redact
-from box_server.settings import Settings
+from myboxi_server.cli import build_parser
+from myboxi_server.ids import uuid7
+from myboxi_server.logconfig import REDACTED, JsonFormatter, redact
+from myboxi_server.settings import Settings
 
 
 def test_uuid7_version_variant_and_order() -> None:

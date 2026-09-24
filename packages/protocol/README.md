@@ -1,9 +1,9 @@
-# box-protocol
+# myboxi-protocol
 
-Pydantic-v2-Modelle für das Box-Protokoll `v1` (SPEC v0.3, §5–§7). Genutzt von Agent und Server.
+Pydantic-v2-Modelle für das Myboxi-Protokoll `v1` (SPEC v0.4, §5–§7). Genutzt von Agent und Server.
 Änderungen hier sind immer auch Spec-Änderungen (CLAUDE.md, Regel 9).
 
-Angelegt von der Server-Session (M1) nach SPEC v0.3. Danach geht der Besitz an die Agent-Session über;
+Angelegt von der Server-Session (M1) nach SPEC v0.3 (seit v0.4 unter dem Namen Myboxi). Danach geht der Besitz an die Agent-Session über;
 jede weitere Änderung ist ein Spec-Änderungsvorschlag und braucht Freigabe.
 
 Offene Punkte für die Agent-Session:

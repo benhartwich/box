@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import os
 import re
+import time
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
@@ -14,12 +16,12 @@ import sqlalchemy as sa
 from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from box_protocol.pairing import PairingClaimed, PairingStartResponse
-from box_server.auth.passwords import hash_secret
-from box_server.domain import pairing as pairing_domain
-from box_server.domain.authz import TenantContext
-from box_server.domain.members import create_tenant_with_owner
-from box_server.models import (
+from myboxi_protocol.pairing import PairingClaimed, PairingStartResponse
+from myboxi_server.auth.passwords import hash_secret
+from myboxi_server.domain import pairing as pairing_domain
+from myboxi_server.domain.authz import TenantContext
+from myboxi_server.domain.members import create_tenant_with_owner
+from myboxi_server.models import (
     Asset,
     Binding,
     Content,
@@ -29,9 +31,9 @@ from box_server.models import (
     Token,
     User,
 )
-from box_server.models.enums import ContentKind, Role
-from box_server.storage.base import relpath_for
-from box_server.storage.filesystem import FilesystemAssetStore
+from myboxi_server.models.enums import ContentKind, Role
+from myboxi_server.storage.base import relpath_for
+from myboxi_server.storage.filesystem import FilesystemAssetStore
 
 PASSWORD = "correct horse battery"
 OPUS_MIME = "audio/ogg; codecs=opus"
@@ -230,3 +232,11 @@ async def seed_library(
 def asset_file(app: FastAPI, sha: str) -> Path:
     store: FilesystemAssetStore = app.state.asset_store
     return store.path(relpath_for(sha, "opus"))
+
+
+async def fresh_window(window_s: int, needed_s: float) -> None:
+    """Rate limits count in fixed windows (auth/ratelimit.py). Wait until at least
+    ``needed_s`` remain in the current window, so a test never straddles a boundary."""
+    remaining = window_s - (time.time() % window_s)
+    if remaining < needed_s:
+        await asyncio.sleep(remaining + 0.05)

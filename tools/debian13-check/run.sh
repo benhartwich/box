@@ -7,9 +7,9 @@ set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 HERE="$ROOT/tools/debian13-check"
-NAME=box-debian13-check
-IMAGE=box-debian13-check:latest
-PORT=${BOX_CHECK_PORT:-18443}
+NAME=myboxi-debian13-check
+IMAGE=myboxi-debian13-check:latest
+PORT=${MYBOXI_CHECK_PORT:-18443}
 KEEP=${1:-}
 PASSWORD="check-$(head -c 12 /dev/urandom | base64 | tr -d '/+=')"
 
@@ -37,22 +37,22 @@ echo "   systemd: $state"
 
 echo "== Anleitung ausführen (docs/betrieb-debian13.md)"
 python3 "$HERE/extract.py" "$ROOT/docs/betrieb-debian13.md" "$HERE/replace" > "$HERE/.install.sh"
-docker exec -i -e BOX_TEST_PASSWORD="$PASSWORD" "$NAME" bash < "$HERE/.install.sh" > "$HERE/.install.log" 2>&1 \
+docker exec -i -e MYBOXI_TEST_PASSWORD="$PASSWORD" "$NAME" bash < "$HERE/.install.sh" > "$HERE/.install.log" 2>&1 \
   || { tail -40 "$HERE/.install.log"; echo "Installation fehlgeschlagen (Log: tools/debian13-check/.install.log)"; exit 1; }
 echo "   ok (Log: tools/debian13-check/.install.log)"
 
 echo "== HTTPS von außen"
-code=$(curl -sk -o /dev/null -w '%{http_code}' --resolve "box.test:${PORT}:127.0.0.1" "https://box.test:${PORT}/login")
+code=$(curl -sk -o /dev/null -w '%{http_code}' --resolve "myboxi.test:${PORT}:127.0.0.1" "https://myboxi.test:${PORT}/login")
 [[ "$code" == 200 ]] || { echo "Web-UI antwortet mit $code"; exit 1; }
-echo "   https://box.test:${PORT}/login → 200"
+echo "   https://myboxi.test:${PORT}/login → 200"
 
 echo "== Abnahme gegen das Deployment"
 cd "$ROOT"
-uv run python "$HERE/smoke.py" "https://127.0.0.1:${PORT}" admin@box.test "$PASSWORD"
+uv run python "$HERE/smoke.py" "https://127.0.0.1:${PORT}" admin@myboxi.test "$PASSWORD"
 
 echo "== Dienste"
-docker exec "$NAME" systemctl is-active box-server-api.socket box-server-api.service box-server-worker.service nginx postgresql
-docker exec "$NAME" bash -c 'journalctl -u box-server-api -u box-server-worker --no-pager -o cat | grep -c "\"level\": \"ERROR\"" || true' \
+docker exec "$NAME" systemctl is-active myboxi-server-api.socket myboxi-server-api.service myboxi-server-worker.service nginx postgresql
+docker exec "$NAME" bash -c 'journalctl -u myboxi-server-api -u myboxi-server-worker --no-pager -o cat | grep -c "\"level\": \"ERROR\"" || true' \
   | sed 's/^/   Fehler im Journal: /'
 echo "== Keine Secrets in Logs"
 leaks=$(docker exec "$NAME" bash -c "journalctl --no-pager -o cat; cat /var/log/nginx/*.log" \

@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Figuren · Myboxi{% endblock %}
+{% block content %}
+<h1>Figuren</h1>
+
+{% if unknown %}
+<section class="card highlight">
+  <h2>Unbekannte Figuren</h2>
+  <p class="muted">Diese Figuren wurden auf einer Box aufgelegt, sind aber noch nicht angelegt.</p>
+  <ul class="list">
+    {% for u in unknown %}
+    <li>
+      <div><code>{{ u.uid }}</code> <span class="muted">zuletzt {{ u.last_seen | localtime }}{% if u.count > 1 %}, {{ u.count }}×{% endif %}</span></div>
+      {% if ctx.can(Perm.TOKEN_WRITE) %}
+      <form method="post" action="/t/{{ tid }}/figures/adopt" class="inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="uid" value="{{ u.uid }}">
+        <button>Übernehmen</button>
+      </form>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+{% if tokens %}
+<ul class="list">
+  {% for t in tokens %}
+  <li>
+    <div>
+      <a href="/t/{{ tid }}/figures/{{ t.id }}"><strong>{% if t.icon %}{{ t.icon }} {% endif %}{{ t.label }}</strong></a>
+      <div class="muted">
+        {% set b = bindings.get(t.id) %}
+        {% if b %}→ {{ content_titles.get(b.content_id, "?") }}{% else %}noch keinem Inhalt zugeordnet{% endif %}
+      </div>
+    </div>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="muted">Noch keine Figuren.</p>
+{% endif %}
+
+{% if ctx.can(Perm.TOKEN_WRITE) %}
+<h2>Figur anlegen</h2>
+<form method="post" action="/t/{{ tid }}/figures" class="stack">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <label>UID (vom NFC-Tag)
+    <input name="uid" value="{{ form.uid or '' }}" placeholder="04A2B3C4D5E680" autocapitalize="characters" required>
+  </label>
+  <label>Name <input name="label" value="{{ form.label or '' }}" maxlength="100" placeholder="Bibi" required></label>
+  <button type="submit">Anlegen</button>
+</form>
+{% endif %}
+{% endblock %}

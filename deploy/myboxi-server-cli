@@ -1,0 +1,10 @@
+#!/bin/sh
+# Admin wrapper, installed as /usr/local/sbin/myboxi-server:
+# loads the configuration and runs the CLI as the service user.
+#   myboxi-server migrate | create-admin --email … --tenant-name …
+set -eu
+set -a
+. /etc/myboxi-server/myboxi-server.env
+set +a
+cd /opt/myboxi-server
+exec runuser -u myboxi-server -- /opt/myboxi-server/.venv/bin/myboxi-server "$@"

@@ -1,10 +1,10 @@
 [project]
-name = "box-server"
+name = "myboxi-server"
 version = "0.1.0"
-description = "Box server: tenants, library, device API (SPEC v0.3)"
+description = "Myboxi server: tenants, library, device API (SPEC v0.4)"
 requires-python = ">=3.13,<3.14"
 dependencies = [
-  "box-protocol",
+  "myboxi-protocol",
   "fastapi>=0.118",
   "uvicorn[standard]>=0.37",
   "sqlalchemy[asyncio]>=2.0.43",
@@ -20,10 +20,10 @@ dependencies = [
 ]
 
 [tool.uv.sources]
-box-protocol = { workspace = true }
+myboxi-protocol = { workspace = true }
 
 [project.scripts]
-box-server = "box_server.cli:main"
+myboxi-server = "myboxi_server.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.12,<0.13"]

@@ -35,7 +35,7 @@ def upgrade() -> None:
 
     op.execute(
         """
-        CREATE FUNCTION box_bump_tenant_config_rev(tid uuid) RETURNS void
+        CREATE FUNCTION myboxi_bump_tenant_config_rev(tid uuid) RETURNS void
         LANGUAGE sql AS $$
             UPDATE tenant
                SET config_rev = config_rev + 1, config_rev_xact = pg_current_xact_id()
@@ -45,14 +45,14 @@ def upgrade() -> None:
     )
     op.execute(
         """
-        CREATE FUNCTION box_config_changed() RETURNS trigger
+        CREATE FUNCTION myboxi_config_changed() RETURNS trigger
         LANGUAGE plpgsql AS $$
         BEGIN
             IF TG_OP IN ('UPDATE', 'DELETE') THEN
-                PERFORM box_bump_tenant_config_rev(OLD.tenant_id);
+                PERFORM myboxi_bump_tenant_config_rev(OLD.tenant_id);
             END IF;
             IF TG_OP IN ('INSERT', 'UPDATE') THEN
-                PERFORM box_bump_tenant_config_rev(NEW.tenant_id);
+                PERFORM myboxi_bump_tenant_config_rev(NEW.tenant_id);
             END IF;
             RETURN NULL;
         END
@@ -64,14 +64,14 @@ def upgrade() -> None:
             f"""
             CREATE TRIGGER {table}_config_rev
             AFTER INSERT OR UPDATE OR DELETE ON {table}
-            FOR EACH ROW EXECUTE FUNCTION box_config_changed()
+            FOR EACH ROW EXECUTE FUNCTION myboxi_config_changed()
             """
         )
 
     # content.rev: a new row counts as the change of its creating transaction.
     op.execute(
         """
-        CREATE FUNCTION box_content_rev() RETURNS trigger
+        CREATE FUNCTION myboxi_content_rev() RETURNS trigger
         LANGUAGE plpgsql AS $$
         BEGIN
             IF TG_OP = 'INSERT' THEN
@@ -88,13 +88,13 @@ def upgrade() -> None:
     op.execute(
         """
         CREATE TRIGGER content_rev BEFORE INSERT OR UPDATE ON content
-        FOR EACH ROW EXECUTE FUNCTION box_content_rev()
+        FOR EACH ROW EXECUTE FUNCTION myboxi_content_rev()
         """
     )
     # Item changes touch the parent content row, which raises content.rev via content_rev.
     op.execute(
         """
-        CREATE FUNCTION box_content_item_changed() RETURNS trigger
+        CREATE FUNCTION myboxi_content_item_changed() RETURNS trigger
         LANGUAGE plpgsql AS $$
         BEGIN
             IF TG_OP IN ('UPDATE', 'DELETE') THEN
@@ -116,13 +116,13 @@ def upgrade() -> None:
         """
         CREATE TRIGGER content_item_content_rev
         AFTER INSERT OR UPDATE OR DELETE ON content_item
-        FOR EACH ROW EXECUTE FUNCTION box_content_item_changed()
+        FOR EACH ROW EXECUTE FUNCTION myboxi_content_item_changed()
         """
     )
 
     op.execute(
         """
-        CREATE FUNCTION box_device_config_changed() RETURNS trigger
+        CREATE FUNCTION myboxi_device_config_changed() RETURNS trigger
         LANGUAGE plpgsql AS $$
         DECLARE did uuid;
         BEGIN
@@ -139,22 +139,22 @@ def upgrade() -> None:
         """
         CREATE TRIGGER device_config_device_rev
         AFTER INSERT OR UPDATE OR DELETE ON device_config
-        FOR EACH ROW EXECUTE FUNCTION box_device_config_changed()
+        FOR EACH ROW EXECUTE FUNCTION myboxi_device_config_changed()
         """
     )
 
 
 def downgrade() -> None:
     op.execute("DROP TRIGGER device_config_device_rev ON device_config")
-    op.execute("DROP FUNCTION box_device_config_changed()")
+    op.execute("DROP FUNCTION myboxi_device_config_changed()")
     op.execute("DROP TRIGGER content_item_content_rev ON content_item")
-    op.execute("DROP FUNCTION box_content_item_changed()")
+    op.execute("DROP FUNCTION myboxi_content_item_changed()")
     op.execute("DROP TRIGGER content_rev ON content")
-    op.execute("DROP FUNCTION box_content_rev()")
+    op.execute("DROP FUNCTION myboxi_content_rev()")
     for table in CONFIG_TABLES:
         op.execute(f"DROP TRIGGER {table}_config_rev ON {table}")
-    op.execute("DROP FUNCTION box_config_changed()")
-    op.execute("DROP FUNCTION box_bump_tenant_config_rev(uuid)")
+    op.execute("DROP FUNCTION myboxi_config_changed()")
+    op.execute("DROP FUNCTION myboxi_bump_tenant_config_rev(uuid)")
     op.execute("ALTER TABLE content DROP COLUMN rev_xact")
     op.execute("ALTER TABLE device DROP COLUMN device_rev_xact")
     op.execute("ALTER TABLE tenant DROP COLUMN config_rev_xact")

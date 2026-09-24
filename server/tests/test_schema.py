@@ -17,8 +17,8 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
-from box_server.models import Asset, Base, Content, ContentItem, Tenant
-from box_server.settings import Settings
+from myboxi_server.models import Asset, Base, Content, ContentItem, Tenant
+from myboxi_server.settings import Settings
 
 ALEMBIC_INI = Path(__file__).resolve().parents[1] / "alembic.ini"
 # Columns that exist only in migrations (maintained by triggers, not mapped in the ORM).
@@ -54,7 +54,7 @@ async def test_models_match_migrations(engine: AsyncEngine) -> None:
 async def scratch_db(settings: Settings) -> AsyncIterator[str]:
     """A throwaway database next to the test database."""
     base, _, _ = settings.async_database_url.rpartition("/")
-    name = f"box_mig_{uuid.uuid4().hex[:8]}"
+    name = f"myboxi_mig_{uuid.uuid4().hex[:8]}"
     admin = create_async_engine(settings.async_database_url, isolation_level="AUTOCOMMIT")
     async with admin.connect() as conn:
         await conn.execute(text(f'CREATE DATABASE "{name}"'))

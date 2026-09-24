@@ -16,8 +16,8 @@ import uvicorn
 from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from box_server.app import create_app
-from box_server.settings import Settings
+from myboxi_server.app import create_app
+from myboxi_server.settings import Settings
 
 from .helpers import PASSWORD, make_tenant, seed_library
 

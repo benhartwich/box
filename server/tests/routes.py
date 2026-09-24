@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from fastapi.dependencies.models import Dependant
 from fastapi.routing import APIRoute, iter_route_contexts
 
-from box_server.domain.authz import Perm
+from myboxi_server.domain.authz import Perm
 
 PARAM_RE = re.compile(r"{(\w+)}")
 

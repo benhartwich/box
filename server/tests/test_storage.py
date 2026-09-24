@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from box_server.storage.base import relpath_for
-from box_server.storage.filesystem import FilesystemAssetStore
+from myboxi_server.storage.base import relpath_for
+from myboxi_server.storage.filesystem import FilesystemAssetStore
 
 SHA = "ab" * 32
 

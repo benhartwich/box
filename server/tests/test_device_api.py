@@ -11,11 +11,11 @@ import httpx
 from fastapi import FastAPI
 from sqlalchemy import select, update
 
-from box_protocol.errors import ErrorCode, ErrorResponse
-from box_protocol.events import EventBatchResponse
-from box_protocol.state import StateResponse
-from box_server.models import Device, DeviceConfig, Event, ResumePosition, Tenant
-from box_server.storage.filesystem import FilesystemAssetStore
+from myboxi_protocol.errors import ErrorCode, ErrorResponse
+from myboxi_protocol.events import EventBatchResponse
+from myboxi_protocol.state import StateResponse
+from myboxi_server.models import Device, DeviceConfig, Event, ResumePosition, Tenant
+from myboxi_server.storage.filesystem import FilesystemAssetStore
 
 from .helpers import asset_file, make_tenant, pair_device, seed_library, sessionmaker_of
 

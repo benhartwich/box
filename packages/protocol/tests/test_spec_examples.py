@@ -11,12 +11,12 @@ from typing import Any
 import pytest
 from pydantic import BaseModel, TypeAdapter, ValidationError
 
-from box_protocol.auth import DeviceTokenRequest, DeviceTokenResponse
-from box_protocol.envelope import RawEnvelope
-from box_protocol.errors import ErrorResponse
-from box_protocol.events import EventBatchRequest, EventBatchResponse, event_adapter
-from box_protocol.messages import CmdAckMessage, CmdMessage, NotifyMessage
-from box_protocol.pairing import (
+from myboxi_protocol.auth import DeviceTokenRequest, DeviceTokenResponse
+from myboxi_protocol.envelope import RawEnvelope
+from myboxi_protocol.errors import ErrorResponse
+from myboxi_protocol.events import EventBatchRequest, EventBatchResponse, event_adapter
+from myboxi_protocol.messages import CmdAckMessage, CmdMessage, NotifyMessage
+from myboxi_protocol.pairing import (
     ClaimRequest,
     ClaimResponse,
     PairingClaimed,
@@ -24,8 +24,8 @@ from box_protocol.pairing import (
     PairingStartRequest,
     PairingStartResponse,
 )
-from box_protocol.reported import ReportedMessage
-from box_protocol.state import DeviceConfig, QuietHours, StateResponse
+from myboxi_protocol.reported import ReportedMessage
+from myboxi_protocol.state import DeviceConfig, QuietHours, StateResponse
 
 DEV = "0192f3a4-5b6c-7d8e-9f01-23456789abcd"
 TENANT = "0192f3a4-0000-7000-8000-000000000001"
@@ -233,7 +233,7 @@ def test_pairing_7_1() -> None:
             "device_secret": "s" * 43,
             "tenant_id": TENANT,
             "mqtt": {
-                "host": "box.example.org",
+                "host": "myboxi.example.org",
                 "port": 8883,
                 "username": DEV,
                 "password": "x" * 20,

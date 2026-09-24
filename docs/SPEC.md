@@ -1,10 +1,11 @@
-# Box — Spezifikation v0.3: Datenmodell & Geräteprotokoll
+# Myboxi — Spezifikation v0.4: Datenmodell & Geräteprotokoll
 
 Status: Entwurf · Stand: 2026-09-24 · Änderungen: §14
 Scope: Der Vertrag zwischen **Box-Agent** (Raspberry Pi) und **Server**.
 Nicht im Scope: Web-UI, Gehäuse, Image-Build, Rechtliches (eigene Dokumente).
 
 Sprache der Spec: Deutsch. Code, Identifier, JSON-Felder, Topics: Englisch.
+Projektname: **Myboxi** (technisch `myboxi`). „Box“ bezeichnet in dieser Spec das Gerät.
 
 ---
 
@@ -157,7 +158,7 @@ Aufbewahrung: 30 Tage, danach löschen. Nur die Typen aus §6.5.
 
 ## 4. Lokales Modell (Box)
 
-SQLite unter `/var/lib/box/box.db` (auf der beschreibbaren Datenpartition, siehe Image-Spec).
+SQLite unter `/var/lib/myboxi/myboxi.db` (auf der beschreibbaren Datenpartition, siehe Image-Spec).
 
 Tabellen spiegeln den für die Box relevanten Ausschnitt: `token`, `content`, `content_item`, `binding`, `device_config`, `resume_position`. Zusätzlich:
 
@@ -257,7 +258,7 @@ Pi Zero 2 W und Pi 4 haben keine Echtzeituhr. Nach einem Offline-Boot ist die Uh
 **MQTT ist optional.** Ohne Broker funktioniert alles über Polling (§5.2), nur ohne sofortige Benachrichtigung und ohne Fernkommandos. Wichtig für einfache Self-Hosting-Setups.
 
 Broker: Mosquitto 2 mit Dynamic-Security-Plugin, TLS direkt auf Port 8883 (Zertifikat wie nginx via certbot, Deploy-Hook). Kein Klartext-Port.
-Topic-Präfix: `box/v1/{device_id}/`
+Topic-Präfix: `myboxi/v1/{device_id}/`
 ACL: Eine Box darf ausschließlich unter ihrem eigenen Präfix lesen und schreiben. Der Server legt beim Pairing pro Box einen Dynsec-Client (Username = `device_id`) und eine Rolle mit genau diesem Präfix an und entfernt beide beim Unpair.
 
 ### 6.0 Envelope (alle Nachrichten)
@@ -464,7 +465,7 @@ Nur im Setup-Modus erreichbar (Tastenkombination 5 s halten oder beim Erststart 
 
 ## 11. Versionierung & Updates
 
-- Protokollversion im Topic (`box/v1/…`), im API-Pfad (`/api/v1`) und im Envelope (`"v": 1`).
+- Protokollversion im Topic (`myboxi/v1/…`), im API-Pfad (`/api/v1`) und im Envelope (`"v": 1`).
 - Breaking Changes nur mit neuer Hauptversion; der Server bedient N und N-1 parallel.
 - Agent-Updates über eigenes apt-Repository, Kanäle `stable` und `beta`.
 - Image-Updates sind nicht Teil dieser Spec.
@@ -499,6 +500,11 @@ Der Agent wird in M0 gegen einen **Mock-Server** entwickelt, der die Endpunkte a
 ---
 
 ## 14. Änderungen
+
+**v0.4 (2026-09-24)** — Projektname Myboxi. Protokollversion bleibt `v1`.
+- §6, §11: MQTT-Topic-Präfix `myboxi/v1/{device_id}/` statt `box/v1/…`. MQTT ist noch nicht implementiert (M2), daher ohne Migrationsbedarf.
+- §4: SQLite der Box unter `/var/lib/myboxi/myboxi.db`.
+- Technische Namen: Pakete `myboxi_protocol`, `myboxi_server`, `myboxi_agent`; JWT-Audience `myboxi-device`.
 
 **v0.3 (2026-09-24)** — Klarstellungen für den Server-MVP (M1); Protokollversion bleibt `v1`, alle Änderungen additiv.
 - §3.4: `quiet_hours` genau spezifiziert (`max_volume` oder `lock`); neues Feld `timezone`.

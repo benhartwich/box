@@ -1,12 +1,13 @@
 """Fake box: runs the complete device flow against a server (SPEC §7).
 
-    uv run python tools/fake-device/fake_device.py --base-url https://box.example.org \
-        --auto-claim --email owner@example.org --tenant <tenant-id>   # password from $BOX_PASSWORD
+    export MYBOXI_PASSWORD=...   # for --auto-claim
+    uv run python tools/fake-device/fake_device.py --base-url https://myboxi.example.org \
+        --auto-claim --email owner@example.org --tenant <tenant-id>
 
 Steps: pairing/start -> claim (by a user, or automatically) -> poll -> token -> reported ->
 state -> download every asset and verify SHA-256 (plus Range and ETag checks) -> event ->
 duplicate event -> unpair -> token must fail. Every response is validated against
-``box_protocol``.
+``myboxi_protocol``.
 """
 
 from __future__ import annotations
@@ -26,10 +27,10 @@ from dataclasses import dataclass, field
 
 import httpx
 
-from box_protocol.auth import DeviceTokenRequest, DeviceTokenResponse
-from box_protocol.errors import ErrorCode, ErrorResponse
-from box_protocol.events import EventBatchRequest, EventBatchResponse, TokenUnknownEvent
-from box_protocol.pairing import (
+from myboxi_protocol.auth import DeviceTokenRequest, DeviceTokenResponse
+from myboxi_protocol.errors import ErrorCode, ErrorResponse
+from myboxi_protocol.events import EventBatchRequest, EventBatchResponse, TokenUnknownEvent
+from myboxi_protocol.pairing import (
     ClaimRequest,
     ClaimResponse,
     PairingClaimed,
@@ -37,8 +38,8 @@ from box_protocol.pairing import (
     PairingStartRequest,
     PairingStartResponse,
 )
-from box_protocol.reported import ReportedMessage
-from box_protocol.state import StateResponse
+from myboxi_protocol.reported import ReportedMessage
+from myboxi_protocol.state import StateResponse
 
 API = "/api/v1"
 _CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
@@ -309,9 +310,9 @@ def main(argv: list[str] | None = None) -> int:
     async def go() -> Report:
         claim: ClaimFn = prompt_claim
         if args.auto_claim:
-            password = os.environ.get("BOX_PASSWORD")
+            password = os.environ.get("MYBOXI_PASSWORD")
             if not (args.email and args.tenant and password):
-                p.error("--auto-claim needs --email, --tenant and $BOX_PASSWORD")
+                p.error("--auto-claim needs --email, --tenant and $MYBOXI_PASSWORD")
             claim = await user_claim(
                 args.base_url,
                 email=args.email,

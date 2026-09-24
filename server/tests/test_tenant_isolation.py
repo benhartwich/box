@@ -15,11 +15,11 @@ import pytest
 from fastapi import FastAPI
 from sqlalchemy import select
 
-from box_protocol.events import EventBatchResponse
-from box_protocol.state import StateResponse
-from box_server.domain import members
-from box_server.models import ContentItem, Event, Membership, ResumePosition, Token, Upload
-from box_server.models.enums import Role, UploadProfile, UploadStatus
+from myboxi_protocol.events import EventBatchResponse
+from myboxi_protocol.state import StateResponse
+from myboxi_server.domain import members
+from myboxi_server.models import ContentItem, Event, Membership, ResumePosition, Token, Upload
+from myboxi_server.models.enums import Role, UploadProfile, UploadStatus
 
 from .helpers import (
     Library,

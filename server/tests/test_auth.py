@@ -11,17 +11,18 @@ import pytest
 from fastapi import FastAPI
 from sqlalchemy import select, update
 
-from box_server.auth.tokens import hash_token
-from box_server.cli import main as cli_main
-from box_server.domain.authz import MIN_ROLE, Perm, role_can
-from box_server.models import Invitation, Membership, User, WebSession
-from box_server.models.enums import Role, RoleRank
-from box_server.settings import Settings, get_settings
+from myboxi_server.auth.tokens import hash_token
+from myboxi_server.cli import main as cli_main
+from myboxi_server.domain.authz import MIN_ROLE, Perm, role_can
+from myboxi_server.models import Invitation, Membership, User, WebSession
+from myboxi_server.models.enums import Role, RoleRank
+from myboxi_server.settings import Settings, get_settings
 
 from .helpers import (
     PASSWORD,
     add_member,
     csrf_from,
+    fresh_window,
     login,
     make_tenant,
     new_client,
@@ -40,11 +41,11 @@ async def test_login_sets_hardened_session_cookie(app: FastAPI, client: httpx.As
     )
     assert r.status_code == 303
     cookie = r.headers["set-cookie"]
-    assert "box_session=" in cookie
+    assert "myboxi_session=" in cookie
     assert "HttpOnly" in cookie
     assert "SameSite=lax" in cookie
     # Only the hash is stored.
-    value = client.cookies["box_session"]
+    value = client.cookies["myboxi_session"]
     async with sessionmaker_of(app)() as db:
         assert await db.scalar(select(WebSession).where(WebSession.token_hash == hash_token(value)))
 
@@ -81,7 +82,7 @@ async def test_login_rejects_bad_credentials(
         data={"email": email, "password": "wrong password", "csrf_token": csrf_from(page.text)},
     )
     assert r.status_code == 400
-    assert "box_session" not in client.cookies
+    assert "myboxi_session" not in client.cookies
 
 
 async def test_login_requires_csrf(app: FastAPI, client: httpx.AsyncClient) -> None:
@@ -94,6 +95,7 @@ async def test_login_requires_csrf(app: FastAPI, client: httpx.AsyncClient) -> N
 async def test_login_rate_limited_per_account(app: FastAPI, client: httpx.AsyncClient) -> None:
     t = await make_tenant(app)
     token = csrf_from((await client.get("/login")).text)
+    await fresh_window(900, 10)
     statuses = [
         (
             await client.post(
@@ -116,10 +118,10 @@ async def test_login_rate_limited_per_account(app: FastAPI, client: httpx.AsyncC
 async def test_logout_invalidates_session(app: FastAPI, client: httpx.AsyncClient) -> None:
     t = await make_tenant(app)
     csrf = await login(client, t.owner_email)
-    cookie = client.cookies["box_session"]
+    cookie = client.cookies["myboxi_session"]
     r = await client.post("/logout", data={"csrf_token": csrf})
     assert r.status_code == 303
-    client.cookies.set("box_session", cookie)
+    client.cookies.set("myboxi_session", cookie)
     r = await client.get(f"/t/{t.tenant_id}/")
     assert r.status_code == 303
     assert r.headers["location"].startswith("/login")
@@ -306,8 +308,8 @@ async def test_last_owner_cannot_leave_or_be_demoted(
 
 def test_create_admin_cli(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
     settings = app.state.settings
-    monkeypatch.setenv("BOX_SERVER_DATABASE_URL", settings.database_url)
-    monkeypatch.setenv("BOX_SERVER_DEVICE_JWT_KEY", settings.device_jwt_key.get_secret_value())
+    monkeypatch.setenv("MYBOXI_SERVER_DATABASE_URL", settings.database_url)
+    monkeypatch.setenv("MYBOXI_SERVER_DEVICE_JWT_KEY", settings.device_jwt_key.get_secret_value())
     monkeypatch.setattr("sys.stdin", io.StringIO("cli password 123\n"))
     get_settings.cache_clear()
     try:
@@ -330,15 +332,15 @@ async def test_smtp_invitation_is_sent_by_worker_with_rotated_token(
     app: FastAPI, client: httpx.AsyncClient, settings: Settings, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """SMTP mode: the page shows no link; the job rotates the token and mails the new link."""
-    from box_server.auth import mail as mail_module
-    from box_server.jobs import context as job_context
+    from myboxi_server.auth import mail as mail_module
+    from myboxi_server.jobs import context as job_context
 
     sent: list[mail_module.Mail] = []
 
     def fake_send(_settings: Settings, mail: mail_module.Mail) -> None:
         sent.append(mail)
 
-    monkeypatch.setattr("box_server.jobs.mail.send_smtp", fake_send)
+    monkeypatch.setattr("myboxi_server.jobs.mail.send_smtp", fake_send)
     smtp_settings = settings.model_copy(update={"mail_backend": "smtp", "smtp_host": "localhost"})
     app.state.settings = smtp_settings
     job_context.configure(smtp_settings)

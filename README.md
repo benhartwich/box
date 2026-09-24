@@ -1,4 +1,4 @@
-# Box
+# Myboxi
 
 Offline-first Audiobox für Kleinkinder: NFC-Figur auflegen, Inhalt spielt.
 Raspberry Pi als Box, optionaler Server mit Mandanten für die zentrale Verwaltung.

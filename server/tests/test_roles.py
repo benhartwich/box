@@ -7,8 +7,8 @@ import httpx
 import pytest
 from fastapi import FastAPI
 
-from box_server.domain.authz import role_can
-from box_server.models.enums import Role
+from myboxi_server.domain.authz import role_can
+from myboxi_server.models.enums import Role
 
 from .helpers import add_member, login, make_tenant
 from .routes import tenant_routes

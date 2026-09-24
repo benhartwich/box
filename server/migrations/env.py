@@ -8,8 +8,8 @@ from alembic import context
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from box_server.models import Base
-from box_server.settings import get_settings
+from myboxi_server.models import Base
+from myboxi_server.settings import get_settings
 
 target_metadata = Base.metadata
 

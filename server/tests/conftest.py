@@ -1,6 +1,6 @@
 """Shared fixtures: a migrated PostgreSQL test database and an app client.
 
-Requires BOX_SERVER_TEST_DATABASE_URL (see tools/dev-postgres.sh and server/README.md).
+Requires MYBOXI_SERVER_TEST_DATABASE_URL (see tools/dev-postgres.sh and server/README.md).
 """
 
 from __future__ import annotations
@@ -18,18 +18,18 @@ from fastapi import FastAPI
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
-from box_server.app import create_app
-from box_server.models import Base
-from box_server.settings import Settings
+from myboxi_server.app import create_app
+from myboxi_server.models import Base
+from myboxi_server.settings import Settings
 
 ALEMBIC_INI = Path(__file__).resolve().parents[1] / "alembic.ini"
 TEST_JWT_KEY = "test-device-jwt-key-0123456789abcdef"
 
 
 def _test_db_url() -> str:
-    url = os.environ.get("BOX_SERVER_TEST_DATABASE_URL")
+    url = os.environ.get("MYBOXI_SERVER_TEST_DATABASE_URL")
     if not url:
-        pytest.exit("BOX_SERVER_TEST_DATABASE_URL is not set (source .dev/env)", returncode=2)
+        pytest.exit("MYBOXI_SERVER_TEST_DATABASE_URL is not set (source .dev/env)", returncode=2)
     return url
 
 

@@ -4,7 +4,7 @@ Vom Image bis zur ersten Figur. Hardware und Verdrahtung: `docs/hardware.md`.
 
 ## 1. Image flashen
 
-1. Das neueste Image herunterladen: GitHub → Releases → `myboxi-<version>.img.xz`. Zwischenstände aus Branches liegen unter Actions → „image“ → Artefakt `myboxi-image`.
+1. Das neueste Image herunterladen: GitHub → Releases → `myboxi-<version>.img.xz`. Zwischenstände aus Branches liegen unter Actions → „image“ → Artefakt `myboxi-image`: eine ZIP-Datei, die du zuerst entpackst.
 2. Raspberry Pi Imager (Version 2) → Gerät „Raspberry Pi 4“ → Betriebssystem „Eigenes Image verwenden“ → die `.img.xz` wählen → SD-Karte → Schreiben.
 3. Die Einstellungen des Imagers sind optional:
    - **WLAN** kannst du hier schon eintragen, dann entfällt Schritt 3.

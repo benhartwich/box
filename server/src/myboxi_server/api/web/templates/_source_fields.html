@@ -1,0 +1,17 @@
+{# Kind-specific fields (SPEC §3.6). #}
+{% if kind == 'podcast' %}
+  <label>Feed-URL <input type="url" name="feed_url" value="{{ form.feed_url or '' }}" placeholder="https://…/feed.xml" required></label>
+  <label>Neueste Folgen auf der Box <input type="number" name="keep_latest" min="1" max="100" value="{{ form.keep_latest or 5 }}"></label>
+  <label>Reihenfolge
+    <select name="order">
+      <option value="newest_first" {% if form.order != 'oldest_first' %}selected{% endif %}>neueste zuerst</option>
+      <option value="oldest_first" {% if form.order == 'oldest_first' %}selected{% endif %}>älteste zuerst</option>
+    </select>
+  </label>
+{% elif kind == 'spotify' %}
+  <label>Spotify-URI oder Link <input name="uri" value="{{ form.uri or '' }}" placeholder="spotify:album:…" required></label>
+  <p class="muted">Spielt nur, wenn Spotify auf der Box eingerichtet ist und Internet besteht.</p>
+{% elif kind == 'stream' %}
+  <label>Stream-URL <input type="url" name="url" value="{{ form.url or '' }}" placeholder="https://…" required></label>
+  <p class="muted">Streams spielen nur mit Internetverbindung.</p>
+{% endif %}

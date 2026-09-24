@@ -1,0 +1,56 @@
+{# Track list and upload status; polled via HTMX while uploads are processed. #}
+<section id="tracks" class="card"
+  {% if polling %}hx-get="/t/{{ tid }}/contents/{{ content.id }}/tracks" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}>
+  <h2>Titel</h2>
+  {% if uploads %}
+  <ul class="list uploads" aria-live="polite">
+    {% for u in uploads %}
+    <li>
+      <div>{{ u.original_filename }} <span class="badge status-{{ u.status.value }}">{{ status_labels[u.status] }}</span>
+        {% if u.error %}<div class="error-text">{{ u.error }}</div>{% endif %}
+      </div>
+      {% if u.status.value == 'failed' and ctx.can(Perm.UPLOAD) %}
+      <form method="post" action="/t/{{ tid }}/contents/{{ content.id }}/uploads/{{ u.id }}/dismiss" class="inline"
+            hx-post="/t/{{ tid }}/contents/{{ content.id }}/uploads/{{ u.id }}/dismiss" hx-target="#tracks" hx-swap="outerHTML">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="link">Ausblenden</button>
+      </form>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+  {% if items %}
+  <ol class="list tracks">
+    {% for item, asset in items %}
+    <li>
+      <div>
+        <strong>{{ item.title }}</strong>
+        <span class="muted">{{ item.duration_ms | duration }} · {{ asset.bytes | filesize }}</span>
+      </div>
+      {% if ctx.can(Perm.CONTENT_WRITE) %}
+      <div class="row">
+        {% for direction, symbol, label, show in [("up", "↑", "nach oben", not loop.first), ("down", "↓", "nach unten", not loop.last)] %}
+        {% if show %}
+        <form method="post" action="/t/{{ tid }}/contents/{{ content.id }}/items/{{ item.id }}/move" class="inline"
+              hx-post="/t/{{ tid }}/contents/{{ content.id }}/items/{{ item.id }}/move" hx-target="#tracks" hx-swap="outerHTML">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="hidden" name="direction" value="{{ direction }}">
+          <button class="icon" aria-label="{{ item.title }} {{ label }}">{{ symbol }}</button>
+        </form>
+        {% endif %}
+        {% endfor %}
+        <form method="post" action="/t/{{ tid }}/contents/{{ content.id }}/items/{{ item.id }}/delete" class="inline"
+              hx-post="/t/{{ tid }}/contents/{{ content.id }}/items/{{ item.id }}/delete" hx-target="#tracks" hx-swap="outerHTML">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button class="icon danger" aria-label="{{ item.title }} entfernen">✕</button>
+        </form>
+      </div>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+  {% elif not uploads %}
+  <p class="muted">Noch keine Titel.</p>
+  {% endif %}
+</section>

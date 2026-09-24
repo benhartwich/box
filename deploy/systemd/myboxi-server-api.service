@@ -1,0 +1,36 @@
+[Unit]
+Description=Myboxi server API (uvicorn, socket-activated)
+Requires=myboxi-server-api.socket
+After=network.target postgresql.service myboxi-server-api.socket
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=myboxi-server
+Group=myboxi-server
+EnvironmentFile=/etc/myboxi-server/myboxi-server.env
+Environment=TMPDIR=/var/lib/myboxi-server/tmp
+WorkingDirectory=/opt/myboxi-server
+ExecStart=/opt/myboxi-server/.venv/bin/myboxi-server serve --workers 2
+Restart=on-failure
+RestartSec=2
+UMask=0027
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ReadWritePaths=/var/lib/myboxi-server
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=yes
+RestrictRealtime=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,11 @@
+[Unit]
+Description=Myboxi server API socket (nginx proxies to it)
+
+[Socket]
+ListenStream=/run/myboxi-server/api.sock
+SocketUser=myboxi-server
+SocketGroup=www-data
+SocketMode=0660
+
+[Install]
+WantedBy=sockets.target

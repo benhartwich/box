@@ -4,6 +4,7 @@ requires-python = "==3.13.*"
 
 [manifest]
 members = [
+    "box-protocol",
     "box-server",
 ]
 
@@ -130,6 +131,17 @@ wheels = [
 ]
 
 [[package]]
+name = "box-protocol"
+version = "0.3.0"
+source = { editable = "packages/protocol" }
+dependencies = [
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "pydantic", specifier = ">=2.11" }]
+
+[[package]]
 name = "box-server"
 version = "0.1.0"
 source = { editable = "server" }
@@ -137,6 +149,7 @@ dependencies = [
     { name = "alembic" },
     { name = "argon2-cffi" },
     { name = "asyncpg" },
+    { name = "box-protocol" },
     { name = "fastapi" },
     { name = "jinja2" },
     { name = "procrastinate" },
@@ -153,6 +166,7 @@ requires-dist = [
     { name = "alembic", specifier = ">=1.16" },
     { name = "argon2-cffi", specifier = ">=25.1" },
     { name = "asyncpg", specifier = ">=0.30" },
+    { name = "box-protocol", editable = "packages/protocol" },
     { name = "fastapi", specifier = ">=0.118" },
     { name = "jinja2", specifier = ">=3.1.6" },
     { name = "procrastinate", specifier = ">=3.5" },

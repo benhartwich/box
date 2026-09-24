@@ -1,5 +1,5 @@
 [tool.uv.workspace]
-members = ["server"]
+members = ["packages/protocol", "server"]
 
 [tool.uv]
 python-preference = "only-system"
@@ -35,7 +35,7 @@ typeCheckingMode = "strict"
 pythonVersion = "3.13"
 venvPath = "."
 venv = ".venv"
-include = ["server", "tools"]
+include = ["packages", "server", "tools"]
 exclude = ["**/__pycache__", ".venv", "server/migrations/versions"]
 reportMissingTypeStubs = false
 
@@ -43,5 +43,5 @@ reportMissingTypeStubs = false
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"
 asyncio_default_test_loop_scope = "session"
-testpaths = ["server/tests"]
+testpaths = ["packages/protocol/tests", "server/tests"]
 addopts = "--import-mode=importlib"

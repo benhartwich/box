@@ -1,15 +1,21 @@
 """Build the box prompts from agent/prompts.toml into Opus files (48 kHz mono).
 
-    uv run --with piper-tts python tools/prompts/build_prompts.py --out build/prompts
+    uv venv build/tts --python 3.13
+    uv pip install -p build/tts --index-url https://download.pytorch.org/whl/cpu torch==2.14.0
+    uv pip install -p build/tts -r tools/prompts/requirements-tts.txt
+    build/tts/bin/python tools/prompts/build_prompts.py --out build/prompts
+
     uv run python tools/prompts/build_prompts.py --out build/prompts --tones-only
 
-Speech uses Piper (https://github.com/OHF-voice/piper1-gpl) at build time only; nothing of
-Piper runs on the box. Tones are generated with ffmpeg.
+Speech: Kokoro with the voice Thorsten-Voice/Kokoro (tools/prompts/kokoro_tts.py), at build
+time only; nothing of it runs on the box. Tones are generated with ffmpeg. NOTICE.txt next to
+the prompts names the voice and its licence.
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import subprocess
 import sys
 import tempfile
@@ -19,7 +25,19 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
 PROMPTS = ROOT / "agent" / "prompts.toml"
-DEFAULT_VOICE = "de_DE-thorsten-medium"
+TTS = Path(__file__).with_name("kokoro_tts.py")
+# The voice must be free for any use. Not allowed: Piper voices finetuned from en_US-lessac
+# (e.g. de_DE-thorsten), whose recordings are licensed for research only.
+NOTICE = """\
+Myboxi prompts: speech synthesized at build time with Kokoro (https://github.com/hexgrad/kokoro)
+and the voice Thorsten-Voice/Kokoro (https://huggingface.co/Thorsten-Voice/Kokoro),
+then loudness-normalized and encoded to Opus. Tones: generated with ffmpeg.
+
+Voice model: Apache License 2.0 (https://www.apache.org/licenses/LICENSE-2.0).
+Fine-tuned by Thorsten Mueller from hexgrad/Kokoro-82M (Apache License 2.0; training data
+and attributions: https://huggingface.co/hexgrad/Kokoro-82M) on the Thorsten-Voice dataset
+(CC0 1.0, https://www.thorsten-voice.de/).
+"""
 OPUS = ["-ar", "48000", "-ac", "1", "-c:a", "libopus", "-b:a", "32k", "-map_metadata", "-1"]
 
 
@@ -52,33 +70,28 @@ def build_tone(steps: list[list[int]], out: Path) -> None:
     ffmpeg("-filter_complex", tone_graph(steps), "-map", "[out]", *OPUS, str(out))
 
 
-def synthesize(text: str, voice: str, voices_dir: Path, wav: Path) -> None:
+def synthesize(texts: dict[str, str], cache: Path, out: Path) -> None:
+    """Every text in one run (loading the model is the slow part): out/<name>.wav."""
     subprocess.run(
-        [sys.executable, "-m", "piper", "--data-dir", str(voices_dir), "-m", voice,
-         "-f", str(wav), "--", text],
+        [sys.executable, str(TTS), "--out", str(out), "--cache", str(cache)],
+        input=json.dumps(texts),
+        text=True,
         check=True,
-    )  # fmt: skip
+    )
 
 
 def build_speech(
-    spec: dict[str, Any],
-    prompts: dict[str, dict[str, Any]],
-    voice: str,
-    voices_dir: Path,
-    out: Path,
+    spec: dict[str, Any], prompts: dict[str, dict[str, Any]], wav: Path, out: Path
 ) -> None:
-    with tempfile.TemporaryDirectory() as tmp:
-        wav = Path(tmp) / "speech.wav"
-        synthesize(str(spec["text"]), voice, voices_dir, wav)
-        speech = "[1:a]aresample=48000,aformat=channel_layouts=mono,loudnorm=I=-16:TP=-1.5[sp]"
-        if "before" in spec:
-            before = tone_graph(prompts[spec["before"]]["tone"]).replace("[out]", "[t]")
-            graph = f"{before};{speech};[t][sp]concat=n=2:v=0:a=1[out]"
-            ffmpeg("-f", "lavfi", "-i", "anullsrc=r=48000:cl=mono", "-i", str(wav),
-                   "-filter_complex", graph, "-map", "[out]", *OPUS, str(out))  # fmt: skip
-        else:
-            ffmpeg("-i", str(wav), "-filter_complex", speech.replace("[1:a]", "[0:a]"),
-                   "-map", "[sp]", *OPUS, str(out))  # fmt: skip
+    speech = "[1:a]aresample=48000,aformat=channel_layouts=mono,loudnorm=I=-16:TP=-1.5[sp]"
+    if "before" in spec:
+        before = tone_graph(prompts[spec["before"]]["tone"]).replace("[out]", "[t]")
+        graph = f"{before};{speech};[t][sp]concat=n=2:v=0:a=1[out]"
+        ffmpeg("-f", "lavfi", "-i", "anullsrc=r=48000:cl=mono", "-i", str(wav),
+               "-filter_complex", graph, "-map", "[out]", *OPUS, str(out))  # fmt: skip
+    else:
+        ffmpeg("-i", str(wav), "-filter_complex", speech.replace("[1:a]", "[0:a]"),
+               "-map", "[sp]", *OPUS, str(out))  # fmt: skip
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -86,32 +99,25 @@ def main(argv: list[str] | None = None) -> int:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     p.add_argument("--out", type=Path, required=True)
-    p.add_argument("--voice", default=DEFAULT_VOICE)
-    p.add_argument("--voices-dir", type=Path, default=Path("build/voices"))
+    p.add_argument("--cache", type=Path, default=Path("build/voices"), help="model downloads")
     p.add_argument("--tones-only", action="store_true")
     args = p.parse_args(argv)
     prompts = load()
     args.out.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory() as tmp:
+        speech = Path(tmp)
+        if not args.tones_only:
+            texts = {name: str(spec["text"]) for name, spec in prompts.items() if "text" in spec}
+            synthesize(texts, args.cache, speech)
+        for name, spec in prompts.items():
+            target = args.out / f"{name}.opus"
+            if "tone" in spec:
+                build_tone(spec["tone"], target)
+            elif not args.tones_only:
+                build_speech(spec, prompts, speech / f"{name}.wav", target)
+            print(f"  {name}")
     if not args.tones_only:
-        args.voices_dir.mkdir(parents=True, exist_ok=True)
-        subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "piper.download_voices",
-                "--data-dir",
-                str(args.voices_dir),
-                args.voice,
-            ],
-            check=True,
-        )
-    for name, spec in prompts.items():
-        target = args.out / f"{name}.opus"
-        if "tone" in spec:
-            build_tone(spec["tone"], target)
-        elif not args.tones_only:
-            build_speech(spec, prompts, args.voice, args.voices_dir, target)
-        print(f"  {name}")
+        (args.out / "NOTICE.txt").write_text(NOTICE)
     return 0
 
 

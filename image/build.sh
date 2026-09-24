@@ -33,6 +33,7 @@ trap cleanup EXIT
 
 [ "$(uname -m)" = "aarch64" ] || { echo "needs an arm64 host"; exit 1; }
 [ -f "$PROMPTS_DIR/tone_start.opus" ] || { echo "prompts missing in $PROMPTS_DIR"; exit 1; }
+[ -f "$PROMPTS_DIR/NOTICE.txt" ] || { echo "voice notice missing in $PROMPTS_DIR"; exit 1; }
 mkdir -p "$OUT/cache" "$MNT"
 
 echo "== base image"
@@ -67,7 +68,7 @@ tar -C "$ROOT" "${TAR_ROOT[@]}" -cf - pyproject.toml uv.lock .python-version pac
     server/pyproject.toml | tar -C "$MNT/opt/myboxi-agent" -xf -
 install -m 0755 "$UV_BIN" "$MNT/usr/local/bin/uv"
 install -d "$MNT/opt/myboxi-agent/prompts"
-install -m 0644 "$PROMPTS_DIR"/*.opus "$MNT/opt/myboxi-agent/prompts/"
+install -m 0644 "$PROMPTS_DIR"/*.opus "$PROMPTS_DIR/NOTICE.txt" "$MNT/opt/myboxi-agent/prompts/"
 # --no-overwrite-dir: /, /etc, /usr … keep owner and mode of the base image.
 tar -C "$ROOT/image/files" "${TAR_ROOT[@]}" -cf - . | tar -C "$MNT" --no-overwrite-dir -xf -
 [ -f "$MNT/etc/myboxi-agent/myboxi-agent.env" ] || { echo "myboxi-agent.env missing"; exit 1; }

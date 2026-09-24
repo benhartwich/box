@@ -45,3 +45,12 @@ def test_tones_are_built(tmp_path: Path) -> None:
             check=True, capture_output=True, text=True,
         ).stdout.strip()  # fmt: skip
         assert out == "opus,48000,1"
+
+
+def test_voice_licence_is_shipped() -> None:
+    module = _module()
+    # Piper voices finetuned from en_US-lessac are research-only (see build_prompts.NOTICE).
+    assert "Apache License 2.0" in module.NOTICE
+    assert "CC0" in module.NOTICE
+    assert "lessac" not in module.NOTICE
+    assert module.TTS.is_file()

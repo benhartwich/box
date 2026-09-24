@@ -61,4 +61,6 @@ sudo journalctl _SYSTEMD_USER_UNIT=myboxi-agent.service -f      # Agent
 sudo journalctl -u myboxi-setupd -f                             # Einrichtungsmodus
 ```
 
+Die mitgelieferten Ansagen spricht die Stimme „Thorsten-Voice/Kokoro“ (Apache-2.0, Lizenzhinweis in `/opt/myboxi-agent/prompts/NOTICE.txt`).
+
 Eigene Ansagen, z. B. mit deiner Stimme: Opus-Dateien mit dem Namen der Ansage (siehe `agent/prompts.toml`, z. B. `unknown_token.opus`) nach `/var/lib/myboxi/prompts/` kopieren (Besitzer `myboxi`). Sie haben Vorrang vor den mitgelieferten.

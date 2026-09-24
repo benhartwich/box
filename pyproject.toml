@@ -39,7 +39,8 @@ pythonVersion = "3.13"
 venvPath = "."
 venv = ".venv"
 include = ["packages", "server", "agent", "tools"]
-exclude = ["**/__pycache__", ".venv", "server/migrations/versions"]
+# kokoro_tts.py runs in its own build venv (torch, kokoro), see tools/prompts/build_prompts.py.
+exclude = ["**/__pycache__", ".venv", "server/migrations/versions", "tools/prompts/kokoro_tts.py"]
 reportMissingTypeStubs = false
 
 [tool.pytest.ini_options]

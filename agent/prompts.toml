@@ -1,5 +1,5 @@
 # Prompts of the box (SPEC §1.7: every situation is audible).
-# Built into Opus files by tools/prompts/build_prompts.py (speech: Piper at image build time).
+# Built into Opus files by tools/prompts/build_prompts.py (speech: Kokoro at image build time).
 # Own recordings override them: /var/lib/myboxi/prompts/<id>.opus (SPEC v0.5 §4).
 #
 # tone:   list of [frequency_hz, milliseconds]; 0 Hz is a pause

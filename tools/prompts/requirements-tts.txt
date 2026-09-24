@@ -1,0 +1,8 @@
+# Build-time speech for the box prompts (tools/prompts/kokoro_tts.py); never on the box.
+# torch comes first from the CPU index: see tools/prompts/build_prompts.py.
+numpy==2.5.3
+soundfile==0.14.0
+huggingface_hub==1.33.0
+# German G2P and Kokoro forks used to train Thorsten-Voice/Kokoro (kikiri-tts).
+misaki @ git+https://github.com/semidark/misaki.git@9cda9268309160120fffee216280a9ca83ac4644
+kokoro @ git+https://github.com/semidark/kokoro.git@b96fef95e6a746495f92443fac7c688f90fc57fc

@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}{{ token.label }} · Box{% endblock %}
+{% block content %}
+<p><a href="/t/{{ tid }}/figures">← Figuren</a></p>
+<h1>{% if token.icon %}{{ token.icon }} {% endif %}{{ token.label }}</h1>
+<p class="muted">UID <code>{{ token.uid }}</code></p>
+
+<section class="card">
+  <h2>Zuordnung</h2>
+  {% set editable = ctx.can(Perm.BINDING_WRITE) %}
+  {% if contents %}
+  <form method="post" action="/t/{{ tid }}/figures/{{ token.id }}/binding" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <fieldset {% if not editable %}disabled{% endif %} class="stack">
+      <label>Inhalt
+        <select name="content_id" required>
+          {% if not binding %}<option value="">– bitte wählen –</option>{% endif %}
+          {% for c in contents %}<option value="{{ c.id }}" {% if binding and binding.content_id == c.id %}selected{% endif %}>{{ c.title }}</option>{% endfor %}
+        </select>
+      </label>
+      <label class="check"><input type="checkbox" name="resume" value="true" {% if not binding or binding.resume %}checked{% endif %}> an letzter Stelle weiterspielen</label>
+      <label class="check"><input type="checkbox" name="shuffle" value="true" {% if binding and binding.shuffle %}checked{% endif %}> zufällige Reihenfolge</label>
+      <label>Wiederholen
+        <select name="repeat">
+          {% for value, label in repeat_labels.items() %}<option value="{{ value.value }}" {% if binding and binding.repeat == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+      </label>
+      {% if editable %}<button type="submit">Speichern</button>{% endif %}
+    </fieldset>
+  </form>
+  {% if binding and editable %}
+  <form method="post" action="/t/{{ tid }}/figures/{{ token.id }}/binding/delete">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button class="secondary">Zuordnung lösen</button>
+  </form>
+  {% endif %}
+  {% else %}
+  <p class="muted">Noch keine Inhalte. <a href="/t/{{ tid }}/contents">Inhalt anlegen</a></p>
+  {% endif %}
+</section>
+
+{% if ctx.can(Perm.TOKEN_WRITE) %}
+<section class="card">
+  <h2>Figur bearbeiten</h2>
+  <form method="post" action="/t/{{ tid }}/figures/{{ token.id }}" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>Name <input name="label" value="{{ token.label }}" maxlength="100" required></label>
+    <label>Symbol (Emoji, optional) <input name="icon" value="{{ token.icon or '' }}" maxlength="16"></label>
+    <button type="submit">Speichern</button>
+  </form>
+  <form method="post" action="/t/{{ tid }}/figures/{{ token.id }}/delete">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button class="danger">Figur löschen</button>
+  </form>
+</section>
+{% endif %}
+{% endblock %}

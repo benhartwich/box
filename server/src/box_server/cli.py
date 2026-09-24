@@ -18,6 +18,8 @@ def _cmd_dev(args: argparse.Namespace) -> int:
     import uvicorn
 
     os.environ.setdefault("BOX_SERVER_ENV", "dev")
+    # CSRF compares the Origin header with base_url; match what the browser will use.
+    os.environ.setdefault("BOX_SERVER_BASE_URL", f"http://{args.host}:{args.port}")
     settings = get_settings()
     configure_logging(settings.log_level, "console")
     uvicorn.run(

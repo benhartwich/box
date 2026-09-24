@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Inhalte · Box{% endblock %}
+{% block content %}
+<h1>Inhalte</h1>
+{% if contents %}
+<ul class="list">
+  {% for c in contents %}
+  <li>
+    <div class="row">
+      {% if c.cover_asset_id %}<img class="thumb" src="/t/{{ tid }}/covers/{{ c.cover_asset_id }}" alt="" width="48" height="48">{% endif %}
+      <div>
+        <a href="/t/{{ tid }}/contents/{{ c.id }}"><strong>{{ c.title }}</strong></a>
+        <div class="muted">{{ kind_labels[c.kind] }}</div>
+      </div>
+    </div>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="muted">Noch keine Inhalte.</p>
+{% endif %}
+{% if ctx.can(Perm.CONTENT_WRITE) %}
+<h2>Neuer Inhalt</h2>
+<div class="row">
+  {% for kind, label in kind_labels.items() %}
+  <a class="button secondary" href="/t/{{ tid }}/contents/new?kind={{ kind.value }}">{{ label }}</a>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

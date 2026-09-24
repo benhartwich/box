@@ -18,8 +18,8 @@ from sqlalchemy import select
 from box_protocol.events import EventBatchResponse
 from box_protocol.state import StateResponse
 from box_server.domain import members
-from box_server.models import Event, Membership, ResumePosition
-from box_server.models.enums import Role
+from box_server.models import ContentItem, Event, Membership, ResumePosition, Token, Upload
+from box_server.models.enums import Role, UploadProfile, UploadStatus
 
 from .helpers import (
     Library,
@@ -54,6 +54,9 @@ class Side:
     lib: Library
     device: PairedDevice
     invitation_id: uuid.UUID
+    item_id: uuid.UUID
+    asset_id: uuid.UUID
+    upload_id: uuid.UUID
 
 
 @dataclass
@@ -69,6 +72,9 @@ class World:
             "device_id": str(self.b.device.device_id),
             "token_id": str(self.b.lib.token_id),
             "content_id": str(self.b.lib.content_id),
+            "item_id": str(self.b.item_id),
+            "asset_id": str(self.b.asset_id),
+            "upload_id": str(self.b.upload_id),
             "sha256": self.b.lib.shas[0],
         }
 
@@ -80,9 +86,29 @@ async def _side(app: FastAPI, client: httpx.AsyncClient, name: str) -> Side:
     ctx = await owner_ctx(app, t.tenant_id)
     async with sessionmaker_of(app)() as db:
         inv, _ = await members.create_invitation(db, ctx, f"guest-{name}@example.org", Role.VIEWER)
+        item = (
+            await db.scalars(select(ContentItem).where(ContentItem.tenant_id == t.tenant_id))
+        ).first()
+        assert item is not None
+        upload = Upload(
+            tenant_id=t.tenant_id, content_id=lib.content_id, original_filename="x.mp3",
+            source_sha256="0" * 64, source_bytes=1, profile=UploadProfile.MUSIC,
+            status=UploadStatus.FAILED, error="x",
+        )  # fmt: skip
+        db.add(upload)
         await db.commit()
         assert ctx.user_id is not None
-    return Side(t.tenant_id, t.owner_email, ctx.user_id, lib, device, inv.id)
+    return Side(
+        t.tenant_id,
+        t.owner_email,
+        ctx.user_id,
+        lib,
+        device,
+        inv.id,
+        item.id,
+        item.asset_id,
+        upload.id,
+    )
 
 
 @pytest.fixture
@@ -106,6 +132,7 @@ def test_every_route_is_covered(app: FastAPI) -> None:
         "content_id",
         "item_id",
         "upload_id",
+        "asset_id",
     }
     for r in tenant_routes(app):
         assert set(r.params) <= known, (
@@ -119,11 +146,7 @@ async def test_foreign_tenant_routes_are_404(
 ) -> None:
     """Owner of A addresses tenant B: every route answers 404 (existence is not revealed)."""
     csrf = await login(client, world.a.owner_email)
-    values = world.foreign_ids() | {
-        "tid": str(world.b.tenant_id),
-        "item_id": str(uuid.uuid4()),
-        "upload_id": str(uuid.uuid4()),
-    }
+    values = world.foreign_ids() | {"tid": str(world.b.tenant_id)}
     checked = 0
     for r in tenant_routes(app):
         resp = await client.request(
@@ -134,9 +157,31 @@ async def test_foreign_tenant_routes_are_404(
     assert checked > 0
 
 
-FOREIGN_OBJECT_FORMS: dict[tuple[str, str], dict[str, str]] = {
-    ("POST", "/t/{tid}/members/{user_id}/role"): {"role": "viewer"},
-}
+AUDIO = ("a.mp3", b"ID3not really audio", "audio/mpeg")
+IMAGE = ("c.png", b"not really an image", "image/png")
+
+
+def foreign_object_request(world: World, method: str, path: str) -> dict[str, object]:
+    """Valid form bodies, so the request reaches the tenant check instead of form validation."""
+    own_content = str(world.a.lib.content_id)
+    forms: dict[tuple[str, str], dict[str, object]] = {
+        ("POST", "/t/{tid}/members/{user_id}/role"): {"data": {"role": "viewer"}},
+        ("POST", "/t/{tid}/boxes/{device_id}/rename"): {"data": {"name": "x"}},
+        ("POST", "/t/{tid}/boxes/{device_id}/config"): {
+            "data": {
+                "max_volume": "50", "start_volume": "30", "on_token_removed": "pause",
+                "locale": "de-AT", "timezone": "Europe/Vienna", "providers": "local",
+            }
+        },
+        ("POST", "/t/{tid}/figures/{token_id}"): {"data": {"label": "x"}},
+        ("POST", "/t/{tid}/figures/{token_id}/binding"): {"data": {"content_id": own_content}},
+        ("POST", "/t/{tid}/contents/{content_id}"): {"data": {"title": "x"}},
+        ("POST", "/t/{tid}/contents/{content_id}/items/{item_id}/move"): {"data": {"direction": "up"}},  # noqa: E501
+        ("POST", "/t/{tid}/contents/{content_id}/items/{item_id}/rename"): {"data": {"title": "x"}},
+        ("POST", "/t/{tid}/contents/{content_id}/uploads"): {"files": {"files": AUDIO}},
+        ("POST", "/t/{tid}/contents/{content_id}/cover"): {"files": {"file": IMAGE}},
+    }  # fmt: skip
+    return forms.get((method, path), {"data": {}})
 
 
 async def test_foreign_objects_in_own_tenant_are_404(
@@ -148,14 +193,33 @@ async def test_foreign_objects_in_own_tenant_are_404(
     for r in tenant_routes(app):
         if r.params == ["tid"]:
             continue
-        form = FOREIGN_OBJECT_FORMS.get((r.method, r.path), {})
-        url = r.url(values | {"item_id": str(uuid.uuid4()), "upload_id": str(uuid.uuid4())})
-        resp = await client.request(r.method, url, headers={"X-CSRF-Token": csrf}, data=form)
+        kwargs = foreign_object_request(world, r.method, r.path) if r.method != "GET" else {}
+        resp = await client.request(
+            r.method,
+            r.url(values),
+            headers={"X-CSRF-Token": csrf},
+            **kwargs,  # pyright: ignore[reportArgumentType]
+        )
         assert resp.status_code == 404, f"{r.method} {r.path} → {resp.status_code}"
     async with sessionmaker_of(app)() as db:
         m = await db.get(Membership, (world.b.tenant_id, world.b.owner_id))
         assert m is not None
         assert m.role == Role.OWNER
+        token = await db.get(Token, world.b.lib.token_id)
+        assert token is not None
+        assert token.label == "Bibi"
+
+
+async def test_binding_to_foreign_content_is_404(
+    app: FastAPI, client: httpx.AsyncClient, world: World
+) -> None:
+    """Own figure, foreign content: refused (the DB's composite FK would refuse it too)."""
+    csrf = await login(client, world.a.owner_email)
+    r = await client.post(
+        f"/t/{world.a.tenant_id}/figures/{world.a.lib.token_id}/binding",
+        data={"content_id": str(world.b.lib.content_id), "csrf_token": csrf},
+    )
+    assert r.status_code == 404
 
 
 async def test_state_contains_only_own_tenant(client: httpx.AsyncClient, world: World) -> None:

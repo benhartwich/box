@@ -90,3 +90,18 @@ def client_ip(request: Request, settings: Settings) -> str:
         if real:
             return real
     return request.client.host if request.client else "unknown"
+
+
+ReadCtx = Annotated[TenantContext, Depends(require(Perm.READ))]
+TokenWriteCtx = Annotated[TenantContext, Depends(require(Perm.TOKEN_WRITE))]
+ContentWriteCtx = Annotated[TenantContext, Depends(require(Perm.CONTENT_WRITE))]
+BindingWriteCtx = Annotated[TenantContext, Depends(require(Perm.BINDING_WRITE))]
+UploadCtx = Annotated[TenantContext, Depends(require(Perm.UPLOAD))]
+ClaimCtx = Annotated[TenantContext, Depends(require(Perm.DEVICE_CLAIM))]
+RenameCtx = Annotated[TenantContext, Depends(require(Perm.DEVICE_RENAME))]
+ConfigCtx = Annotated[TenantContext, Depends(require(Perm.DEVICE_CONFIG))]
+RemoveCtx = Annotated[TenantContext, Depends(require(Perm.DEVICE_REMOVE))]
+
+
+def is_htmx(request: Request) -> bool:
+    return request.headers.get("hx-request") == "true"

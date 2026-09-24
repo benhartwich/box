@@ -18,7 +18,13 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from box_server.api.device import claim as device_claim
 from box_server.api.device import router as device_router
 from box_server.api.device.errors import ApiError, code_for_status, error_response
-from box_server.api.web import routes_auth, routes_members
+from box_server.api.web import (
+    routes_auth,
+    routes_boxes,
+    routes_contents,
+    routes_figures,
+    routes_members,
+)
 from box_server.api.web.deps import LoginRequiredError
 from box_server.api.web.render import render
 from box_server.api.web.templating import STATIC_DIR
@@ -178,6 +184,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
     app.include_router(routes_auth.router)
     app.include_router(routes_members.router)
+    app.include_router(routes_boxes.router)
+    app.include_router(routes_figures.router)
+    app.include_router(routes_contents.router)
     app.include_router(device_router.router)
     app.include_router(device_claim.router)
 

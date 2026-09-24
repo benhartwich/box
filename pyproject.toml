@@ -22,6 +22,8 @@ extend-exclude = ["server/migrations/versions"]
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "SIM", "ASYNC", "S", "DTZ", "RUF", "PT", "TID", "C4", "RET", "PTH"]
 ignore = ["S311"]
+# German UI texts use typographic dashes and quotes.
+allowed-confusables = ["–", "„", "“", "×"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["box_server", "box_protocol"]

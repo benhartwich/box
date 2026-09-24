@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import datetime as dt
 from pathlib import Path
 from typing import Any, cast
+from zoneinfo import ZoneInfo
 
 from fastapi.templating import Jinja2Templates
 
@@ -20,3 +22,38 @@ _globals["ROLE_LABELS"] = {
     Role.CONTRIBUTOR: "Mitwirkend",
     Role.VIEWER: "Nur lesen",
 }
+
+# Times in the UI are shown in the household's usual zone (SPEC default timezone).
+UI_ZONE = ZoneInfo("Europe/Vienna")
+
+
+def localtime(value: dt.datetime | None) -> str:
+    if value is None:
+        return "–"
+    return value.astimezone(UI_ZONE).strftime("%d.%m.%Y %H:%M")
+
+
+def duration(ms: int | None) -> str:
+    if ms is None:
+        return "–"
+    seconds = round(ms / 1000)
+    h, rest = divmod(seconds, 3600)
+    m, s = divmod(rest, 60)
+    return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
+
+
+def filesize(n: int | None) -> str:
+    if n is None:
+        return "–"
+    size = float(n)
+    for unit in ("B", "KB", "MB", "GB"):
+        if size < 1024 or unit == "GB":
+            return f"{size:.0f} {unit}" if unit == "B" else f"{size:.1f} {unit}".replace(".", ",")
+        size /= 1024
+    return str(n)
+
+
+_filters = cast(dict[str, Any], templates.env.filters)
+_filters["localtime"] = localtime
+_filters["duration"] = duration
+_filters["filesize"] = filesize

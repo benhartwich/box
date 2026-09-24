@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import uuid
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from box_protocol.state import DeviceConfig as DeviceConfigMsg
 from box_server.domain.authz import Perm, TenantContext
-from box_server.domain.errors import NotFoundError
+from box_server.domain.errors import InvalidInputError, NotFoundError
+from box_server.domain.state import device_config_message
 from box_server.models import Device, DeviceConfig
+from box_server.models.enums import OnTokenRemoved
 
 
 async def unpair(db: AsyncSession, device: Device) -> None:
@@ -57,3 +61,62 @@ async def get_device(
 async def remove_device(db: AsyncSession, ctx: TenantContext, device_id: uuid.UUID) -> None:
     ctx.require(Perm.DEVICE_REMOVE)
     await unpair(db, await get_device(db, ctx, device_id, for_update=True))
+
+
+async def rename_device(
+    db: AsyncSession, ctx: TenantContext, device_id: uuid.UUID, name: str
+) -> None:
+    ctx.require(Perm.DEVICE_RENAME)
+    name = name.strip()
+    if not 1 <= len(name) <= 64:
+        raise InvalidInputError("Bitte einen Namen mit höchstens 64 Zeichen angeben.")
+    device = await get_device(db, ctx, device_id, for_update=True)
+    device.name = name
+    await db.flush()
+
+
+async def _config_row(
+    db: AsyncSession, ctx: TenantContext, device_id: uuid.UUID
+) -> DeviceConfig | None:
+    return await db.scalar(
+        select(DeviceConfig).where(
+            DeviceConfig.device_id == device_id, DeviceConfig.tenant_id == ctx.tenant_id
+        )
+    )
+
+
+async def get_config(db: AsyncSession, ctx: TenantContext, device_id: uuid.UUID) -> DeviceConfigMsg:
+    """The box's desired configuration as sent in the state (SPEC §3.4 defaults if unset)."""
+    ctx.require(Perm.READ)
+    await get_device(db, ctx, device_id)
+    return device_config_message(await _config_row(db, ctx, device_id))
+
+
+async def update_config(
+    db: AsyncSession, ctx: TenantContext, device_id: uuid.UUID, config: DeviceConfigMsg
+) -> DeviceConfig:
+    """SPEC §3.4, validated with the protocol model. Raises device_rev via trigger (§5.1)."""
+    ctx.require(Perm.DEVICE_CONFIG)
+    try:
+        ZoneInfo(config.timezone)
+    except (ZoneInfoNotFoundError, ValueError):
+        raise InvalidInputError("Unbekannte Zeitzone.") from None
+    await get_device(db, ctx, device_id, for_update=True)
+    cfg = await _config_row(db, ctx, device_id)
+    if cfg is None:
+        cfg = DeviceConfig(device_id=device_id, tenant_id=ctx.tenant_id)
+        db.add(cfg)
+    cfg.max_volume = config.max_volume
+    cfg.start_volume = config.start_volume
+    cfg.quiet_hours = (
+        config.quiet_hours.model_dump(mode="json", exclude_none=True)
+        if config.quiet_hours
+        else None
+    )
+    cfg.sleep_timer_min = config.sleep_timer_min
+    cfg.on_token_removed = OnTokenRemoved(config.on_token_removed)
+    cfg.locale = config.locale
+    cfg.timezone = config.timezone
+    cfg.providers_enabled = list(dict.fromkeys(config.providers_enabled))
+    await db.flush()
+    return cfg

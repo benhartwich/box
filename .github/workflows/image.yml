@@ -20,6 +20,11 @@ on:
 permissions:
   contents: write
 
+# One build per branch (a newer push replaces it); release builds for tags always finish.
+concurrency:
+  group: image-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref_type == 'branch' }}
+
 env:
   UV_VERSION: "0.12.18"
 

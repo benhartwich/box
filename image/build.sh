@@ -60,13 +60,17 @@ printf '#!/bin/sh\nexit 101\n' > "$MNT/usr/sbin/policy-rc.d"
 chmod +x "$MNT/usr/sbin/policy-rc.d"
 
 echo "== agent source, uv, prompts, system files"
+# Everything copied into the image belongs to root, never to the build user (tar keeps owners).
+TAR_ROOT=(--owner=0 --group=0 --numeric-owner)
 install -d "$MNT/opt/myboxi-agent"
-tar -C "$ROOT" -cf - pyproject.toml uv.lock .python-version packages/protocol agent server/pyproject.toml \
-    | tar -C "$MNT/opt/myboxi-agent" -xf -
+tar -C "$ROOT" "${TAR_ROOT[@]}" -cf - pyproject.toml uv.lock .python-version packages/protocol agent \
+    server/pyproject.toml | tar -C "$MNT/opt/myboxi-agent" -xf -
 install -m 0755 "$UV_BIN" "$MNT/usr/local/bin/uv"
 install -d "$MNT/opt/myboxi-agent/prompts"
 install -m 0644 "$PROMPTS_DIR"/*.opus "$MNT/opt/myboxi-agent/prompts/"
-cp -a "$ROOT/image/files/." "$MNT/"
+# --no-overwrite-dir: /, /etc, /usr … keep owner and mode of the base image.
+tar -C "$ROOT/image/files" "${TAR_ROOT[@]}" -cf - . | tar -C "$MNT" --no-overwrite-dir -xf -
+[ -f "$MNT/etc/myboxi-agent/myboxi-agent.env" ] || { echo "myboxi-agent.env missing"; exit 1; }
 cat "$ROOT/image/config.txt.append" >> "$MNT/boot/firmware/config.txt"
 # HDMI audio off too, so PipeWire's only sink is the MAX98357A.
 sed -i 's/^dtoverlay=vc4-kms-v3d$/dtoverlay=vc4-kms-v3d,noaudio/' "$MNT/boot/firmware/config.txt"
@@ -107,6 +111,10 @@ install -d /var/lib/myboxi/.config/systemd/user/default.target.wants
 ln -sf /usr/lib/systemd/user/myboxi-agent.service \
     /var/lib/myboxi/.config/systemd/user/default.target.wants/myboxi-agent.service
 chown -R myboxi:myboxi /var/lib/myboxi
+
+# Nothing may belong to a user that does not exist on the box (e.g. the build user).
+orphans=$(find / -xdev \( -nouser -o -nogroup \) -print)
+[ -z "$orphans" ] || { echo "files without owner on the box:"; echo "$orphans"; exit 1; }
 
 # Self-test without hardware or network.
 runuser -u myboxi -- env MYBOXI_AGENT_PROMPTS_DIR=/opt/myboxi-agent/prompts \

@@ -20,7 +20,9 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="MYBOXI_AGENT_", extra="ignore")
 
     data_dir: Path = Path("/var/lib/myboxi")
-    default_server_url: str | None = "https://app.myboxi.eu"
+    # The image sets https://app.myboxi.eu; empty here so dev and test runs never pair
+    # against production by accident.
+    default_server_url: str | None = None
     sim: bool = False
 
     # Hardware (docs/hardware.md): BCM pin numbers, buttons wired to GND.

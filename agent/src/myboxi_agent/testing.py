@@ -1,4 +1,4 @@
-"""Recording fakes for the core ports."""
+"""Recording fakes for the core ports (tests and experiments; never used at runtime)."""
 
 from __future__ import annotations
 

@@ -97,6 +97,12 @@ class StateRepo:
         )
 
     def set_server_url(self, url: str | None) -> None:
+        """A different server means different credentials (SPEC §1.5): pair again."""
+        current = self.get()
+        if current.server_url == url:
+            return
+        if current.tenant_id is not None:
+            self.clear_tenant()
         with self.db.tx() as c:
             c.execute("UPDATE sync_state SET server_url = ? WHERE id = 1", (url,))
 

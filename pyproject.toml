@@ -30,7 +30,7 @@ allowed-confusables = ["–", "„", "“", "×"]
 known-first-party = ["myboxi_server", "myboxi_protocol", "myboxi_agent"]
 
 [tool.ruff.lint.per-file-ignores]
-"**/tests/**" = ["S101", "S603", "S607"]
+"**/tests/**" = ["S101", "S603", "S607", "ASYNC109", "ASYNC110", "ASYNC240"]
 "tools/**" = ["S101", "S603", "S607"]
 
 [tool.pyright]

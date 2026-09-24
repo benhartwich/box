@@ -57,6 +57,20 @@ def _cmd_status(args: argparse.Namespace, settings: Settings) -> int:
     return _control(settings, {"cmd": "status"})
 
 
+def _cmd_sync(args: argparse.Namespace, settings: Settings) -> int:
+    del args
+    return _control(settings, {"cmd": "sync_now"})
+
+
+def _cmd_repair(args: argparse.Namespace, settings: Settings) -> int:
+    del args
+    return _control(settings, {"cmd": "repair"})
+
+
+def _cmd_server(args: argparse.Namespace, settings: Settings) -> int:
+    return _control(settings, {"cmd": "set_server_url", "url": args.url})
+
+
 def _cmd_sim(args: argparse.Namespace, settings: Settings) -> int:
     match args.sim_command:
         case "place":
@@ -109,9 +123,17 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("run", help="run the agent")
     p.add_argument("--sim", action="store_true", help="simulated hardware (CLAUDE.md rule 2)")
+    p.add_argument("--server-url", help="default server URL (e.g. http://127.0.0.1:8000)")
     p.set_defaults(func=_cmd_run)
 
     sub.add_parser("status", help="state of the running agent").set_defaults(func=_cmd_status)
+    sub.add_parser("sync", help="sync with the server now").set_defaults(func=_cmd_sync)
+    sub.add_parser("repair", help="unpair and pair again (SPEC §9.4)").set_defaults(
+        func=_cmd_repair
+    )
+    p = sub.add_parser("server", help="set the server URL (pairs again if it changes)")
+    p.add_argument("url")
+    p.set_defaults(func=_cmd_server)
 
     p = sub.add_parser("sim", help="drive a simulated agent (run --sim)")
     ss = p.add_subparsers(dest="sim_command", required=True)
@@ -145,6 +167,8 @@ def main(argv: list[str] | None = None) -> int:
         updates["data_dir"] = args.data_dir
     if getattr(args, "sim", False):
         updates["sim"] = True
+    if getattr(args, "server_url", None):
+        updates["default_server_url"] = args.server_url
     if updates:
         settings = settings.model_copy(update=updates)
     fmt = "console" if args.command in {"run"} and settings.sim else settings.log_format

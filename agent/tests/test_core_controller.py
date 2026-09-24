@@ -12,15 +12,7 @@ import pytest
 from myboxi_agent.core.clock import FakeClock
 from myboxi_agent.core.controller import RESUME_SAVE_EVERY_S, Controller
 from myboxi_agent.core.model import Action, Loading, Prompt, ResumePoint, Unavailable
-from myboxi_protocol.events import (
-    PlaybackErrorData,
-    ResumePositionData,
-    TokenPlayedData,
-    TokenUnknownData,
-)
-from myboxi_protocol.state import DeviceConfig
-
-from .fakes import (
+from myboxi_agent.testing import (
     FakeAnnouncer,
     FakeLibrary,
     FakeOutbox,
@@ -29,6 +21,13 @@ from .fakes import (
     FakeSystem,
     playable,
 )
+from myboxi_protocol.events import (
+    PlaybackErrorData,
+    ResumePositionData,
+    TokenPlayedData,
+    TokenUnknownData,
+)
+from myboxi_protocol.state import DeviceConfig
 
 UID = "04A2B3C4D5E680"
 

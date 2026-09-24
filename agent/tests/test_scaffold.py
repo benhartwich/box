@@ -14,7 +14,7 @@ def test_defaults_follow_spec_paths() -> None:
     s = Settings()
     assert str(s.db_path) == "/var/lib/myboxi/myboxi.db"  # SPEC §4
     assert str(s.asset_dir) == "/var/lib/myboxi/assets"
-    assert s.default_server_url == "https://app.myboxi.eu"
+    assert s.default_server_url is None  # set by the image, never by accident in dev
     assert s.pins == {"play_pause": 17, "volume_up": 27, "volume_down": 22, "next": 23}
 
 

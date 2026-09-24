@@ -5,16 +5,20 @@ from __future__ import annotations
 import asyncio
 import logging
 import random
+from collections.abc import Callable
 from typing import Any
 
+from myboxi_agent import __version__
 from myboxi_agent.adapters.base import Placed
 from myboxi_agent.adapters.bundle import Adapters, sim_adapters
 from myboxi_agent.adapters.outbox import EventOutbox, read_boot_id
 from myboxi_agent.adapters.sim import SimButtons, SimPlayer, SimReader
+from myboxi_agent.adapters.system_info import detect_hw_model, free_bytes, image_version
 from myboxi_agent.config import Settings
 from myboxi_agent.control import ControlServer
 from myboxi_agent.core.buttons import ButtonTracker
 from myboxi_agent.core.controller import Controller
+from myboxi_agent.core.model import Action
 from myboxi_agent.store.db import connect
 from myboxi_agent.store.repos import (
     AssetRepo,
@@ -24,6 +28,9 @@ from myboxi_agent.store.repos import (
     ResumeRepo,
     StateRepo,
 )
+from myboxi_agent.sync.client import DeviceApi
+from myboxi_agent.sync.engine import Api, SyncEngine
+from myboxi_protocol.reported import ReportedData
 
 log = logging.getLogger(__name__)
 
@@ -40,7 +47,12 @@ def build_adapters(settings: Settings) -> Adapters:
 
 
 class App:
-    def __init__(self, settings: Settings, adapters: Adapters | None = None) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        adapters: Adapters | None = None,
+        api_factory: Callable[[str], Api] | None = None,
+    ) -> None:
         self.settings = settings
         self.adapters = adapters or build_adapters(settings)
         clock = self.adapters.clock
@@ -63,6 +75,25 @@ class App:
             rng=random.Random(),
         )
         self.tracker = ButtonTracker(clock)
+        self.hw_model = detect_hw_model()
+        self.sync = SyncEngine(
+            state=self.state,
+            library=self.library,
+            assets=self.assets,
+            outbox_repo=self.outbox_repo,
+            outbox=self.outbox,
+            controller=self.controller,
+            clock=clock,
+            api_factory=api_factory or DeviceApi,
+            default_server_url=settings.default_server_url,
+            hw_model=self.hw_model,
+            reported_data=self.reported_data,
+            disk_free=lambda: free_bytes(settings.data_dir),
+            interval_s=settings.sync_interval_s,
+        )
+        system: Any = self.adapters.system
+        if hasattr(system, "on_repair"):
+            system.on_repair = self.sync.request_repair
         player: Any = self.adapters.player
         if hasattr(player, "on_playlist_finished"):
             player.on_playlist_finished = self.controller.playlist_finished
@@ -83,6 +114,7 @@ class App:
                 tg.create_task(self._buttons_loop())
                 tg.create_task(self._tick_loop())
                 tg.create_task(self.control.serve())
+                tg.create_task(self.sync.run())
                 tg.create_task(self._stop_on_request())
                 for background in self.adapters.background:
                     tg.create_task(background())
@@ -136,6 +168,26 @@ class App:
 
     # --- control socket ----------------------------------------------------------------------
 
+    def reported_data(self) -> ReportedData:
+        st = self.state.get()
+        playback = self.controller.status()
+        return ReportedData.model_validate(
+            {
+                "agent_version": __version__,
+                "image_version": image_version(),
+                "hw_model": self.hw_model,
+                "applied_config_rev": st.applied_config_rev,
+                "applied_device_rev": st.applied_device_rev,
+                "storage": {"free_mb": free_bytes(self.settings.data_dir) // (1024 * 1024)},
+                "time_trusted": self.adapters.clock.time_trusted(),
+                "playback": {
+                    "status": playback.status,
+                    "token_id": playback.token_id,
+                    "volume": playback.volume,
+                },
+            }
+        )
+
     def status(self) -> dict[str, Any]:
         st = self.state.get()
         playback = self.controller.status()
@@ -143,7 +195,9 @@ class App:
             "ok": True,
             "device_id": str(st.device_id),
             "paired": st.tenant_id is not None,
-            "server_url": st.server_url or self.settings.default_server_url,
+            "server_url": self.sync.server_url(),
+            "last_sync": self.sync.status.last_sync,
+            "last_error": self.sync.status.last_error,
             "applied_config_rev": st.applied_config_rev,
             "applied_device_rev": st.applied_device_rev,
             "playback": playback.status,
@@ -157,6 +211,16 @@ class App:
     async def handle_control(self, req: dict[str, Any]) -> dict[str, Any]:
         cmd = req.get("cmd")
         if cmd == "status":
+            return self.status()
+        if cmd == "sync_now":
+            self.sync.trigger()
+            return self.status()
+        if cmd == "repair":
+            self.controller.button(Action.REPAIR)
+            return self.status()
+        if cmd == "set_server_url":
+            self.state.set_server_url(str(req["url"]) or None)
+            self.sync.trigger()
             return self.status()
         a = self.adapters
         if not isinstance(a.reader, SimReader) or not isinstance(a.buttons, SimButtons):

@@ -157,7 +157,8 @@ class StateResponse(ProtocolModel):
     config_rev: NonNegativeInt
     device_rev: NonNegativeInt
     upserts: Upserts
-    deletes: Deletes | None = None
+    # Omitted (not null) in a full snapshot (SPEC §5.4).
+    deletes: Deletes | None = Field(default=None, exclude_if=lambda v: v is None)
     device_config: DeviceConfig
 
     @model_validator(mode="after")

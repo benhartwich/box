@@ -242,7 +242,7 @@ def test_pairing_7_1() -> None:
     )
     assert claimed.mqtt is not None
     without = roundtrip(PairingClaimed, {"device_secret": "s" * 43, "tenant_id": TENANT})
-    assert "mqtt" not in without.model_dump(exclude_none=True)
+    assert "mqtt" not in without.model_dump(mode="json")
 
 
 def test_secrets_not_in_repr() -> None:
@@ -327,7 +327,11 @@ def test_state_full_has_no_deletes_5_4() -> None:
     with pytest.raises(ValidationError):
         StateResponse.model_validate(full)
     del full["deletes"]
-    assert roundtrip(StateResponse, full).deletes is None
+    parsed = roundtrip(StateResponse, full)
+    assert parsed.deletes is None
+    dumped = parsed.model_dump(mode="json")
+    assert "deletes" not in dumped
+    assert dumped["device_config"]["quiet_hours"] is None  # other nulls stay
 
 
 def test_content_source_per_kind_3_6() -> None:

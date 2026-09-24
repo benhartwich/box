@@ -80,6 +80,7 @@ def require(perm: Perm) -> Callable[..., Awaitable[TenantContext]]:
             raise HTTPException(status_code=403)
         return ctx
 
+    dependency.required_perm = perm  # type: ignore[attr-defined]  # read by the route tests
     return dependency
 
 

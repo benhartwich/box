@@ -46,7 +46,8 @@ class PairingClaimed(ProtocolModel):
         repr=False
     )
     tenant_id: UUID
-    mqtt: MqttCredentials | None = None
+    # Omitted (not null) when the server runs without a broker (SPEC §7.1).
+    mqtt: MqttCredentials | None = Field(default=None, exclude_if=lambda v: v is None)
 
 
 class ClaimRequest(ProtocolModel):

@@ -10,11 +10,14 @@ from urllib.parse import quote
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse, Response
+from fastapi.responses import PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from box_server.api.device import claim as device_claim
+from box_server.api.device import router as device_router
+from box_server.api.device.errors import ApiError, code_for_status, error_response
 from box_server.api.web import routes_auth, routes_members
 from box_server.api.web.deps import LoginRequiredError
 from box_server.api.web.render import render
@@ -24,6 +27,7 @@ from box_server.domain.authz import PermissionDeniedError
 from box_server.domain.errors import NotFoundError
 from box_server.jobs.app import connected_job_app
 from box_server.settings import Settings, get_settings
+from box_server.storage.filesystem import FilesystemAssetStore
 
 access_log = logging.getLogger("box_server.access")
 
@@ -80,11 +84,19 @@ def _wants_html(request: Request) -> bool:
     return not request.url.path.startswith("/api/")
 
 
+def _api_detail(detail: object, fallback: str) -> str:
+    return detail if isinstance(detail, str) else fallback
+
+
 def _install_error_handlers(app: FastAPI) -> None:
+    @app.exception_handler(ApiError)
+    async def api_error(request: Request, exc: ApiError) -> Response:  # pyright: ignore[reportUnusedFunction]
+        return error_response(exc.status_code, exc.code, exc.message, exc.headers)
+
     @app.exception_handler(LoginRequiredError)
     async def login_required(request: Request, exc: LoginRequiredError) -> Response:  # pyright: ignore[reportUnusedFunction]
         if not _wants_html(request):
-            return JSONResponse({"detail": "Nicht angemeldet."}, status_code=401)
+            return error_response(401, code_for_status(401), "Not signed in")
         target = "/login?next=" + quote(request.url.path, safe="/")
         if request.headers.get("hx-request"):
             return Response(status_code=204, headers={"HX-Redirect": target})
@@ -105,7 +117,7 @@ def _install_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(RequestValidationError)
     async def invalid(request: Request, exc: RequestValidationError) -> Response:  # pyright: ignore[reportUnusedFunction]
         if not _wants_html(request):
-            return JSONResponse({"detail": "Ungültige Anfrage."}, status_code=422)
+            return error_response(400, code_for_status(400), "Invalid request")
         return PlainTextResponse("Ungültige Eingabe.", status_code=422)
 
 
@@ -118,7 +130,12 @@ _MESSAGES = {
 async def _http_error(request: Request, exc: HTTPException) -> Response:
     headers = dict(exc.headers or {})
     if not _wants_html(request):
-        return JSONResponse({"detail": exc.detail}, status_code=exc.status_code, headers=headers)
+        return error_response(
+            exc.status_code,
+            code_for_status(exc.status_code),
+            _api_detail(exc.detail, "Error"),
+            headers,
+        )
     message = _MESSAGES.get(exc.status_code, str(exc.detail))
     response = render(
         request,
@@ -156,12 +173,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         openapi_url="/api/openapi.json" if settings.is_dev else None,
     )
     app.state.settings = settings
+    app.state.asset_store = FilesystemAssetStore(settings.asset_dir, settings.accel_redirect_prefix)
     app.add_middleware(AccessLogMiddleware)
     _install_error_handlers(app)
 
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
     app.include_router(routes_auth.router)
     app.include_router(routes_members.router)
+    app.include_router(device_router.router)
+    app.include_router(device_claim.router)
 
     @app.get("/healthz", include_in_schema=False)
     async def healthz() -> dict[str, str]:  # pyright: ignore[reportUnusedFunction]

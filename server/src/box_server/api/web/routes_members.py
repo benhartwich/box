@@ -13,7 +13,7 @@ from box_server.api.web.render import render
 from box_server.auth.mail import invitation_mail, log_mail
 from box_server.domain import members
 from box_server.domain.authz import Perm, TenantContext
-from box_server.domain.errors import DomainError
+from box_server.domain.errors import DomainError, NotFoundError
 from box_server.jobs.mail import send_invitation_mail
 from box_server.models import Tenant
 from box_server.models.enums import Role
@@ -119,6 +119,8 @@ async def change_role(
 ) -> Response:
     try:
         await members.change_role(db, ctx, user_id, role)
+    except NotFoundError:
+        raise
     except DomainError as exc:
         await db.rollback()
         return await _members_page(request, db, session, ctx, error=exc.message, status_code=400)
@@ -136,6 +138,8 @@ async def remove(
 ) -> Response:
     try:
         await members.remove_member(db, ctx, user_id)
+    except NotFoundError:
+        raise
     except DomainError as exc:
         await db.rollback()
         return await _members_page(request, db, session, ctx, error=exc.message, status_code=400)

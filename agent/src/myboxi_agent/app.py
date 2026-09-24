@@ -11,6 +11,7 @@ from typing import Any
 from myboxi_agent import __version__
 from myboxi_agent.adapters.base import Placed
 from myboxi_agent.adapters.bundle import Adapters, sim_adapters
+from myboxi_agent.adapters.mpv import KNOWN_PROMPTS
 from myboxi_agent.adapters.outbox import EventOutbox, read_boot_id
 from myboxi_agent.adapters.sim import SimButtons, SimPlayer, SimReader
 from myboxi_agent.adapters.system_info import detect_hw_model, free_bytes, image_version
@@ -19,6 +20,8 @@ from myboxi_agent.control import ControlServer
 from myboxi_agent.core.buttons import ButtonTracker
 from myboxi_agent.core.controller import Controller
 from myboxi_agent.core.model import Action
+from myboxi_agent.setup.nm import NetworkManager
+from myboxi_agent.setup.watch import NetworkWatch
 from myboxi_agent.store.db import connect
 from myboxi_agent.store.repos import (
     AssetRepo,
@@ -115,6 +118,14 @@ class App:
                 tg.create_task(self._tick_loop())
                 tg.create_task(self.control.serve())
                 tg.create_task(self.sync.run())
+                if not self.settings.sim:
+                    watch = NetworkWatch(
+                        NetworkManager(),
+                        self.adapters.system,
+                        self.adapters.clock,
+                        self.sync.trigger,
+                    )
+                    tg.create_task(watch.run())
                 tg.create_task(self._stop_on_request())
                 for background in self.adapters.background:
                     tg.create_task(background())
@@ -218,6 +229,12 @@ class App:
         if cmd == "repair":
             self.controller.button(Action.REPAIR)
             return self.status()
+        if cmd == "announce":
+            prompts = [str(x) for x in req["prompts"]]
+            if not prompts or not set(prompts) <= set(KNOWN_PROMPTS):
+                return {"ok": False, "error": "unknown prompt"}
+            self.announcer.announce(*prompts)
+            return {"ok": True}
         if cmd == "set_server_url":
             self.state.set_server_url(str(req["url"]) or None)
             self.sync.trigger()

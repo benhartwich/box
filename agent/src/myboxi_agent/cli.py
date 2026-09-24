@@ -113,6 +113,32 @@ def _cmd_library_add(args: argparse.Namespace, settings: Settings) -> int:
     return 0
 
 
+def _cmd_setupd(args: argparse.Namespace, settings: Settings) -> int:
+    """Root service for setup mode (SPEC §9.3); started by the agent via systemd."""
+    from myboxi_agent.setup.daemon import SocketAgentLink, run_setup
+    from myboxi_agent.setup.nm import NetworkManager, network_name, read_serial
+
+    async def current_server_url() -> str:
+        try:
+            status = await request(settings.control_socket, {"cmd": "status"}, limit_s=5)
+            url = status.get("server_url")
+        except (OSError, TimeoutError, ValueError):
+            url = None
+        return str(url or settings.default_server_url or "https://app.myboxi.eu")
+
+    async def main() -> bool:
+        return await run_setup(
+            NetworkManager(),
+            SocketAgentLink(settings.control_socket),
+            ssid=network_name(read_serial()),
+            default_server_url=await current_server_url(),
+            host=args.host,
+            port=args.port,
+        )
+
+    return 0 if asyncio.run(main()) else 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="myboxi-agent")
     parser.add_argument("--version", action="version", version=f"myboxi-agent {__version__}")
@@ -147,6 +173,11 @@ def build_parser() -> argparse.ArgumentParser:
     hold.add_argument("buttons", nargs="+")
     hold.add_argument("--seconds", type=float, default=5.5)
     p.set_defaults(func=_cmd_sim)
+
+    p = sub.add_parser("setupd", help="setup mode service (root, systemd)")
+    p.add_argument("--host", default="10.42.0.1")
+    p.add_argument("--port", type=int, default=80)
+    p.set_defaults(func=_cmd_setupd)
 
     p = sub.add_parser("library", help="local library without server")
     ls = p.add_subparsers(dest="library_command", required=True)

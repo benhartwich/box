@@ -1,0 +1,15 @@
+# Setup mode (SPEC §9.3): access point + captive portal. Started on demand by the agent
+# (polkit rule 50-myboxi-setupd.rules); never enabled at boot.
+[Unit]
+Description=Myboxi setup mode
+After=NetworkManager.service
+Requires=NetworkManager.service
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/myboxi-agent/myboxi-agent.env
+ExecStart=/opt/myboxi-agent/.venv/bin/myboxi-agent setupd
+TimeoutStopSec=20
+NoNewPrivileges=yes
+ProtectHome=yes
+PrivateTmp=yes

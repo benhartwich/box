@@ -46,7 +46,8 @@ async def test_agent_pairs_syncs_plays_and_reports(
         await wait_for(lambda: agent.controller.pairing_code)
         code = agent.controller.pairing_code
         assert code is not None
-        assert announcer.history[0][2:] == tuple(f"digit_{d}" for d in code)
+        assert announcer.history[0] == ("hello",)
+        assert announcer.history[1][2:] == tuple(f"digit_{d}" for d in code)
         await claim_code(app, t.tenant_id, code)
 
         # §5.2: pairing, token, snapshot, assets (SHA-256 checked), atomic activation.

@@ -303,3 +303,23 @@ async def test_trigger_during_a_running_sync_is_not_lost(app: App, api: FakeApi)
 
     app.sync.sync_once = slow_sync  # type: ignore[method-assign]
     await run_until(app, lambda: api.unpaired == 1 and api.starts >= 1, timeout=3)
+
+
+async def test_unknown_figure_speeds_up_polling(
+    app: App, api: FakeApi, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Until MQTT (M2): after an unknown figure the box asks every 30 s for 10 minutes."""
+    monkeypatch.setattr(engine_module, "FAST_POLL_S", 0.05)
+    app.state.set_paired(TENANT, "s" * 43)
+    app.sync.interval_s = 3600
+    syncs = 0
+    original = app.sync.sync_once
+
+    async def counting(api_: Any) -> None:
+        nonlocal syncs
+        syncs += 1
+        await original(api_)
+
+    app.sync.sync_once = counting  # type: ignore[method-assign]
+    app.sync.fast_poll()
+    await run_until(app, lambda: syncs >= 3, timeout=3)

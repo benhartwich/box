@@ -39,6 +39,8 @@ log = logging.getLogger(__name__)
 
 POLL_S = 3.0  # SPEC §7.1
 REPORT_CHECK_S = 30.0  # SPEC §6.4: at most every 30 s
+FAST_POLL_S = 30.0
+FAST_POLL_FOR_S = 10 * 60
 REPORT_MAX_AGE_S = 600.0  # SPEC §6.4: at least every 10 min
 BACKOFF_MAX_S = 300.0
 DISK_RESERVE = 200 * 1024 * 1024
@@ -111,11 +113,18 @@ class SyncEngine:
         self._last_report: dict[str, Any] | None = None
         self._last_report_at = -math.inf
         self._storage_full_for: int | None = None
+        self._fast_until = -math.inf
 
     # --- control -----------------------------------------------------------------------------
 
     def trigger(self) -> None:
         """Sync now (after reconnect, pairing, ``sync_now``)."""
+        self._wake.set()
+
+    def fast_poll(self) -> None:
+        """An unknown or still loading figure was placed: until MQTT (M2) notifies the box,
+        ask every 30 s for 10 minutes so a figure adopted in the app works right away."""
+        self._fast_until = self.clock.monotonic() + FAST_POLL_FOR_S
         self._wake.set()
 
     def request_repair(self) -> None:
@@ -149,7 +158,8 @@ class SyncEngine:
                 await self.sync_once(api)
                 backoff = 5.0
                 self.status.last_error = None
-                await self._wait(self.interval_s)
+                fast = self.clock.monotonic() < self._fast_until
+                await self._wait(FAST_POLL_S if fast else self.interval_s)
             except PairingExpired:
                 continue
             except NeedsPairing:

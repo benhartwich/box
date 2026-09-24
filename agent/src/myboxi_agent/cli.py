@@ -139,6 +139,12 @@ def _cmd_setupd(args: argparse.Namespace, settings: Settings) -> int:
     return 0 if asyncio.run(main()) else 1
 
 
+def _cmd_doctor(args: argparse.Namespace, settings: Settings) -> int:
+    from myboxi_agent.doctor import run_doctor
+
+    return run_doctor(settings, offline=args.offline)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="myboxi-agent")
     parser.add_argument("--version", action="version", version=f"myboxi-agent {__version__}")
@@ -173,6 +179,10 @@ def build_parser() -> argparse.ArgumentParser:
     hold.add_argument("buttons", nargs="+")
     hold.add_argument("--seconds", type=float, default=5.5)
     p.set_defaults(func=_cmd_sim)
+
+    p = sub.add_parser("doctor", help="self-check: hardware, audio, network, server")
+    p.add_argument("--offline", action="store_true", help="image build: no hardware, no network")
+    p.set_defaults(func=_cmd_doctor)
 
     p = sub.add_parser("setupd", help="setup mode service (root, systemd)")
     p.add_argument("--host", default="10.42.0.1")

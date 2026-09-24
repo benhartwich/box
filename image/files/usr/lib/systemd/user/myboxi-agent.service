@@ -1,0 +1,18 @@
+# Runs in the user session of "myboxi" (linger), next to PipeWire.
+[Unit]
+Description=Myboxi agent
+After=pipewire.service wireplumber.service
+ConditionUser=myboxi
+Wants=pipewire.service wireplumber.service
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/myboxi-agent/myboxi-agent.env
+WorkingDirectory=/var/lib/myboxi
+ExecStart=/opt/myboxi-agent/.venv/bin/myboxi-agent run
+Restart=always
+RestartSec=2
+TimeoutStopSec=10
+
+[Install]
+WantedBy=default.target

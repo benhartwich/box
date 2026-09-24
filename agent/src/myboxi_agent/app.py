@@ -19,7 +19,7 @@ from myboxi_agent.config import Settings
 from myboxi_agent.control import ControlServer
 from myboxi_agent.core.buttons import ButtonTracker
 from myboxi_agent.core.controller import Controller
-from myboxi_agent.core.model import Action
+from myboxi_agent.core.model import Action, Loading, Prompt, Unknown
 from myboxi_agent.setup.nm import NetworkManager
 from myboxi_agent.setup.watch import NetworkWatch
 from myboxi_agent.store.db import connect
@@ -111,6 +111,7 @@ class App:
             "agent starting",
             extra={"device_id": str(self.state.get().device_id), "sim": self.settings.sim},
         )
+        self.announcer.announce(Prompt.HELLO)  # SPEC §1.7: the box says it is ready
         try:
             async with asyncio.TaskGroup() as tg:
                 tg.create_task(self._reader_loop())
@@ -149,6 +150,8 @@ class App:
     async def _reader_loop(self) -> None:
         async for event in self.adapters.reader.events():
             if isinstance(event, Placed):
+                if isinstance(self.library.resolve(event.uid), Unknown | Loading):
+                    self.sync.fast_poll()
                 self.controller.token_placed(event.uid)
                 session = self.controller.session
                 if session is not None and session.playing:

@@ -70,7 +70,8 @@ async def test_place_play_pause_remove(running: App) -> None:
     assert isinstance(announcer, SimAnnouncer)
     status = await ctl(running, cmd="place", uid=UID.lower())
     assert status["playback"] == "playing"
-    assert announcer.history[0] == (Prompt.TONE_START,)
+    assert announcer.history[0] == (Prompt.HELLO,)
+    assert announcer.history[1] == (Prompt.TONE_START,)
     assert player.volume == 35
     status = await ctl(running, cmd="press", button="play_pause")
     assert status["playback"] == "paused"

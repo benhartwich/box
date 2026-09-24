@@ -1,0 +1,8 @@
+
+# --- Myboxi (docs/hardware.md) ---
+# PN532 NFC reader on I2C-1 (GPIO2/3)
+dtparam=i2c_arm=on
+# MAX98357A I2S amplifier (GPIO18/19/21); onboard and HDMI audio off
+dtparam=i2s=on
+dtoverlay=max98357a
+dtparam=audio=off

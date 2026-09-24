@@ -11,7 +11,7 @@ from myboxi_server.models.enums import Role, RoleRank
 
 class Perm(StrEnum):
     READ = "read"
-    TOKEN_WRITE = "token.write"  # noqa: S105
+    TOKEN_WRITE = "token.write"
     CONTENT_WRITE = "content.write"
     BINDING_WRITE = "binding.write"
     UPLOAD = "upload"

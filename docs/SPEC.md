@@ -251,7 +251,7 @@ Die Box hat keine eigene Konfigurations-UI, dadurch gibt es kaum echte Konflikte
 ### 5.6 Zeit ohne RTC
 Pi Zero 2 W und Pi 4 haben keine Echtzeituhr. Nach einem Offline-Boot ist die Uhrzeit falsch.
 - Die Box führt ein Flag `time_trusted` (true nach erfolgreichem NTP-Sync seit dem Boot).
-- **Ruhezeiten** gelten nur bei `time_trusted`. Sonst gilt als sichere Rückfallebene `min(max_volume, quiet_hours.max_volume)` für die gesamte Laufzeit.
+- **Ruhezeiten** gelten nur bei `time_trusted`. Sonst gilt als sichere Rückfallebene `min(max_volume, quiet_hours.max_volume)` für die gesamte Laufzeit. Ruhezeiten mit `lock` lassen sich ohne verlässliche Zeit nicht zuordnen; dann gilt keine Sperre, sondern nur `max_volume` (sonst bliebe die Box nach jedem Offline-Start stumm).
 - Events tragen immer `boot_id` + monotone Millisekunden seit Boot (`mono_ms`, Envelope-Felder, §6.0) zusätzlich zu `device_ts` (= Envelope-`ts`). Der Server speichert beide und korrigiert Zeitstempel nachträglich, sobald die Box eine vertrauenswürdige Zeit meldet (Korrektur folgt nach M1).
 - Optional: DS3231-RTC-Modul als Hardware-Upgrade.
 
@@ -527,6 +527,7 @@ Der Agent wird in M0 gegen einen **Mock-Server** entwickelt, der die Endpunkte a
 
 **v0.5 (2026-09-24)** — Box-Verhalten für den Agent; Protokollversion bleibt `v1`.
 - §4: Pfade auf der Box; lokale Bibliothek mit `origin = local` (M0).
+- §5.6: Ruhezeiten mit `lock` ohne verlässliche Zeit.
 - §9.3: Setup-Modus konkretisiert (Auslöser, WLAN-Name, Portal-Adresse, Felder).
 - §9.4: Tastenbelegung und Kombinationen.
 - §9.5: Kopplungsablauf auf der Box.

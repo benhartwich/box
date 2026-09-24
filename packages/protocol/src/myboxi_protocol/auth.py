@@ -19,5 +19,5 @@ class DeviceTokenRequest(ProtocolModel):
 
 class DeviceTokenResponse(ProtocolModel):
     access_token: str = Field(repr=False)
-    token_type: Literal["Bearer"] = "Bearer"  # noqa: S105
+    token_type: Literal["Bearer"] = "Bearer"
     expires_in: NonNegativeInt

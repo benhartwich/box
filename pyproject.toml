@@ -21,7 +21,8 @@ extend-exclude = ["server/migrations/versions"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "SIM", "ASYNC", "S", "DTZ", "RUF", "PT", "TID", "C4", "RET", "PTH"]
-ignore = ["S311"]
+# S105/S106: "token" is the domain word for figures, not a credential.
+ignore = ["S311", "S105", "S106"]
 # German UI texts use typographic dashes and quotes.
 allowed-confusables = ["–", "„", "“", "×"]
 
@@ -29,7 +30,7 @@ allowed-confusables = ["–", "„", "“", "×"]
 known-first-party = ["myboxi_server", "myboxi_protocol", "myboxi_agent"]
 
 [tool.ruff.lint.per-file-ignores]
-"**/tests/**" = ["S101", "S105", "S106", "S603", "S607"]
+"**/tests/**" = ["S101", "S603", "S607"]
 "tools/**" = ["S101", "S603", "S607"]
 
 [tool.pyright]

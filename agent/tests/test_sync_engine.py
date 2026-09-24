@@ -285,3 +285,21 @@ async def test_offline_does_not_block_playback(tmp_path: Path) -> None:
         task.cancel()
         with pytest.raises(asyncio.CancelledError):
             await task
+
+
+async def test_trigger_during_a_running_sync_is_not_lost(app: App, api: FakeApi) -> None:
+    """A repair requested while a sync is still running must start right after it."""
+    app.state.set_paired(TENANT, "s" * 43)
+    app.sync.interval_s = 3600
+    original = app.sync.sync_once
+    calls = 0
+
+    async def slow_sync(api_: Any) -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            app.sync.request_repair()  # arrives while this sync is still in progress
+        await original(api_)
+
+    app.sync.sync_once = slow_sync  # type: ignore[method-assign]
+    await run_until(app, lambda: api.unpaired == 1 and api.starts >= 1, timeout=3)

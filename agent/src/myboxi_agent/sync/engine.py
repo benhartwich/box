@@ -172,9 +172,11 @@ class SyncEngine:
         log.warning("sync failed", extra={"error": message})
 
     async def _wait(self, seconds: float) -> None:
-        self._wake.clear()
+        """Sleep until the timeout or a trigger. A trigger that arrived while a sync was
+        still running is kept (cleared only after waking), so it is never lost."""
         with contextlib.suppress(TimeoutError):
             await asyncio.wait_for(self._wake.wait(), seconds)
+        self._wake.clear()
 
     async def _api_for(self, url: str) -> Api:
         if self._api is None or self._api_url != url:

@@ -37,6 +37,7 @@ def _include(obj: Any, name: str | None, type_: str, reflected: bool, compare_to
     return True
 
 
+@pytest.mark.filterwarnings("ignore:Did not recognize type 'xid8'")
 async def test_models_match_migrations(engine: AsyncEngine) -> None:
     def diff(conn: Connection) -> list[Any]:
         ctx = MigrationContext.configure(

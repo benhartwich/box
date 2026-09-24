@@ -1,4 +1,4 @@
-# Myboxi — Spezifikation v0.4: Datenmodell & Geräteprotokoll
+# Myboxi — Spezifikation v0.5: Datenmodell & Geräteprotokoll
 
 Status: Entwurf · Stand: 2026-09-24 · Änderungen: §14
 Scope: Der Vertrag zwischen **Box-Agent** (Raspberry Pi) und **Server**.
@@ -169,6 +169,10 @@ Tabellen spiegeln den für die Box relevanten Ausschnitt: `token`, `content`, `c
 | `staged_change` | Empfangene, noch nicht aktivierte Änderungen (wartet auf Assets) |
 | `outbox` | Ausstehende Events, bis vom Server bestätigt |
 | `secret` | device_secret; Soloist-API-Key (**nie** synchronisiert, nie geloggt) |
+
+Pfade auf der Box: Daten unter `/var/lib/myboxi` (Datenbank `myboxi.db`, Assets content-adressiert unter `assets/ab/cd/<sha256>.opus`, eigene Ansagen unter `prompts/`), Konfiguration unter `/etc/myboxi-agent/myboxi-agent.env`.
+
+**Lokale Bibliothek (M0, ohne Server):** Inhalte lassen sich direkt auf der Box anlegen (`myboxi-agent library add <UID> <Ordner>`). Sie tragen `origin = local` und gelten nur für Figuren, für die der Server kein Binding liefert. Ein Snapshot vom Server (§5.4) ersetzt ausschließlich Einträge mit `origin = server`.
 
 ### 4.1 Cache-Regeln
 - Alle Assets, die von einem aktiven Binding erreichbar sind, werden **vollständig vorab** geladen. Die Box spielt gebundene lokale Inhalte nie per Streaming.
@@ -449,6 +453,26 @@ resolve(content) -> PlaybackPlan | Unavailable(reason)
 ### 9.3 Lokale Setup-Seite
 Nur im Setup-Modus erreichbar (Tastenkombination 5 s halten oder beim Erststart ohne WLAN). Die Box öffnet dann einen Access-Point mit Captive Portal für WLAN, Server-URL und optional Spotify-Key. Nach 15 min Inaktivität oder Abschluss wird der Modus beendet. Im Normalbetrieb lauscht die Box auf keinem Port außer lokal (`127.0.0.1`).
 
+Details:
+- Der Setup-Modus startet automatisch, wenn kein WLAN konfiguriert ist oder das konfigurierte WLAN 2 min lang nicht erreichbar ist und keine Ethernet-Verbindung besteht; außerdem mit `volume_up` + `volume_down` 5 s gehalten (§9.4).
+- Offenes WLAN `Myboxi-XXXX` (letzte vier Stellen der Seriennummer), Seite unter `http://10.42.0.1/`; alle DNS-Anfragen zeigen dorthin (Captive Portal).
+- Felder: WLAN (Liste oder manuell) und Server-URL (Vorgabe `https://app.myboxi.eu`). Das Feld für den Spotify-Key kommt mit M4.
+- Die Box sagt Beginn und Ende des Setup-Modus an und ob die Verbindung geklappt hat.
+
+### 9.4 Tasten
+| Eingabe | Wirkung |
+|---|---|
+| `play_pause` kurz | Pause bzw. weiterspielen; während der Kopplung: Code wiederholen |
+| `volume_up` / `volume_down` kurz | Lautstärke ±5 (über §9.2); gehalten alle 250 ms wiederholt |
+| `next` kurz | Nächster Titel; am Ende gemäß `repeat` (`all`: erster Titel, sonst Stille und Position auf Anfang) |
+| `volume_up` + `volume_down` 5 s | Setup-Modus (§9.3) |
+| `play_pause` + `next` 5 s | Box entkoppeln (`/device/unpair`) und neu koppeln (§9.5) |
+
+### 9.5 Kopplung auf der Box
+- Eine ungekoppelte Box mit Server-URL startet die Kopplung (§7.1) automatisch, sobald sie online ist.
+- Sie sagt den Code nach einem Hinweiston an, danach alle 30 s und bei `play_pause` erneut.
+- Läuft der Code ab, holt sie einen neuen. Nach erfolgreicher Kopplung: Bestätigungsansage und sofortige Synchronisierung.
+
 ---
 
 ## 10. Sicherheit & Datenschutz
@@ -500,6 +524,12 @@ Der Agent wird in M0 gegen einen **Mock-Server** entwickelt, der die Endpunkte a
 ---
 
 ## 14. Änderungen
+
+**v0.5 (2026-09-24)** — Box-Verhalten für den Agent; Protokollversion bleibt `v1`.
+- §4: Pfade auf der Box; lokale Bibliothek mit `origin = local` (M0).
+- §9.3: Setup-Modus konkretisiert (Auslöser, WLAN-Name, Portal-Adresse, Felder).
+- §9.4: Tastenbelegung und Kombinationen.
+- §9.5: Kopplungsablauf auf der Box.
 
 **v0.4 (2026-09-24)** — Projektname Myboxi. Protokollversion bleibt `v1`.
 - §6, §11: MQTT-Topic-Präfix `myboxi/v1/{device_id}/` statt `box/v1/…`. MQTT ist noch nicht implementiert (M2), daher ohne Migrationsbedarf.

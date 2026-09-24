@@ -85,6 +85,50 @@ def _cmd_migrate(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_create_admin(args: argparse.Namespace) -> int:
+    """First owner (SPEC §3.2): creates a tenant owned by a new or existing user."""
+    import getpass
+
+    from box_server.db import create_engine, create_sessionmaker
+    from box_server.domain.errors import DomainError
+    from box_server.domain.members import create_tenant_with_owner, user_by_email
+
+    settings = get_settings()
+    configure_logging(settings.log_level, "console")
+
+    async def run() -> int:
+        engine = create_engine(settings)
+        try:
+            async with create_sessionmaker(engine)() as db:
+                password: str | None = None
+                if await user_by_email(db, args.email) is None:
+                    if args.password_stdin:
+                        password = sys.stdin.readline().rstrip("\n")
+                    else:
+                        password = getpass.getpass("Passwort: ")
+                        if password != getpass.getpass("Passwort wiederholen: "):
+                            print("Passwörter stimmen nicht überein.", file=sys.stderr)
+                            return 1
+                try:
+                    tenant, user = await create_tenant_with_owner(
+                        db,
+                        tenant_name=args.tenant_name,
+                        email=args.email,
+                        display_name=args.display_name or "",
+                        password=password,
+                    )
+                except DomainError as exc:
+                    print(exc.message, file=sys.stderr)
+                    return 1
+                await db.commit()
+                print(f"Mandant {tenant.name} ({tenant.id}) mit Owner {user.email} angelegt.")
+                return 0
+        finally:
+            await engine.dispose()
+
+    return asyncio.run(run())
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="box-server")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -107,6 +151,13 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("migrate", help="apply database migrations")
     p.add_argument("revision", nargs="?", default="head")
     p.set_defaults(func=_cmd_migrate)
+
+    p = sub.add_parser("create-admin", help="create a tenant and its owner")
+    p.add_argument("--email", required=True)
+    p.add_argument("--tenant-name", required=True)
+    p.add_argument("--display-name")
+    p.add_argument("--password-stdin", action="store_true", help="read the password from stdin")
+    p.set_defaults(func=_cmd_create_admin)
 
     return parser
 

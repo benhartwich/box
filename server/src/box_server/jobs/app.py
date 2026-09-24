@@ -10,7 +10,7 @@ import procrastinate
 
 from box_server.settings import Settings
 
-TASK_MODULES: list[str] = []
+TASK_MODULES: list[str] = ["box_server.jobs.mail"]
 
 job_app = procrastinate.App(connector=procrastinate.PsycopgConnector(), import_paths=TASK_MODULES)
 

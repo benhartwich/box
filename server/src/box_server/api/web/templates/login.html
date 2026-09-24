@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Anmelden · Box{% endblock %}
+{% block content %}
+<h1>Anmelden</h1>
+<form method="post" action="/login" class="stack">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input type="hidden" name="next" value="{{ next or '/' }}">
+  <label>E-Mail-Adresse
+    <input type="email" name="email" value="{{ email or '' }}" autocomplete="username" required>
+  </label>
+  <label>Passwort
+    <input type="password" name="password" autocomplete="current-password" required>
+  </label>
+  <button type="submit">Anmelden</button>
+</form>
+{% endblock %}

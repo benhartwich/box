@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Haushalte · Box{% endblock %}
+{% block content %}
+<h1>Haushalte</h1>
+{% if memberships %}
+<ul class="list">
+  {% for m in memberships %}
+  <li><a href="/t/{{ m.tenant.id }}/">{{ m.tenant.name }}</a> <span class="muted">{{ ROLE_LABELS[m.role] }}</span></li>
+  {% endfor %}
+</ul>
+{% else %}
+<p>Du gehörst noch zu keinem Haushalt. Bitte lass dich einladen.</p>
+{% endif %}
+{% endblock %}

@@ -5,11 +5,17 @@ name: image
 on:
   workflow_dispatch:
   push:
-    # Branch pushes build when the image itself changes; tag pushes (paths are not evaluated
-    # for tags) publish a release.
+    # Branch pushes build when anything that goes into the image changes; tag pushes (paths
+    # are not evaluated for tags) publish a release.
     branches: ["**"]
     tags: ["box-v*"]
-    paths: ["image/**", ".github/workflows/image.yml"]
+    paths:
+      - "image/**"
+      - "agent/**"
+      - "packages/protocol/**"
+      - "tools/prompts/**"
+      - "uv.lock"
+      - ".github/workflows/image.yml"
 
 permissions:
   contents: write
@@ -60,6 +66,22 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          docs="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/$GITHUB_REF_NAME/docs"
+          pre="" hint=""
+          case "$GITHUB_REF_NAME" in
+            box-v0.*) pre="--prerelease" hint=" Vorabversion, auf echter Hardware noch nicht vollständig erprobt." ;;
+          esac
+          cat > build/notes.md <<EOF
+          Image für den Raspberry Pi 4 (Raspberry Pi OS Lite, Trixie, arm64).$hint
+
+          - Anleitung: [Inbetriebnahme]($docs/box-inbetriebnahme.md), [Hardware]($docs/hardware.md)
+          - Im Raspberry Pi Imager „Eigenes Image verwenden“ und die \`.img.xz\` wählen. Prüfsumme: \`.sha256\`.
+
+          Ansagen und Lizenz der Stimme (im Image unter \`/opt/myboxi-agent/prompts/NOTICE.txt\`):
+
+          $(sed 's/^/> /' build/prompts/NOTICE.txt)
+
+          Quellcode: dieses Repository. Die Pakete von Raspberry Pi OS und Debian mit ihren Quellen: archive.raspberrypi.com, deb.debian.org.
+          EOF
           gh release create "$GITHUB_REF_NAME" build/myboxi-*.img.xz build/myboxi-*.img.xz.sha256 \
-            --title "Myboxi ${GITHUB_REF_NAME#box-v}" \
-            --notes "Image für Raspberry Pi 4. Anleitung: docs/box-inbetriebnahme.md"
+            --title "Myboxi ${GITHUB_REF_NAME#box-v}" --notes-file build/notes.md $pre

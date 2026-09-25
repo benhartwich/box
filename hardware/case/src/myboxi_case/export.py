@@ -385,14 +385,26 @@ def _readme(model: CaseModel, files: list[str], url: str | None) -> str:
         "  4 Schrauben M2,5 x 6 (Pi)"
         + ("; Gewindeeinsätze M3 und M2,5" if cfg.fastening == "insert" else ", selbstschneidend"),
         "",
-        "ZUSAMMENBAU",
+        "ZUSAMMENBAU (ohne Kleber)",
         "  1. Lautsprecher in die Front legen, Lautsprecherring aufschrauben.",
-        "  2. NFC-Modul von unten in den Rahmen unter der Figurenmarke drücken.",
+        "  2. NFC-Modul von unten in den Rahmen unter der Figurenmarke drücken (rastet ein).",
         "  3. Taster oben einsetzen und verschrauben, USB-C-Buchse hinten einschrauben.",
-        "  4. Pi auf den Boden schrauben, Verstärker in die Nut stecken, verkabeln",
-        "     (Pins: https://github.com/benhartwich/myboxi/blob/main/docs/hardware.md).",
-        "  5. Front von unten in die Schienen hinter dem Fenster schieben.",
-        "  6. Boden einsetzen und mit 4 Schrauben M3 festschrauben.",
+        "  4. Pi auf den Boden schrauben. Verstärker von oben in seinen Halter schieben:",
+        "     die Platine klemmt in den Schlitzen.",
+        "  5. Verkabeln (Pins: https://github.com/benhartwich/myboxi/blob/main/docs/hardware.md)",
+        "     und die Kabel mit kleinen Kabelbindern an den Haltern auf dem Boden bündeln,",
+        "     damit beim Schließen nichts eingeklemmt wird."
+        + (
+            "\n     Powerbank mit einem Klettband durch die Schlitze festzurren."
+            if cfg.power == "powerbank"
+            else ""
+        ),
+        "  6. Front von unten in die Schienen hinter dem Fenster schieben.",
+        "  7. Boden einsetzen und mit 4 Schrauben M3 festschrauben.",
+        "",
+        'Ohne Löten: Pi Zero 2 W mit vorgelöteter Stiftleiste ("WH") kaufen, Taster mit',
+        "Anschlusslitzen, Dupont-Kabel Buchse/Buchse 20 cm. Beim PN532 liegt die Stiftleiste",
+        "oft lose bei; es gibt Module mit fertig eingelöteter Leiste.",
         "",
         "Maße vor dem Druck mit den eigenen Teilen vergleichen: Taster, USB-C-Buchse und",
         "Lautsprecher unterscheiden sich je nach Händler. Anleitung und Maße:",

@@ -5,4 +5,4 @@ front face (0) to the back, z up from the table (0).
 """
 
 # Part of every digest and file name. Bump on any change that alters generated geometry.
-GENERATOR_VERSION = "0.1"
+GENERATOR_VERSION = "0.2"

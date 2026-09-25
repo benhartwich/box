@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import re
 import zipfile
 
 import httpx
@@ -25,7 +26,8 @@ async def test_page_is_public_and_keeps_the_choices(client: httpx.AsyncClient) -
     assert 'name="form" value="bear" checked' in r.text
     assert 'name="color_body" value="braun" checked' in r.text
     assert 'href="/gestalten/download.zip?form=bear&amp;name=Mia&amp;color_body=braun"' in r.text
-    assert '<script type="module" src="/static/case.js">' in r.text
+    script = re.search(r'<script type="module" src="(/static/case\.js\?v=[0-9a-f]{10})">', r.text)
+    assert script
     assert "default-src 'self'" in r.headers["content-security-policy"]
     # Without an order address the request form stays off.
     assert "/gestalten/anfrage" not in r.text
@@ -106,6 +108,19 @@ async def test_builds_are_rate_limited_but_cache_hits_are_free(
     assert blocked.status_code == 429
     assert "Retry-After" in blocked.headers
     assert (await client.get("/gestalten/vorschau?name=A")).status_code == 200  # cached
+
+
+async def test_static_files_are_versioned(client: httpx.AsyncClient) -> None:
+    """A stale cached stylesheet once made the preview canvas grow without end."""
+    page = (await client.get("/gestalten")).text
+    css = re.search(r'href="(/static/app\.css\?v=[0-9a-f]{10})"', page)
+    assert css
+    r = await client.get(css.group(1))
+    assert r.headers["cache-control"] == "public, max-age=31536000, immutable"
+    plain = await client.get("/static/app.css")
+    assert plain.headers["cache-control"] == "no-cache"
+    vendor = await client.get("/static/vendor/three-0.186.1/OrbitControls.js")
+    assert "immutable" in vendor.headers["cache-control"]
 
 
 async def test_public_header_links_to_the_configurator(client: httpx.AsyncClient) -> None:

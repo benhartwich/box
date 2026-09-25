@@ -98,6 +98,19 @@ def _api_detail(detail: object, fallback: str) -> str:
     return detail if isinstance(detail, str) else fallback
 
 
+class CachedStaticFiles(StaticFiles):
+    """Pages link static files with ``?v=<content hash>`` (templating.asset) and third-party
+    files under a versioned path: those never change. Everything else is revalidated."""
+
+    async def get_response(self, path: str, scope: Scope) -> Response:
+        response = await super().get_response(path, scope)
+        versioned = b"v=" in scope.get("query_string", b"") or path.startswith("vendor/")
+        response.headers["Cache-Control"] = (
+            "public, max-age=31536000, immutable" if versioned else "no-cache"
+        )
+        return response
+
+
 def _install_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(ApiError)
     async def api_error(request: Request, exc: ApiError) -> Response:  # pyright: ignore[reportUnusedFunction]
@@ -187,7 +200,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(AccessLogMiddleware)
     _install_error_handlers(app)
 
-    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+    app.mount("/static", CachedStaticFiles(directory=STATIC_DIR), name="static")
     app.include_router(routes_auth.router)
     app.include_router(routes_members.router)
     app.include_router(routes_boxes.router)

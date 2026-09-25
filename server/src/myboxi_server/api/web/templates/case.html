@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% import "_icons.html" as icon %}
 {% block title %}Box gestalten · Myboxi{% endblock %}
-{% block head %}<script type="module" src="/static/case.js"></script>{% endblock %}
+{% block head %}<script type="module" src="{{ asset('case.js') }}"></script>{% endblock %}
 {% block main_class %}wide{% endblock %}
 {% block content %}
 <div class="case-head">
@@ -13,7 +13,7 @@
 <div class="case">
   <section class="viewer" aria-label="Vorschau">
     <div class="viewer-stage" id="stage" data-preview="/gestalten/vorschau">
-      <img class="viewer-fallback" src="/static/case/{{ cfg.form }}.png" alt="{{ form_label }} (Beispielbild)" width="480" height="360">
+      <img class="viewer-fallback" src="{{ asset('case/' ~ cfg.form ~ '.png') }}" alt="{{ form_label }} (Beispielbild)" width="480" height="360">
       <p class="viewer-note" id="viewer-note" role="status" hidden></p>
     </div>
     <div class="viewer-tools js-only">
@@ -30,7 +30,7 @@
         {% for key, label, text in forms %}
         <label class="form-card">
           <input type="radio" name="form" value="{{ key }}" {% if cfg.form == key %}checked{% endif %}>
-          <img src="/static/case/{{ key }}.png" alt="" width="240" height="180" loading="lazy">
+          <img src="{{ asset('case/' ~ key ~ '.png') }}" alt="" width="240" height="180" loading="lazy">
           <strong>{{ label }}</strong>
           <span class="muted">{{ text }}</span>
         </label>

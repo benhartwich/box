@@ -43,6 +43,10 @@ Neu koppeln (z. B. für einen anderen Haushalt): **`play_pause` + `next` 5 Sekun
 2. In der Web-UI unter **Figuren → Unbekannte Figuren** mit „Übernehmen“ anlegen, einen Inhalt zuordnen.
 3. Nach einer unbekannten Figur fragt die Box 10 Minuten lang alle 30 Sekunden beim Server nach, sonst alle 15 Minuten. Sie lädt die Dateien vollständig. Danach spielt die Figur auch ohne Internet. Die Figur einfach noch einmal auflegen.
 
+## Updates
+
+Ab Image 0.3.0 aktualisiert sich die Box selbst, sobald sie online ist, aber nie während etwas spielt. Den Stand zeigt die App auf der Box-Seite unter „Software“; dort lassen sich automatische Updates auch abschalten. Sicherheitsupdates des Systems kommen täglich, ein nötiger Neustart erst nach 10 ruhigen Minuten. Boxen mit einem älteren Image brauchen einmal das neue Image. Details: `docs/updates.md`.
+
 ## Checkliste für die erste Inbetriebnahme
 
 - [ ] Einrichtungs-WLAN `Myboxi-NNNN` erscheint, die Seite öffnet sich

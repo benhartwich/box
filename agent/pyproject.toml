@@ -1,6 +1,6 @@
 [project]
 name = "myboxi-agent"
-version = "0.1.0"
+version = "0.2.0"
 description = "Myboxi box agent: figures, buttons, playback, sync (SPEC v0.5)"
 license = "GPL-3.0-or-later"
 requires-python = ">=3.13,<3.14"

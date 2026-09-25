@@ -78,6 +78,7 @@ class Layout:
     socket: tuple[float, float]  # USB-C socket in the back wall (x, z)
     powerbank: tuple[float, float] | None  # corner (x, y) of the compartment
     character: Character | None = None  # ears or horn on top, a face on the front
+    anchors: tuple[tuple[float, float], ...] = ()  # cable tie mounts on the base (x, y)
 
     @property
     def ears(self) -> bool:
@@ -144,6 +145,9 @@ def _cube(cfg: CaseConfig) -> Layout:
         socket=(75.0, 14.0) if cfg.board == "zero2w" else (30.0, 46.0),
         powerbank=None,
         character=character,
+        anchors=((55.0, 42.0), (96.0, 45.0))
+        if cfg.board == "zero2w"
+        else ((40.0, 32.0), (85.0, 32.0)),
     )
 
 
@@ -167,10 +171,13 @@ def _radio(cfg: CaseConfig) -> Layout:
     powerbank = cfg.power == "powerbank"
     if cfg.board == "pi4":
         board, amp = BoardPlace(68.5, 20.5, 0), (22.0, 34.0)
+        anchors = ((45.0, 45.0), (58.0, 72.0))
     elif powerbank:
         board, amp = BoardPlace(110.0, 12.0, 90), (88.0, 11.0)
+        anchors = ((125.0, 82.0), (150.0, 40.0))
     else:
         board, amp = BoardPlace(80.0, 45.0, 180), (86.0, 33.0)
+        anchors = ((60.0, 40.0), (120.0, 38.0))
     return Layout(
         form="radio",
         width=w,
@@ -187,6 +194,7 @@ def _radio(cfg: CaseConfig) -> Layout:
         amp=amp,
         socket=(40.0, 40.0 if powerbank else 14.0),
         powerbank=(13.5, 20.0) if powerbank else None,
+        anchors=anchors,
     )
 
 

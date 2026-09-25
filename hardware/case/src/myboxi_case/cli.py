@@ -10,12 +10,13 @@ import argparse
 import itertools
 import sys
 from pathlib import Path
+from typing import get_args
 
 from pydantic import ValidationError
 
 from myboxi_case.build import build
 from myboxi_case.checks import check
-from myboxi_case.config import CaseConfig
+from myboxi_case.config import CaseConfig, Form
 from myboxi_case.export import bundle_zip
 from myboxi_case.layout import LayoutError
 from myboxi_case.render import assembled, render
@@ -78,7 +79,7 @@ def _check_all() -> int:
     failed = 0
     tried = 0
     for form, board, power, grille, speaker, button in itertools.product(
-        ("radio", "cube", "bear"), ("zero2w", "pi4"), ("usbc", "powerbank"),
+        get_args(Form), ("zero2w", "pi4"), ("usbc", "powerbank"),
         ("dots", "stars", "hearts", "lines"), (40, 50, 57), (16, 24),
     ):  # fmt: skip
         cfg = CaseConfig.model_validate(

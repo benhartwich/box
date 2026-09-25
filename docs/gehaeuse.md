@@ -23,7 +23,7 @@ Lizenzen:
 |---|---|---|
 | Korpus | Oberseite auf dem Bett | Deckel, Seiten, Rückwand, Rahmen für den NFC-Leser, Schienen für die Front |
 | Front | Sichtseite auf dem Bett | Lautsprechergitter, Name, bei Tierfiguren das Gesicht |
-| Boden | liegend | Abstandshalter für den Pi, Nut für den Verstärker, bei Bedarf Powerbank-Fach |
+| Boden | liegend | Abstandshalter für den Pi, Halter für den Verstärker, zwei Kabelbinder-Halter, bei Bedarf Powerbank-Fach mit Schlitzen für ein Klettband |
 | Lautsprecherring | liegend | klemmt den Lautsprecher an die Front |
 | Ohren, Augen, Horn | liegend, Horn stehend | nur bei Tierfiguren |
 | Figurensockel | liegend | Druckpause bei 2,2 mm, NFC-Tag einlegen |
@@ -58,7 +58,7 @@ Die ZIP-Datei enthält eine `LIESMICH.txt` mit Stückliste und Montage.
 |---|---|
 | Raspberry Pi Zero 2 W oder Pi 4 | Zero 2 W mit angelöteter Stiftleiste |
 | NFC-Modul PN532 V3 | 42,7 × 40,4 mm, auf I2C gestellt |
-| Verstärker MAX98357A | steht in der Nut im Boden |
+| Verstärker MAX98357A | klemmt im Halter auf dem Boden, Platine bis 20 mm breit |
 | Lautsprecher 40 mm, 3 W, 4 Ω | Radio: auch 50 oder 57 mm |
 | 4 Taster 16 mm | Radio: auch 24-mm-Arcade-Taster |
 | USB-C-Einbaubuchse mit Kabel | Ausschnitt 13 × 7 mm, Schrauben im Abstand von 24 mm |
@@ -82,15 +82,25 @@ Diese Teile gibt es in vielen Varianten. Der Generator geht von den folgenden Ma
 
 ## Zusammenbau
 
+Alles wird geschraubt oder gesteckt, nichts geklebt (außer Ohren und Augen der Tierfiguren).
+
 1. Lautsprecher in die Front legen, Lautsprecherring aufschrauben.
-2. NFC-Modul von unten in den Rahmen unter der Figurenmarke drücken. Die Lippen halten es; notfalls einen Tropfen Heißkleber.
+2. NFC-Modul von unten in den Rahmen unter der Figurenmarke drücken. Die Lippen rasten ein.
 3. Taster oben einsetzen und verschrauben, USB-C-Buchse hinten einschrauben.
 4. Tierfiguren:
    - Ohren oder Augen in die Schlitze kleben.
    - Beim Einhorn das Horn von innen mit M3 × 10 festschrauben.
-5. Pi auf den Boden schrauben, Verstärker in die Nut stecken, verkabeln.
-6. Front von unten in die Schienen hinter dem Fenster schieben.
-7. Boden einsetzen und mit 4 Schrauben M3 festschrauben. Die Front lässt sich nur bei offenem Boden herausnehmen; Kinder kommen nicht an die Elektronik.
+5. Pi auf den Boden schrauben. Den Verstärker von oben in seinen Halter schieben: Die Platine läuft in zwei Schlitzen und klemmt.
+6. Verkabeln (`docs/hardware.md`). Die Kabel mit kleinen Kabelbindern (bis 3,6 mm) an den beiden Haltern auf dem Boden bündeln, damit die Front beim Einschieben nichts einklemmt. Mit Powerbank: diese mit einem Klettband (bis 20 mm) durch die zwei Schlitze im Boden festzurren.
+7. Front von unten in die Schienen hinter dem Fenster schieben.
+8. Boden einsetzen und mit 4 Schrauben M3 festschrauben. Die Front lässt sich nur bei offenem Boden herausnehmen; Kinder kommen nicht an die Elektronik.
+
+**Ohne Löten**
+- Raspberry Pi Zero 2 W mit vorgelöteter Stiftleiste („Zero 2 WH“).
+- Taster mit Anschlusslitzen.
+- Dupont-Kabel Buchse/Buchse, 20 cm.
+- PN532-Module gibt es mit eingelöteter Stiftleiste; oft liegt sie aber lose bei.
+- Der Lautsprecher kommt an die Schraubklemme des Verstärkers.
 
 ## Automatische Prüfungen
 

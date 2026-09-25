@@ -52,7 +52,8 @@ BOARDS: dict[Board, BoardSpec] = {
 
 PN532 = (42.7, 40.4)  # Elechouse V3 outline
 PN532_BELOW = 15.0  # parts and header wiring below the board (measure)
-AMP = (20.0, 7.6, 30.0)  # MAX98357A standing in its groove: width, thickness with parts, height
+AMP = (20.0, 7.6, 30.0)  # MAX98357A standing in its holder: width, thickness with parts, height
+AMP_BOARD_H = 19.4
 BUTTON_BODY = {16: (10.0, 30.0), 24: (12.5, 35.0)}  # radius, depth below the top
 BUTTON_NUT = {16: 12.0, 24: 17.0}  # radius of nut and spanner room directly under the top
 SOCKET_BODY = (14.0, 9.0, 22.0)  # USB-C panel socket incl. cable exit: width, height, depth
@@ -171,9 +172,13 @@ def buttons(layout: Layout, size: int) -> list[Component]:
 def amp(layout: Layout) -> Component:
     ax, ay = layout.amp
     w, t, h = AMP
-    edge = box(ax - w / 2, ay - 0.8, BASE + 1.0, ax + w / 2, ay + 0.8, BASE + 4.2)  # in the groove
-    above = box(ax - w / 2, ay - t / 2, BASE + 4.2, ax + w / 2, ay + t / 2, BASE + 1.0 + h)
-    solid = union([edge, above])
+    # The board (1.6 mm) stands in a groove and two slotted posts; its parts keep 2.5 mm from
+    # the side edges, the wires leave at the top.
+    board = box(ax - w / 2, ay - 0.8, BASE + 1.0, ax + w / 2, ay + 0.8, BASE + 1.0 + AMP_BOARD_H)
+    parts = box(
+        ax - w / 2 + 2.5, ay - t / 2, BASE + 4.5, ax + w / 2 - 2.5, ay + t / 2, BASE + 1.0 + h
+    )
+    solid = union([board, parts])
     return Component("amp", "Verstärker MAX98357A", solid, ("base",), "#1f4f8f")
 
 

@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from manifold3d import CrossSection, Manifold
 
 from myboxi_case import characters, patterns, text
-from myboxi_case.components import BOARDS, PN532, board_footprint, board_holes
+from myboxi_case.components import AMP, BOARDS, PN532, board_footprint, board_holes
 from myboxi_case.config import CaseConfig
 from myboxi_case.geom import (
     bounds,
@@ -296,11 +296,18 @@ def base(g: Geometry) -> Shape:
     for hx, hy in board_holes(lay.board, spec):
         parts.append(cylinder_z(STANDOFF_R, hx, hy, BASE - 0.01, BASE + STANDOFF_H))
         cuts.append(cylinder_z(pilot, hx, hy, BASE - 1.0, BASE + STANDOFF_H + 1.0))
+    # Amplifier holder: groove plus two posts with slots; the board slides in from above and
+    # sits tight (no glue).
     ax, ay = lay.amp
-    parts.append(box(ax - 12.0, ay - 3.0, BASE - 0.01, ax + 12.0, ay + 3.0, BASE + 4.0))
-    cuts.append(
-        box(ax - 10.5, ay - 0.9 - tol / 2, BASE + 1.0, ax + 10.5, ay + 0.9 + tol / 2, BASE + 4.1)
-    )
+    aw = AMP[0] / 2
+    parts.append(box(ax - aw - 3.0, ay - 3.0, BASE - 0.01, ax + aw + 3.0, ay + 3.0, BASE + 3.0))
+    for side in (-1, 1):
+        inner, outer = sorted((ax + side * (aw - 1.5), ax + side * (aw + 3.0)))
+        parts.append(box(inner, ay - 3.0, BASE - 0.01, outer, ay + 3.0, BASE + 14.0))
+    slot = 0.8 + tol / 2
+    cuts.append(box(ax - aw - tol, ay - slot, BASE + 1.0, ax + aw + tol, ay + slot, BASE + 14.1))
+    for x, y in lay.anchors:
+        parts.append(_tie_anchor(x, y))
     if lay.powerbank is not None:
         px, py = lay.powerbank
         w, d = 93.0, 61.0
@@ -332,12 +339,24 @@ def base(g: Geometry) -> Shape:
                     BASE + 12.0,
                 )
             )
+        # Slots for a hook-and-loop strap over the powerbank (front to back).
+        for y0 in (py - 4.5, py + d + 1.5):
+            cuts.append(box(px + w / 2 - 11.0, y0, -1.0, px + w / 2 + 11.0, y0 + 3.0, BASE + 1.0))
     if cfg.board == "pi4":
         bx0, by0, bx1, by1 = board_footprint(lay.board, spec)
         for i in range(6):
             x = bx0 + 12.0 + i * (bx1 - bx0 - 24.0) / 5
             cuts.append(box(x - 1.5, by0 + 12.0, -1.0, x + 1.5, by1 - 12.0, BASE + 1.0))
     return Shape(union(parts) - union(cuts), Manifold())
+
+
+def _tie_anchor(x: float, y: float) -> Manifold:
+    """Mount for a 3.6 mm cable tie: bridge over a 4.5 mm gap, the tie runs along y."""
+    posts = [
+        box(x + sx, y - 2.0, BASE - 0.01, x + sx + 2.5, y + 2.0, BASE + 5.0) for sx in (-4.75, 2.25)
+    ]
+    bridge = box(x - 4.75, y - 2.0, BASE + 3.0, x + 4.75, y + 2.0, BASE + 5.0)
+    return union([*posts, bridge])
 
 
 def ear_positions(lay: Layout) -> list[tuple[float, float]]:

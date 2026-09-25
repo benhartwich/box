@@ -365,6 +365,28 @@ async def test_upload_through_ui_and_worker(ui: Ui, settings: Settings, media: P
     assert titles == ["Folge 1", "Folge 2"]
 
 
+async def test_create_collection_with_files_in_one_step(ui: Ui, media: Path) -> None:
+    """ "Dateien hochladen": title and first files in one form, no hidden second step."""
+    page = await ui.client.get(ui.url("/contents"))
+    assert "Dateien hochladen" in page.text
+    assert "Sammlung" not in page.text
+    form = await ui.client.get(ui.url("/contents/new?kind=collection"))
+    assert 'enctype="multipart/form-data"' in form.text
+    assert 'name="files"' in form.text
+    r = await ui.client.post(
+        ui.url("/contents"),
+        data={"csrf_token": ui.csrf, "kind": "collection", "title": "Lieder", "profile": "music"},
+        files=[("files", ("Folge 1.mp3", (media / "Folge 1.mp3").read_bytes(), "audio/mpeg"))],
+    )
+    assert r.status_code == 303
+    cid = uuid.UUID(r.headers["location"].split("/")[-1])
+    async with sessionmaker_of(ui.app)() as db:
+        uploads = (await db.scalars(select(Upload).where(Upload.content_id == cid))).all()
+    assert [u.original_filename for u in uploads] == ["Folge 1.mp3"]
+    page = await ui.client.get(r.headers["location"])
+    assert "Folge 1.mp3" in page.text
+
+
 # --- boxes --------------------------------------------------------------------------------
 
 

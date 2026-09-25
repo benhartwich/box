@@ -320,7 +320,7 @@ async def change_role(db: AsyncSession, ctx: TenantContext, user_id: uuid.UUID, 
     ctx.require(Perm.MEMBER_MANAGE)
     m = await _membership(db, ctx, user_id)
     if m.role == Role.OWNER and role != Role.OWNER and await _owner_count(db, ctx.tenant_id) <= 1:
-        raise ConflictError("Es muss mindestens eine Person mit der Rolle Owner geben.")
+        raise ConflictError("Es muss mindestens eine Person mit der Rolle Besitzer geben.")
     m.role = role
     await db.flush()
 
@@ -329,6 +329,6 @@ async def remove_member(db: AsyncSession, ctx: TenantContext, user_id: uuid.UUID
     ctx.require(Perm.MEMBER_MANAGE)
     m = await _membership(db, ctx, user_id)
     if m.role == Role.OWNER and await _owner_count(db, ctx.tenant_id) <= 1:
-        raise ConflictError("Es muss mindestens eine Person mit der Rolle Owner geben.")
+        raise ConflictError("Es muss mindestens eine Person mit der Rolle Besitzer geben.")
     await db.delete(m)
     await db.flush()

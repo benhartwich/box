@@ -1,9 +1,25 @@
 {% extends "base.html" %}
 {% import "_icons.html" as icon %}
-{% block title %}Neuer Inhalt · Myboxi{% endblock %}
+{% block title %}{{ kind_headings[kind] }} · Myboxi{% endblock %}
 {% block content %}
 <a class="back" href="/t/{{ tid }}/contents">{{ icon.back() }}Inhalte</a>
-<h1>{{ kind_labels[kind] }} anlegen</h1>
+<h1>{{ kind_headings[kind] }}</h1>
+{% if kind == 'collection' %}
+<form method="post" action="/t/{{ tid }}/contents" enctype="multipart/form-data" class="dropzone stack">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input type="hidden" name="kind" value="collection">
+  <label>Titel <input name="title" value="{{ form.title or '' }}" maxlength="200" placeholder="z. B. Gute-Nacht-Lieder" required></label>
+  <p class="muted">Unter diesem Namen wählst du den Inhalt später für eine Figur aus. Mehrere Dateien werden nacheinander abgespielt.</p>
+  <label>Audiodateien (MP3, M4A, WAV, OGG, FLAC)
+    <input type="file" name="files" accept=".mp3,.m4a,.wav,.ogg,.oga,.opus,.flac,audio/*" multiple required>
+  </label>
+  <label>Art
+    <select name="profile">{% for value, label in profiles %}<option value="{{ value.value }}">{{ label }}</option>{% endfor %}</select>
+  </label>
+  <button type="submit">{{ icon.upload(20) }}Hochladen</button>
+  <p class="muted">Die Titel werden für die Box umgewandelt und in der Lautstärke angeglichen. Später kannst du weitere hinzufügen.</p>
+</form>
+{% else %}
 <form method="post" action="/t/{{ tid }}/contents" class="card stack">
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   <input type="hidden" name="kind" value="{{ kind.value }}">
@@ -11,4 +27,5 @@
   {% include "_source_fields.html" %}
   <button type="submit">Anlegen</button>
 </form>
+{% endif %}
 {% endblock %}

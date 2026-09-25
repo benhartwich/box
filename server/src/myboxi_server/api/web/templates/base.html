@@ -28,8 +28,8 @@
     </nav>
     {% endif %}
     <div class="appbar-end">
-      <a class="pill" href="/households">Haushalte {{ icon.chevron() }}</a>
-      <form method="post" action="/logout" class="inline logout">
+      {% if tid %}<a class="pill" href="/households">Haushalte {{ icon.chevron() }}</a>{% endif %}
+      <form method="post" action="/logout" class="inline logout{% if tid %} in-tenant{% endif %}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <button class="link">Abmelden</button>
       </form>

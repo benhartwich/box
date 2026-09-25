@@ -130,7 +130,7 @@ def _cmd_create_admin(args: argparse.Namespace) -> int:
                     print(exc.message, file=sys.stderr)
                     return 1
                 await db.commit()
-                print(f"Mandant {tenant.name} ({tenant.id}) mit Owner {user.email} angelegt.")
+                print(f"Mandant {tenant.name} ({tenant.id}) mit Besitzer {user.email} angelegt.")
                 return 0
         finally:
             await engine.dispose()

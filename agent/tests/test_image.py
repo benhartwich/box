@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -123,7 +124,7 @@ def test_firewall_only_lets_the_home_network_in() -> None:
     assert "policy drop;" in rules
     assert "192.168.0.0/16" in rules
     assert "fc00::/7" in rules
-    if shutil.which("nft"):
+    if shutil.which("nft") and os.geteuid() == 0:  # nft -c needs netlink, even to only check
         subprocess.run(["nft", "-c", "-f", str(FILES / "etc" / "nftables.conf")], check=True)
 
 

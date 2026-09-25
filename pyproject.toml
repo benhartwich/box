@@ -1,5 +1,5 @@
 [tool.uv.workspace]
-members = ["packages/protocol", "server", "agent"]
+members = ["packages/protocol", "server", "agent", "hardware/case"]
 
 [tool.uv]
 python-preference = "only-system"
@@ -27,7 +27,7 @@ ignore = ["S311", "S105", "S106"]
 allowed-confusables = ["–", "„", "“", "×"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["myboxi_server", "myboxi_protocol", "myboxi_agent"]
+known-first-party = ["myboxi_server", "myboxi_protocol", "myboxi_agent", "myboxi_case"]
 
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**" = ["S101", "S603", "S607", "ASYNC109", "ASYNC110", "ASYNC240"]
@@ -38,7 +38,7 @@ typeCheckingMode = "strict"
 pythonVersion = "3.13"
 venvPath = "."
 venv = ".venv"
-include = ["packages", "server", "agent", "tools"]
+include = ["packages", "server", "agent", "hardware", "tools"]
 # kokoro_tts.py runs in its own build venv (torch, kokoro), see tools/prompts/build_prompts.py.
 exclude = ["**/__pycache__", ".venv", "server/migrations/versions", "tools/prompts/kokoro_tts.py"]
 reportMissingTypeStubs = false
@@ -47,5 +47,5 @@ reportMissingTypeStubs = false
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"
 asyncio_default_test_loop_scope = "session"
-testpaths = ["packages/protocol/tests", "server/tests", "agent/tests"]
+testpaths = ["packages/protocol/tests", "server/tests", "agent/tests", "hardware/case/tests"]
 addopts = "--import-mode=importlib"

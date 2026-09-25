@@ -6,6 +6,7 @@ Only complete states are active: a snapshot whose assets are still downloading w
 
 from __future__ import annotations
 
+import datetime as dt
 import json
 import sqlite3
 import uuid
@@ -73,6 +74,7 @@ class SyncState:
     tenant_id: uuid.UUID | None
     applied_config_rev: int
     applied_device_rev: int
+    paired_at: dt.datetime | None = None
 
 
 class StateRepo:
@@ -94,6 +96,7 @@ class StateRepo:
             tenant_id=uuid.UUID(row["tenant_id"]) if row["tenant_id"] else None,
             applied_config_rev=row["applied_config_rev"],
             applied_device_rev=row["applied_device_rev"],
+            paired_at=dt.datetime.fromisoformat(row["paired_at"]) if row["paired_at"] else None,
         )
 
     def set_server_url(self, url: str | None) -> None:

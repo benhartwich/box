@@ -25,6 +25,7 @@ from myboxi_agent.core.model import (
     digit_prompt,
 )
 from myboxi_agent.core.ports import Announcer, Library, Outbox, Player, ResumeStore, System
+from myboxi_agent.core.setup_phase import SetupPhase
 from myboxi_protocol.events import (
     PlaybackErrorData,
     ResumePositionData,
@@ -71,6 +72,7 @@ class Controller:
     system: System
     config: Callable[[], DeviceConfig]
     rng: random.Random = field(default_factory=random.Random)
+    setup_phase: SetupPhase | None = None
 
     requested_volume: int = -1
     session: Session | None = None
@@ -114,6 +116,14 @@ class Controller:
             s.playing = False
         else:
             self._save(emit=True)
+
+    def button_seen(self, button: str) -> None:
+        """Raw press, before combos and repeats (SPEC v0.6 §9.6): in the setup phase the box
+        remembers it for the button test and beeps unless something is playing."""
+        if self.setup_phase is None or not self.setup_phase.record(button):
+            return
+        if self.session is None or not self.session.playing:
+            self.announcer.announce(Prompt.TONE_BUTTON)
 
     def button(self, action: Action) -> None:
         match action:

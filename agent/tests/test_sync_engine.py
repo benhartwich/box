@@ -11,6 +11,7 @@ from typing import Any
 
 import pytest
 
+import myboxi_agent.app as app_module
 from myboxi_agent.adapters.bundle import sim_adapters
 from myboxi_agent.adapters.sim import SimAnnouncer
 from myboxi_agent.app import App
@@ -323,3 +324,32 @@ async def test_unknown_figure_speeds_up_polling(
     app.sync.sync_once = counting  # type: ignore[method-assign]
     app.sync.fast_poll()
     await run_until(app, lambda: syncs >= 3, timeout=3)
+
+
+async def test_pairing_starts_the_setup_phase_with_fast_reports(
+    app: App, api: FakeApi, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """SPEC v0.6 §9.6: after pairing, a button press reaches the server within seconds."""
+    monkeypatch.setattr(engine_module, "SETUP_REPORT_S", 0.05)
+    api.polls = [claimed()]
+    await run_until(app, lambda: app.state.get().applied_config_rev == 3)
+    assert app.sync.in_setup_phase()
+    sent = len(api.reported_sent)
+    app.controller.button_seen("next")
+    app.sync.report_soon()
+    await run_until(app, lambda: len(api.reported_sent) > sent, timeout=2)
+    last = api.reported_sent[-1].data.button_test
+    assert last is not None
+    assert last.seen == ["next"]
+
+
+async def test_signal_level_alone_is_no_change(
+    app: App, api: FakeApi, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    app.state.set_paired(TENANT, "s" * 43)
+    levels = iter([-50, -61])
+    monkeypatch.setattr(app_module, "wifi_rssi", lambda: next(levels))
+    await app.sync.report(api)  # pyright: ignore[reportArgumentType]
+    await app.sync.report(api)  # pyright: ignore[reportArgumentType]
+    assert len(api.reported_sent) == 1
+    assert api.reported_sent[0].data.wifi_rssi == -50

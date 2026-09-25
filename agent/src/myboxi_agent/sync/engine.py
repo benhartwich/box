@@ -21,6 +21,7 @@ from myboxi_agent import __version__
 from myboxi_agent.adapters.outbox import EventOutbox
 from myboxi_agent.core.clock import Clock
 from myboxi_agent.core.controller import Controller
+from myboxi_agent.core.setup_phase import SetupPhase
 from myboxi_agent.ids import ulid
 from myboxi_agent.store.repos import AssetRepo, LibraryRepo, OutboxRepo, StateRepo
 from myboxi_agent.sync.client import ApiError, ChecksumMismatch, Unreachable
@@ -39,6 +40,7 @@ log = logging.getLogger(__name__)
 
 POLL_S = 3.0  # SPEC §7.1
 REPORT_CHECK_S = 30.0  # SPEC §6.4: at most every 30 s
+SETUP_REPORT_S = 5.0  # SPEC v0.6 §9.6: in the setup phase at most every 5 s
 FAST_POLL_S = 30.0
 FAST_POLL_FOR_S = 10 * 60
 REPORT_MAX_AGE_S = 600.0  # SPEC §6.4: at least every 10 min
@@ -91,6 +93,7 @@ class SyncEngine:
         reported_data: Callable[[], ReportedData],
         disk_free: Callable[[], int],
         interval_s: float,
+        setup_phase: SetupPhase | None = None,
     ) -> None:
         self.state = state
         self.library = library
@@ -105,8 +108,10 @@ class SyncEngine:
         self.reported_data = reported_data
         self.disk_free = disk_free
         self.interval_s = interval_s
+        self.setup_phase = setup_phase
         self.status = SyncStatus()
         self._wake = asyncio.Event()
+        self._report_wake = asyncio.Event()
         self._repair = False
         self._api: Api | None = None
         self._api_url: str | None = None
@@ -126,6 +131,13 @@ class SyncEngine:
         ask every 30 s for 10 minutes so a figure adopted in the app works right away."""
         self._fast_until = self.clock.monotonic() + FAST_POLL_FOR_S
         self._wake.set()
+
+    def report_soon(self) -> None:
+        """Something the setup wizard waits for changed (e.g. a button test press)."""
+        self._report_wake.set()
+
+    def in_setup_phase(self) -> bool:
+        return self.setup_phase is not None and self.setup_phase.active()
 
     def request_repair(self) -> None:
         """SPEC §9.4: unpair and pair again."""
@@ -158,7 +170,7 @@ class SyncEngine:
                 await self.sync_once(api)
                 backoff = 5.0
                 self.status.last_error = None
-                fast = self.clock.monotonic() < self._fast_until
+                fast = self.clock.monotonic() < self._fast_until or self.in_setup_phase()
                 await self._wait(FAST_POLL_S if fast else self.interval_s)
             except PairingExpired:
                 continue
@@ -223,6 +235,8 @@ class SyncEngine:
             if isinstance(result, PairingClaimed):
                 self.state.set_paired(result.tenant_id, result.device_secret)
                 api.forget_token()
+                if self.setup_phase is not None:
+                    self.setup_phase.started()
                 self.controller.pairing_finished(success=True)
                 log.info("paired", extra={"tenant_id": str(result.tenant_id)})
                 return
@@ -339,7 +353,8 @@ class SyncEngine:
 
     async def report(self, api: Api, *, force: bool = False) -> None:
         data = self.reported_data()
-        comparable = data.model_dump(mode="json", exclude={"storage"})
+        # Free space and signal level change all the time; they go along with other changes.
+        comparable = data.model_dump(mode="json", exclude={"storage", "wifi_rssi"})
         now = self.clock.monotonic()
         changed = comparable != self._last_report
         if not force and not changed and now - self._last_report_at < REPORT_MAX_AGE_S:
@@ -350,9 +365,20 @@ class SyncEngine:
         await api.reported(await self._token(api), message)
         self._last_report, self._last_report_at = comparable, now
 
+    async def _report_pause(self) -> None:
+        if not self.in_setup_phase():
+            await asyncio.sleep(REPORT_CHECK_S)
+            return
+        with contextlib.suppress(TimeoutError):
+            await asyncio.wait_for(self._report_wake.wait(), SETUP_REPORT_S)
+        self._report_wake.clear()
+        gap = SETUP_REPORT_S - (self.clock.monotonic() - self._last_report_at)
+        if gap > 0:
+            await asyncio.sleep(gap)
+
     async def _report_loop(self) -> None:
         while True:
-            await asyncio.sleep(REPORT_CHECK_S)
+            await self._report_pause()
             url = self.server_url()
             if not url or self.state.get().tenant_id is None:
                 continue

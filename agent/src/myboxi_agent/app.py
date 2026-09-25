@@ -25,6 +25,7 @@ from myboxi_agent.control import ControlServer
 from myboxi_agent.core.buttons import ButtonTracker
 from myboxi_agent.core.controller import Controller
 from myboxi_agent.core.model import Action, Loading, Prompt, Unknown
+from myboxi_agent.core.setup_phase import SetupPhase
 from myboxi_agent.setup.nm import NetworkManager
 from myboxi_agent.setup.watch import NetworkWatch
 from myboxi_agent.store.db import connect
@@ -71,6 +72,7 @@ class App:
         self.outbox_repo = OutboxRepo(self.db)
         self.outbox = EventOutbox(self.outbox_repo, clock, read_boot_id())
         self.announcer = self.adapters.announcer_factory(lambda: self.controller.prompt_volume())
+        self.setup_phase = SetupPhase(clock, lambda: self.state.get().paired_at)
         self.controller = Controller(
             clock=clock,
             player=self.adapters.player,
@@ -81,6 +83,7 @@ class App:
             system=self.adapters.system,
             config=self.state.device_config,
             rng=random.Random(),
+            setup_phase=self.setup_phase,
         )
         self.tracker = ButtonTracker(clock)
         self.hw_model = detect_hw_model()
@@ -98,6 +101,7 @@ class App:
             reported_data=self.reported_data,
             disk_free=lambda: free_bytes(settings.data_dir),
             interval_s=settings.sync_interval_s,
+            setup_phase=self.setup_phase,
         )
         system: Any = self.adapters.system
         if hasattr(system, "on_repair"):
@@ -166,6 +170,9 @@ class App:
 
     async def _buttons_loop(self) -> None:
         async for event in self.adapters.buttons.events():
+            if event.pressed and self.setup_phase.active():
+                self.controller.button_seen(event.button)
+                self.sync.report_soon()
             actions = (
                 self.tracker.press(event.button)
                 if event.pressed
@@ -206,6 +213,9 @@ class App:
                     "volume": playback.volume,
                 },
                 "health": self.adapters.health.snapshot(),
+                "button_test": (
+                    {"seen": sorted(self.setup_phase.seen)} if self.setup_phase.active() else None
+                ),
             }
         )
 
@@ -227,6 +237,7 @@ class App:
             "pairing_code": self.controller.pairing_code,
             "outbox": self.outbox_repo.count(),
             "health": self.adapters.health.snapshot(),
+            "setup_phase": self.setup_phase.active(),
             "sim": self.settings.sim,
         }
 

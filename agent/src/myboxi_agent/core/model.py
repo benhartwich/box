@@ -74,6 +74,7 @@ class Prompt(StrEnum):
     TONE_START = "tone_start"
     TONE_ERROR = "tone_error"
     TONE_ATTENTION = "tone_attention"
+    TONE_BUTTON = "tone_button"  # SPEC v0.6 §9.6: button test
     UNKNOWN_TOKEN = "unknown_token"
     LOADING = "loading"
     UNAVAILABLE = "unavailable"

@@ -6,6 +6,7 @@ Placeholders like "..." in the spec are replaced with concrete, valid values.
 from __future__ import annotations
 
 import json
+import uuid
 from typing import Any
 
 import pytest
@@ -14,7 +15,12 @@ from pydantic import BaseModel, TypeAdapter, ValidationError
 from myboxi_protocol.auth import DeviceTokenRequest, DeviceTokenResponse
 from myboxi_protocol.envelope import RawEnvelope
 from myboxi_protocol.errors import ErrorResponse
-from myboxi_protocol.events import EventBatchRequest, EventBatchResponse, event_adapter
+from myboxi_protocol.events import (
+    EventBatchRequest,
+    EventBatchResponse,
+    ResumePositionData,
+    event_adapter,
+)
 from myboxi_protocol.messages import CmdAckMessage, CmdMessage, NotifyMessage
 from myboxi_protocol.pairing import (
     ClaimRequest,
@@ -176,6 +182,16 @@ def test_reported_without_v06_fields_and_with_unknown_checks() -> None:
         ("storage_full", {"needed_mb": 120, "free_mb": 40}),
         ("sync_error", {"stage": "asset_download", "code": "sha_mismatch"}),
         ("resume_position", {"token_id": TOKEN, "item_index": 2, "position_ms": 81234}),
+        (
+            "resume_position",
+            {
+                "token_id": TOKEN,
+                "item_index": 1,
+                "position_ms": 5000,
+                "item_key": "3f2a9c0d4b1e8f7a6c5d4e3f2a1b0c9d",
+            },
+        ),
+        ("playback_error", {"token_id": TOKEN, "provider": "podcast", "code": "feed_error"}),
     ],
 )
 def test_events_6_5(type_: str, data: dict[str, Any]) -> None:
@@ -471,3 +487,13 @@ def test_update_versions(candidate: str, current: str, newer: bool) -> None:
 def test_auto_update_defaults_on() -> None:
     assert DeviceConfig().auto_update is True
     assert DeviceConfig.model_validate({"auto_update": False}).auto_update is False
+
+
+def test_resume_position_item_key_is_optional_and_omitted_v0_8() -> None:
+    """SPEC v0.8 §3.10: older peers neither send nor expect ``item_key``."""
+    data = ResumePositionData(token_id=uuid.UUID(TOKEN), item_index=0, position_ms=0)
+    assert "item_key" not in data.model_dump(mode="json")
+    with pytest.raises(ValidationError):
+        ResumePositionData.model_validate(
+            {"token_id": TOKEN, "item_index": 0, "position_ms": 0, "item_key": "a b"}
+        )

@@ -2,6 +2,8 @@
 
 Vom Image bis zur ersten Figur. Hardware und Verdrahtung: `docs/hardware.md`.
 
+**Am einfachsten mit dem Einrichtungs-Assistenten der Web-UI:** Haushalt anlegen (oder auf der Startseite „Erste Box einrichten“), dann führt er durch alle Schritte unten. Nach dem Koppeln zeigt er live, was die Box meldet: Selbsttest (NFC-Leser, Lautsprecher, Taster, Ansagen), Tastentest, erste Figur, Inhalt, Laden und Abspielen. Bei Problemen nennt er, was zu prüfen ist. Diese Anleitung ist die Referenz dazu.
+
 ## 1. Image flashen
 
 1. Das neueste Image herunterladen: GitHub → Releases → `myboxi-<version>.img.xz`. Zwischenstände aus Branches liegen unter Actions → „image“ → Artefakt `myboxi-image`: eine ZIP-Datei, die du zuerst entpackst.
@@ -30,6 +32,8 @@ Später lässt sich der Einrichtungsmodus jederzeit starten: **`volume_up` + `vo
 Sobald die Box online ist, sagt sie ihren Kopplungscode an: „Dein Code ist: vier – sieben – …“. Wiederholen: **`play_pause`** drücken. Der Code gilt 10 Minuten, danach kommt ein neuer.
 
 In der Web-UI (https://app.myboxi.eu) → **Boxen** → „Box hinzufügen“ → Code und Name eingeben. Die Box bestätigt mit „Geschafft!“ und lädt sofort alle Inhalte.
+
+In der ersten Stunde nach dem Koppeln (Einrichtungsphase, SPEC §9.6) piept die Box bei jedem Tastendruck und meldet die gedrückten Tasten an den Assistenten; sie gleicht sich alle 30 Sekunden mit dem Server ab.
 
 Neu koppeln (z. B. für einen anderen Haushalt): **`play_pause` + `next` 5 Sekunden halten.**
 

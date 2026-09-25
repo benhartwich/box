@@ -43,6 +43,19 @@ Neu koppeln (z. B. für einen anderen Haushalt): **`play_pause` + `next` 5 Sekun
 2. In der Web-UI unter **Figuren → Unbekannte Figuren** mit „Übernehmen“ anlegen, einen Inhalt zuordnen.
 3. Nach einer unbekannten Figur fragt die Box 10 Minuten lang alle 30 Sekunden beim Server nach, sonst alle 15 Minuten. Sie lädt die Dateien vollständig. Danach spielt die Figur auch ohne Internet. Die Figur einfach noch einmal auflegen.
 
+## 6. Podcasts
+
+1. In der Web-UI unter **Inhalte → Podcast** die Feed-Adresse eintragen (RSS oder Atom, `https://…`) und festlegen, wie viele der neuesten Folgen auf die Box sollen.
+2. Den Podcast einer Figur zuordnen. Die Box liest den Feed selbst, gleich nach dem nächsten Abgleich, und lädt die Folgen vollständig herunter. Bis die erste Folge da ist, sagt sie „Wird noch geladen“.
+3. Danach spielen die Folgen auch ohne Internet. Alle 6 Stunden sieht die Box nach neuen Folgen; ältere räumt sie weg, wenn der Platz knapp wird. Beim Auflegen geht es in der zuletzt gehörten Folge weiter, auch wenn inzwischen eine neue erschienen ist.
+
+Gut zu wissen:
+- Folgen, die der Feed als nicht jugendfrei markiert (`itunes:explicit`), spielt die Box nicht. Video-Podcasts lässt sie aus.
+- Die Box gleicht die Lautheit an (−16 LUFS, wie bei hochgeladenen Dateien). Die Höchstlautstärke der Box gilt wie immer.
+- Die Box lädt nur von öffentlichen Adressen, nicht aus dem Heimnetz.
+- Feed und Folgen kommen direkt vom Anbieter des Podcasts, nicht über den Myboxi-Server. Der Anbieter sieht dabei die IP-Adresse eures Anschlusses.
+- Lässt sich ein Feed nicht lesen, steht das auf der Box-Seite unter „Probleme bei der Wiedergabe“.
+
 ## Updates
 
 Ab Image 0.3.0 aktualisiert sich die Box selbst, sobald sie online ist, aber nie während etwas spielt. Den Stand zeigt die App auf der Box-Seite unter „Software“; dort lassen sich automatische Updates auch abschalten. Sicherheitsupdates des Systems kommen täglich, ein nötiger Neustart erst nach 10 ruhigen Minuten. Boxen mit einem älteren Image brauchen einmal das neue Image. Details: `docs/updates.md`.

@@ -57,6 +57,19 @@
 </section>
 {% endif %}
 
+{% if problems %}
+<section class="card attention" aria-labelledby="problems">
+  <h2 id="problems">Probleme bei der Wiedergabe</h2>
+  <ul class="hints">
+    {% for p in problems %}
+    <li class="hint-warn">{% if p.figure %}<strong>{{ p.figure }}:</strong> {% endif %}{{ p.text }}
+      <span class="muted">{{ p.last_at | localtime }}{% if p.count > 1 %}, {{ p.count }}-mal{% endif %}</span></li>
+    {% endfor %}
+  </ul>
+  <p class="muted">Die letzten 14 Tage.</p>
+</section>
+{% endif %}
+
 <section class="card">
   <div class="card-head"><h2>Selbsttest</h2><a href="/t/{{ tid }}/boxes/{{ device.id }}/setup">Einrichtungs-Assistent</a></div>
   {% if reported and reported.health %}

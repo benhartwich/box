@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import datetime as dt
 import uuid
+from dataclasses import dataclass
 
 from pydantic import ValidationError
 from sqlalchemy import select
@@ -16,7 +18,10 @@ from myboxi_protocol.events import (
     ResumePositionEvent,
     event_adapter,
 )
+from myboxi_server.domain.authz import Perm, TenantContext
 from myboxi_server.models import Event, ResumePosition, Token
+
+PROBLEM_WINDOW = dt.timedelta(days=14)
 
 
 async def ingest(
@@ -71,6 +76,7 @@ async def _store_resume_position(
         token_id=event.data.token_id,
         item_index=event.data.item_index,
         position_ms=event.data.position_ms,
+        item_key=event.data.item_key,
         updated_at=event.ts,
         device_id=device_id,
     )
@@ -80,6 +86,7 @@ async def _store_resume_position(
             set_={
                 "item_index": stmt.excluded.item_index,
                 "position_ms": stmt.excluded.position_ms,
+                "item_key": stmt.excluded.item_key,
                 "updated_at": stmt.excluded.updated_at,
                 "device_id": stmt.excluded.device_id,
                 "received_at": stmt.excluded.received_at,
@@ -87,3 +94,61 @@ async def _store_resume_position(
             where=ResumePosition.updated_at < stmt.excluded.updated_at,
         )
     )
+
+
+@dataclass(frozen=True)
+class PlaybackProblem:
+    """``playback_error`` events of one box, grouped by figure, provider and code."""
+
+    provider: str
+    code: str
+    figure: str | None
+    count: int
+    last_at: dt.datetime
+
+
+async def playback_problems(
+    db: AsyncSession,
+    ctx: TenantContext,
+    device_id: uuid.UUID,
+    *,
+    now: dt.datetime | None = None,
+    limit: int = 5,
+) -> list[PlaybackProblem]:
+    """Recent playback errors (SPEC §6.5), newest first, e.g. a podcast feed that fails."""
+    ctx.require(Perm.READ)
+    since = (now or dt.datetime.now(dt.UTC)) - PROBLEM_WINDOW
+    rows = (
+        await db.execute(
+            select(Event.data, Event.received_at)
+            .where(
+                Event.tenant_id == ctx.tenant_id,
+                Event.device_id == device_id,
+                Event.type == "playback_error",
+                Event.received_at >= since,
+            )
+            .order_by(Event.received_at.desc())
+            .limit(200)
+        )
+    ).all()
+    groups: dict[tuple[str, str, str], list[dt.datetime]] = {}
+    for data, received_at in rows:
+        key = (str(data.get("token_id")), str(data.get("provider")), str(data.get("code")))
+        groups.setdefault(key, []).append(received_at)
+    token_ids: list[uuid.UUID] = []
+    for token_id, _, _ in groups:
+        try:
+            token_ids.append(uuid.UUID(token_id))
+        except ValueError:
+            continue
+    labels = {
+        str(t.id): t.label
+        for t in await db.scalars(
+            select(Token).where(Token.tenant_id == ctx.tenant_id, Token.id.in_(token_ids))
+        )
+    }
+    problems = [
+        PlaybackProblem(provider, code, labels.get(token_id), len(times), times[0])
+        for (token_id, provider, code), times in groups.items()
+    ]
+    return problems[:limit]

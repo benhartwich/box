@@ -29,7 +29,7 @@ from myboxi_server.api.web.deps import (
 from myboxi_server.api.web.render import render
 from myboxi_server.api.web.routes_setup import render_start
 from myboxi_server.auth.sessions import SessionInfo
-from myboxi_server.domain import devices
+from myboxi_server.domain import devices, events
 from myboxi_server.domain.authz import TenantContext
 from myboxi_server.domain.errors import DomainError, NotFoundError
 from myboxi_server.domain.setup import health_hints
@@ -47,6 +47,42 @@ PROVIDERS = [
 LOCALES = ["de-AT", "de-DE", "de-CH", "en-GB", "en-US"]
 TIMEZONES = ["Europe/Vienna", "Europe/Berlin", "Europe/Zurich", "Europe/London", "UTC"]
 SOLOIST_WARN = dt.timedelta(days=14)
+PROVIDER_NAMES = dict(PROVIDERS)
+# SPEC v0.8 §6.5: known playback_error codes; unknown ones are shown neutrally.
+PROBLEM_TEXTS = {
+    ("podcast", "feed_error"): "Der Podcast-Feed lässt sich nicht laden. Bitte die Feed-Adresse "
+    "prüfen.",
+    ("podcast", "no_episodes"): "Der Podcast hat keine passende Folge. Folgen, die als nicht "
+    "jugendfrei markiert sind, lässt die Box aus.",
+    ("local", "asset_missing"): "Eine Datei fehlt auf der Box. Sie wird beim nächsten Abgleich "
+    "neu geladen.",
+    ("local", "empty"): "Der Inhalt hat keine Titel.",
+}
+CODE_TEXTS = {
+    "disabled": "{provider} ist für diese Box ausgeschaltet (Einstellungen unten).",
+    "not_available": "{provider} kann diese Box noch nicht abspielen.",
+    "decode_error": "Eine Datei ließ sich nicht abspielen.",
+    "player_restart": "Die Wiedergabe ist abgebrochen und wurde neu gestartet.",
+}
+
+
+def _problems(problems: list[events.PlaybackProblem]) -> list[dict[str, Any]]:
+    return [
+        {"text": problem_text(p.provider, p.code), "figure": p.figure, "count": p.count,
+         "last_at": p.last_at}
+        for p in problems
+    ]  # fmt: skip
+
+
+def problem_text(provider: str, code: str) -> str:
+    if text := PROBLEM_TEXTS.get((provider, code)):
+        return text
+    name = PROVIDER_NAMES.get(provider, provider)
+    if template := CODE_TEXTS.get(code):
+        return template.format(provider=name)
+    return f"Problem bei der Wiedergabe ({name}: {code})."
+
+
 _CLAIM_MESSAGES = {
     ErrorCode.CODE_INVALID: "Der Code ist ungültig oder abgelaufen.",
     ErrorCode.DEVICE_PAIRED_ELSEWHERE: "Diese Box ist mit einem anderen Haushalt gekoppelt. "
@@ -148,6 +184,7 @@ async def _box_page(
             "device": device,
             "cfg": cfg,
             "reported": _reported_view(device, tenant.config_rev if tenant else 0, latest),
+            "problems": _problems(await events.playback_problems(db, ctx, device_id)),
             "providers": PROVIDERS,
             "locales": LOCALES,
             "timezones": TIMEZONES,

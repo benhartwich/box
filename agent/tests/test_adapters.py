@@ -27,7 +27,7 @@ from myboxi_agent.adapters.mpv import (
     MpvProcess,
     mpv_args,
 )
-from myboxi_agent.core.model import ResumePoint
+from myboxi_agent.core.model import PlanItem, ResumePoint
 
 # --- a fake mpv IPC endpoint ------------------------------------------------------------------
 
@@ -79,7 +79,9 @@ async def test_player_commands_and_events(fake_mpv: FakeMpv) -> None:
     player.on_error = errors.append
     task = asyncio.create_task(player.client.run())
     try:
-        player.play(["/a/0.opus", "/a/1.opus"], 1, 12_500, "all")
+        player.play(
+            [PlanItem("/a/0.opus", "A", 0), PlanItem("/a/1.opus", "B", 0)], 1, 12_500, "all"
+        )
         player.set_volume(35)
         await fake_mpv.settle()
         assert fake_mpv.commands[:2] == [
@@ -106,6 +108,30 @@ async def test_player_commands_and_events(fake_mpv: FakeMpv) -> None:
         player.stop()
         await fake_mpv.emit(event="idle")
         assert finished == [True]  # an intentional stop is not the end of the content
+    finally:
+        task.cancel()
+
+
+async def test_player_applies_loudness_gain_per_file(fake_mpv: FakeMpv) -> None:
+    """SPEC v0.8 §8.2: the correction belongs to one file; a boost goes through a limiter."""
+    player = MpvPlayer(lambda on_event: MpvClient(fake_mpv.path, on_event))
+    task = asyncio.create_task(player.client.run())
+    try:
+        items = [
+            PlanItem("/p/loud.mp3", "laut", 0, key="a" * 32, gain_db=-4.24),
+            PlanItem("/p/quiet.mp3", "leise", 0, key="b" * 32, gain_db=6.0),
+            PlanItem("/p/plain.mp3", "normal", 0, key="c" * 32, gain_db=0.04),
+        ]
+        player.play(items, 0, 0, "off")
+        await fake_mpv.settle()
+        loads = [c for c in fake_mpv.commands if "loadfile" in json.dumps(c)]
+        assert loads == [
+            {"name": "loadfile", "url": "/p/loud.mp3", "flags": "append",
+             "options": "af=%21%lavfi=[volume=-4.2dB]"},
+            {"name": "loadfile", "url": "/p/quiet.mp3", "flags": "append",
+             "options": "af=%49%lavfi=[volume=6.0dB,alimiter=limit=0.891:level=0]"},
+            ["loadfile", "/p/plain.mp3", "append"],
+        ]  # fmt: skip
     finally:
         task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
@@ -164,7 +190,15 @@ async def test_real_mpv_plays_resumes_and_finishes(tmp_path: Path) -> None:
     try:
         await asyncio.wait_for(player.client.connected.wait(), 10)
         player.set_volume(10)
-        player.play([str(tmp_path / "0.wav"), str(tmp_path / "1.wav")], 0, 500, "off")
+        player.play(
+            [
+                PlanItem(str(tmp_path / f"{i}.wav"), f"T{i}", 1000, gain_db=g)
+                for i, g in ((0, 3.0), (1, None))
+            ],
+            0,
+            500,
+            "off",
+        )
         await asyncio.sleep(0.8)
         pos = player.position()
         assert pos is not None

@@ -15,7 +15,7 @@ import pytest
 
 from myboxi_agent.core.clock import FakeClock
 from myboxi_agent.core.model import Loading, Playable, ResumePoint, Unavailable, Unknown
-from myboxi_agent.store.db import connect
+from myboxi_agent.store.db import MIGRATIONS, connect
 from myboxi_agent.store.repos import (
     AssetRepo,
     Database,
@@ -86,7 +86,7 @@ def test_schema_wal_and_permissions(tmp_path: Path) -> None:
     conn = connect(tmp_path / "myboxi.db")
     assert conn.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
     assert conn.execute("PRAGMA synchronous").fetchone()[0] == 2  # FULL
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 1
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == len(MIGRATIONS)
     assert stat.S_IMODE((tmp_path / "myboxi.db").stat().st_mode) == 0o600
     connect(tmp_path / "myboxi.db")  # idempotent
 
@@ -111,12 +111,26 @@ def test_resolve_unknown_playable_and_missing_asset(db: Database) -> None:
     assert plan.items[0].source == str(asset_path(db.asset_dir, SHA_A))
 
 
-@pytest.mark.parametrize("kind", ["podcast", "spotify"])
-def test_providers_not_on_the_box_yet_are_unavailable(db: Database, kind: str) -> None:
-    LibraryRepo(db).activate(snapshot(kind=kind, shas=()))
+def test_spotify_not_on_the_box_yet_is_unavailable(db: Database) -> None:
+    LibraryRepo(db).activate(snapshot(kind="spotify", shas=()))
     res = LibraryRepo(db).resolve(UID)
     assert isinstance(res, Unavailable)
-    assert res.provider == kind
+    assert res.provider == "spotify"
+
+
+def test_migration_2_keeps_resume_positions(tmp_path: Path) -> None:
+    """SPEC v0.8: a box updated from v0.7 keeps its data; old points have no item key."""
+    path = tmp_path / "myboxi.db"
+    conn = sqlite3.connect(path, isolation_level=None)
+    for statement in MIGRATIONS[0].split(";"):
+        if statement.strip():
+            conn.execute(statement)
+    conn.execute("PRAGMA user_version = 1")
+    conn.execute("INSERT INTO resume_position VALUES ('t', 2, 5000, '2026-09-24T12:00:00+00:00')")
+    conn.close()
+    db = Database(connect(path), tmp_path / "assets", FakeClock())
+    row = db.conn.execute("SELECT * FROM resume_position").fetchone()
+    assert (row["item_index"], row["position_ms"], row["item_key"]) == (2, 5000, None)
 
 
 def test_staged_binding_is_loading_and_old_binding_stays_active(db: Database) -> None:

@@ -1,7 +1,7 @@
 [project]
 name = "myboxi-agent"
-version = "0.3.0"
-description = "Myboxi box agent: figures, buttons, playback, sync (SPEC v0.5)"
+version = "0.4.0"
+description = "Myboxi box agent: figures, buttons, playback, sync, podcasts (SPEC v0.8)"
 license = "GPL-3.0-or-later"
 requires-python = ">=3.13,<3.14"
 dependencies = [

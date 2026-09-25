@@ -94,6 +94,7 @@ class SyncEngine:
         disk_free: Callable[[], int],
         interval_s: float,
         setup_phase: SetupPhase | None = None,
+        on_synced: Callable[[], None] | None = None,
     ) -> None:
         self.state = state
         self.library = library
@@ -109,6 +110,7 @@ class SyncEngine:
         self.disk_free = disk_free
         self.interval_s = interval_s
         self.setup_phase = setup_phase
+        self.on_synced = on_synced  # e.g. new podcasts: read their feeds (SPEC v0.8 §8.2)
         self.status = SyncStatus()
         self._wake = asyncio.Event()
         self._report_wake = asyncio.Event()
@@ -288,6 +290,8 @@ class SyncEngine:
             if await self._fetch_assets(api, snapshot):
                 self.library.activate(snapshot)
                 log.info("library activated", extra={"config_rev": snapshot.config_rev})
+        if self.on_synced is not None:
+            self.on_synced()
         await self.flush_outbox(api)
         await self.report(api, force=True)
         self.status.last_sync = self.clock.now()
@@ -333,13 +337,7 @@ class SyncEngine:
         return True
 
     def _evict(self, needed: int) -> int:
-        freed = 0
-        for sha, size in self.assets.evictable():
-            if freed >= needed:
-                break
-            self.assets.delete(sha)
-            freed += size
-        return freed
+        return self.assets.evict(needed)
 
     # --- events and reported ----------------------------------------------------------------
 

@@ -15,13 +15,38 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
-from myboxi_agent.core.model import Prompt, ResumePoint
+from myboxi_agent.core.model import PlanItem, Prompt, ResumePoint
 from myboxi_protocol.state import RepeatMode
 
 log = logging.getLogger(__name__)
 
 TONE_FALLBACK = "av://lavfi:sine=frequency=660:duration=0.25"
 ERROR_FALLBACK = "av://lavfi:sine=frequency=330:duration=0.6"
+GAIN_MIN_DB = 0.1  # smaller corrections are inaudible: play unchanged
+LIMIT = 0.891  # -1 dBFS (SPEC v0.8 §8.2)
+
+
+def gain_filter(gain_db: float) -> str:
+    """Per-file audio filter for the loudness correction (SPEC v0.8 §8.2). A boost runs
+    through a limiter without its auto level, so peaks cannot clip."""
+    graph = f"volume={gain_db:.1f}dB"
+    if gain_db > 0:
+        graph += f",alimiter=limit={LIMIT}:level=0"
+    return f"lavfi=[{graph}]"
+
+
+def loadfile_command(item: PlanItem) -> dict[str, Any] | list[Any]:
+    if item.gain_db is None or abs(item.gain_db) < GAIN_MIN_DB:
+        return ["loadfile", item.source, "append"]
+    value = gain_filter(item.gain_db)
+    # Per-file options (kept with the playlist entry). Named arguments work on every mpv
+    # since 0.33; the %n% quoting keeps the commas of the filter graph in one value.
+    return {
+        "name": "loadfile",
+        "url": item.source,
+        "flags": "append",
+        "options": f"af=%{len(value)}%{value}",
+    }
 
 
 def mpv_args(mpv: str, ipc: Path, audio_output: str, client_name: str) -> list[str]:
@@ -46,12 +71,16 @@ class MpvClient:
     def __init__(self, ipc: Path, on_event: Callable[[dict[str, Any]], None]) -> None:
         self.ipc = ipc
         self.on_event = on_event
-        self._queue: asyncio.Queue[list[Any]] = asyncio.Queue()
+        self._queue: asyncio.Queue[dict[str, Any] | list[Any]] = asyncio.Queue()
         self._ids = itertools.count(1)
         self.connected = asyncio.Event()
 
     def send(self, *command: Any) -> None:
         self._queue.put_nowait(list(command))
+
+    def send_command(self, command: dict[str, Any] | list[Any]) -> None:
+        """A prepared command, e.g. with named arguments."""
+        self._queue.put_nowait(command)
 
     async def run(self) -> None:
         while True:
@@ -146,7 +175,7 @@ class MpvPlayer:
             self._observed = True
 
     def play(
-        self, sources: Sequence[str], index: int, position_ms: int, repeat: RepeatMode
+        self, items: Sequence[PlanItem], index: int, position_ms: int, repeat: RepeatMode
     ) -> None:
         self._observe()
         self._active = False
@@ -156,8 +185,8 @@ class MpvPlayer:
         self._pending_start = position_ms / 1000 if position_ms > 0 else None
         if self._pending_start is not None:
             self.client.send("set_property", "start", f"{self._pending_start:.3f}")
-        for source in sources:
-            self.client.send("loadfile", source, "append")
+        for item in items:
+            self.client.send_command(loadfile_command(item))
         self.client.send("set_property", "pause", False)
         self.client.send("playlist-play-index", index)
         self._pos_index, self._pos_s = index, position_ms / 1000

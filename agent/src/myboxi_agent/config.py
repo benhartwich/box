@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     prompts_dir: Path = Path("/opt/myboxi-agent/current/prompts")
 
     sync_interval_s: int = Field(default=15 * 60, ge=60)
+    # SPEC v0.8 §8.2: feeds and episodes only from public addresses. Development only: allow
+    # a feed on the local network or on this machine.
+    podcast_allow_private: bool = False
 
     # Software updates (SPEC v0.7 §11.1); used by the root service myboxi-updater.
     update_manifest_url: str = (

@@ -29,14 +29,15 @@ from myboxi_agent.core.model import (
     Unknown,
 )
 from myboxi_agent.ids import uuid7
-from myboxi_protocol.state import DeviceConfig, StateResponse
+from myboxi_agent.store.podcasts import PodcastRepo
+from myboxi_protocol.state import DeviceConfig, PodcastSource, StateResponse
 
 Origin = Literal["server", "local"]
 
 
-def asset_path(asset_dir: Path, sha256: str) -> Path:
-    """SPEC §4: ``assets/ab/cd/<sha256>.opus``."""
-    return asset_dir / sha256[:2] / sha256[2:4] / f"{sha256}.opus"
+def asset_path(asset_dir: Path, sha256: str, suffix: str = ".opus") -> Path:
+    """SPEC §4: ``assets/ab/cd/<sha256>.opus``; podcast episodes keep their format (v0.8)."""
+    return asset_dir / sha256[:2] / sha256[2:4] / f"{sha256}{suffix}"
 
 
 class Database:
@@ -140,6 +141,7 @@ class StateRepo:
             c.execute("DELETE FROM device_config")
             c.execute("DELETE FROM staged_change")
             c.execute("DELETE FROM resume_position")
+            _prune_podcasts(c)
 
     def device_config(self) -> DeviceConfig:
         row = self.db.conn.execute("SELECT config FROM device_config WHERE id = 1").fetchone()
@@ -167,6 +169,15 @@ def _delete_server_rows(c: sqlite3.Connection) -> None:
     c.execute("DELETE FROM token WHERE origin = 'server'")
 
 
+def _prune_podcasts(c: sqlite3.Connection) -> None:
+    """Feeds and episodes of podcasts that no longer exist (SPEC v0.8 §8.2)."""
+    for table in ("podcast_feed", "podcast_episode"):
+        c.execute(
+            f"DELETE FROM {table} WHERE content_id NOT IN"  # noqa: S608 - fixed table names
+            " (SELECT id FROM content WHERE kind = 'podcast')"
+        )
+
+
 # --- library ----------------------------------------------------------------------------------
 
 
@@ -175,12 +186,13 @@ class LibraryRepo:
 
     def __init__(self, db: Database) -> None:
         self.db = db
+        self.podcasts = PodcastRepo(db)
 
     def resolve(self, uid: str) -> Resolution:
         c = self.db.conn
         rows = c.execute(
             "SELECT t.id AS token_id, b.content_id, b.resume, b.shuffle, b.repeat,"
-            " ct.kind, ct.origin"
+            " ct.kind, ct.origin, ct.source"
             " FROM token t JOIN binding b ON b.token_id = t.id"
             " JOIN content ct ON ct.id = b.content_id"
             " WHERE t.uid = ? ORDER BY t.origin = 'server' DESC",
@@ -195,8 +207,10 @@ class LibraryRepo:
 
     def _plan(self, row: sqlite3.Row) -> Resolution:
         token_id, content_id = uuid.UUID(row["token_id"]), uuid.UUID(row["content_id"])
+        if row["kind"] == "podcast":
+            return self._podcast(row, token_id, content_id)
         if row["kind"] != "collection":
-            # Podcast (M3), Spotify (M4) and streams are not available on the box yet.
+            # Spotify (M4) and streams are not available on the box yet.
             return Unavailable(
                 token_id, content_id, provider=_provider(row["kind"]), code="not_available"
             )
@@ -221,6 +235,31 @@ class LibraryRepo:
             shuffle=bool(row["shuffle"]),
             repeat=row["repeat"],
         )
+
+    def _podcast(self, row: sqlite3.Row, token_id: uuid.UUID, content_id: uuid.UUID) -> Resolution:
+        """SPEC v0.8 §8.2, table "Figur auflegen"."""
+        if "podcast" not in StateRepo(self.db).device_config().providers_enabled:
+            return Unavailable(token_id, content_id, provider="podcast", code="disabled")
+        try:
+            source = PodcastSource.model_validate_json(row["source"])
+        except ValidationError:
+            return Unavailable(token_id, content_id, provider="podcast", code="feed_error")
+        items = self.podcasts.plan_items(content_id, source.order)
+        if items:
+            return Playable(
+                token_id=token_id,
+                content_id=content_id,
+                items=tuple(items),
+                resume=bool(row["resume"]),
+                shuffle=bool(row["shuffle"]),
+                repeat=row["repeat"],
+                provider="podcast",
+            )
+        match self.podcasts.status(content_id):
+            case "loading":
+                return Loading(token_id)
+            case code:
+                return Unavailable(token_id, content_id, provider="podcast", code=code)
 
     def _staged_token(self, uid: str) -> uuid.UUID | None:
         for row in self.db.conn.execute("SELECT snapshot FROM staged_change"):
@@ -288,6 +327,7 @@ class LibraryRepo:
                     " VALUES (?, ?, ?, ?, ?, 'server')",
                     (str(b.token_id), str(b.content_id), b.resume, b.shuffle, b.repeat),
                 )
+            _prune_podcasts(c)
             c.execute(
                 "UPDATE sync_state SET applied_config_rev = ? WHERE id = 1", (state.config_rev,)
             )
@@ -345,19 +385,26 @@ class ResumeRepo:
 
     def get(self, token_id: uuid.UUID) -> ResumePoint | None:
         row = self.db.conn.execute(
-            "SELECT item_index, position_ms FROM resume_position WHERE token_id = ?",
+            "SELECT item_index, position_ms, item_key FROM resume_position WHERE token_id = ?",
             (str(token_id),),
         ).fetchone()
-        return ResumePoint(row["item_index"], row["position_ms"]) if row else None
+        return ResumePoint(row["item_index"], row["position_ms"], row["item_key"]) if row else None
 
     def save(self, token_id: uuid.UUID, point: ResumePoint) -> None:
         with self.db.tx() as c:
             c.execute(
-                "INSERT INTO resume_position (token_id, item_index, position_ms, updated_at)"
-                " VALUES (?, ?, ?, ?) ON CONFLICT (token_id) DO UPDATE SET"
+                "INSERT INTO resume_position"
+                " (token_id, item_index, position_ms, item_key, updated_at)"
+                " VALUES (?, ?, ?, ?, ?) ON CONFLICT (token_id) DO UPDATE SET"
                 " item_index = excluded.item_index, position_ms = excluded.position_ms,"
-                " updated_at = excluded.updated_at",
-                (str(token_id), point.item_index, point.position_ms, self.db.now_iso()),
+                " item_key = excluded.item_key, updated_at = excluded.updated_at",
+                (
+                    str(token_id),
+                    point.item_index,
+                    point.position_ms,
+                    point.item_key,
+                    self.db.now_iso(),
+                ),
             )
 
 
@@ -371,30 +418,35 @@ class AssetRepo:
     def path(self, sha256: str) -> Path:
         return asset_path(self.db.asset_dir, sha256)
 
-    def has(self, sha256: str) -> bool:
+    def stored_path(self, sha256: str) -> Path | None:
         row = self.db.conn.execute(
             "SELECT path FROM local_asset WHERE sha256 = ?", (sha256,)
         ).fetchone()
-        return row is not None and Path(row["path"]).is_file()
+        return Path(row["path"]) if row is not None else None
 
-    def register(self, sha256: str, size: int) -> None:
+    def has(self, sha256: str) -> bool:
+        path = self.stored_path(sha256)
+        return path is not None and path.is_file()
+
+    def register(self, sha256: str, size: int, path: Path | None = None) -> None:
         with self.db.tx() as c:
             c.execute(
                 "INSERT INTO local_asset (sha256, path, bytes, verified_at) VALUES (?, ?, ?, ?)"
                 " ON CONFLICT (sha256) DO UPDATE SET verified_at = excluded.verified_at,"
                 " path = excluded.path, bytes = excluded.bytes",
-                (sha256, str(self.path(sha256)), size, self.db.now_iso()),
+                (sha256, str(path or self.path(sha256)), size, self.db.now_iso()),
             )
 
     def referenced(self) -> set[str]:
-        """Assets reachable from the active or staged state; never evicted (SPEC §4.1)."""
+        """Assets reachable from the active or staged state, and the selected podcast
+        episodes; never evicted (SPEC §4.1, v0.8 §8.2)."""
         shas = {
             r["asset_sha256"] for r in self.db.conn.execute("SELECT asset_sha256 FROM content_item")
         }
         for row in self.db.conn.execute("SELECT snapshot FROM staged_change"):
             state = StateResponse.model_validate_json(row["snapshot"])
             shas |= {i.asset_sha256 for i in state.upserts.content_item}
-        return shas
+        return shas | PodcastRepo(self.db).referenced()
 
     def evictable(self) -> list[tuple[str, int]]:
         """Unreferenced assets, least recently played first (SPEC §4.1)."""
@@ -405,7 +457,21 @@ class AssetRepo:
         ).fetchall()
         return [(r["sha256"], r["bytes"]) for r in rows if r["sha256"] not in keep]
 
+    def evict(self, needed: int) -> int:
+        """Delete unreferenced assets, least recently played first, until ``needed`` bytes
+        are free (SPEC §4.1). Returns the bytes freed."""
+        freed = 0
+        for sha, size in self.evictable():
+            if freed >= needed:
+                break
+            self.delete(sha)
+            freed += size
+        return freed
+
     def delete(self, sha256: str) -> None:
+        stored = self.stored_path(sha256)
+        if stored is not None:
+            stored.unlink(missing_ok=True)
         self.path(sha256).unlink(missing_ok=True)
         with self.db.tx() as c:
             c.execute("DELETE FROM local_asset WHERE sha256 = ?", (sha256,))

@@ -12,7 +12,7 @@ from typing import Literal, Protocol
 
 from pydantic import BaseModel
 
-from myboxi_agent.core.model import Resolution, ResumePoint
+from myboxi_agent.core.model import PlanItem, Resolution, ResumePoint
 from myboxi_protocol.state import RepeatMode
 
 EventType = Literal[
@@ -27,10 +27,11 @@ EventType = Literal[
 
 class Player(Protocol):
     def play(
-        self, sources: Sequence[str], index: int, position_ms: int, repeat: RepeatMode
+        self, items: Sequence[PlanItem], index: int, position_ms: int, repeat: RepeatMode
     ) -> None:
         """Play the playlist from ``index``; ``repeat`` loops one item or the whole list.
-        Without repeat the adapter calls ``Controller.playlist_finished`` at the end."""
+        Without repeat the adapter calls ``Controller.playlist_finished`` at the end.
+        Each item's ``gain_db`` (SPEC v0.8 §8.2) applies to that item only."""
         ...
 
     def pause(self) -> None: ...

@@ -17,6 +17,7 @@ from myboxi_agent.core.clock import Clock
 from myboxi_agent.core.model import (
     Action,
     Loading,
+    PlanItem,
     Playable,
     Prompt,
     ResumePoint,
@@ -50,8 +51,11 @@ class Session:
     last_saved: float = 0.0
     finished: bool = False
 
+    def items(self) -> list[PlanItem]:
+        return [self.plan.items[i] for i in self.order]
+
     def sources(self) -> list[str]:
-        return [self.plan.items[i].source for i in self.order]
+        return [item.source for item in self.items()]
 
 
 @dataclass(frozen=True)
@@ -154,7 +158,7 @@ class Controller:
         if s is not None:
             self.outbox.emit(
                 "playback_error",
-                PlaybackErrorData(token_id=s.plan.token_id, provider="local", code=code),
+                PlaybackErrorData(token_id=s.plan.token_id, provider=s.plan.provider, code=code),
             )
             s.playing = False
 
@@ -239,8 +243,10 @@ class Controller:
         start = ResumePoint(0, 0)
         if plan.resume:
             saved = self.resume_store.get(plan.token_id)
-            if saved is not None and 0 <= saved.item_index < n:
-                start = saved
+            index = plan.start_index(saved) if saved is not None else None
+            if saved is not None and index is not None:
+                # SPEC v0.8 §8.2: a vanished episode starts over at the first one.
+                start = ResumePoint(index, saved.position_ms)
         order = list(range(n))
         if plan.shuffle:
             self.rng.shuffle(order)
@@ -252,7 +258,7 @@ class Controller:
         self.requested_volume = cfg.start_volume
         self._apply_volume()
         self.announcer.announce(Prompt.TONE_START)
-        self.player.play(s.sources(), order.index(start.item_index), start.position_ms, plan.repeat)
+        self.player.play(s.items(), order.index(start.item_index), start.position_ms, plan.repeat)
         self.outbox.emit(
             "token_played", TokenPlayedData(token_id=plan.token_id, content_id=plan.content_id)
         )
@@ -291,9 +297,9 @@ class Controller:
         pos = self.player.position()
         current = pos.item_index if pos else 0
         if current + 1 < len(s.order):
-            self.player.play(s.sources(), current + 1, 0, s.plan.repeat)
+            self.player.play(s.items(), current + 1, 0, s.plan.repeat)
         elif s.plan.repeat == "all":
-            self.player.play(s.sources(), 0, 0, s.plan.repeat)
+            self.player.play(s.items(), 0, 0, s.plan.repeat)
         else:
             self._finish(s)
             return
@@ -319,7 +325,8 @@ class Controller:
         if pos is None:
             return
         playlist_index = min(max(pos.item_index, 0), len(s.order) - 1)
-        point = ResumePoint(s.order[playlist_index], pos.position_ms)
+        item_index = s.order[playlist_index]
+        point = ResumePoint(item_index, pos.position_ms, s.plan.items[item_index].key)
         s.last_saved = self.clock.monotonic()
         if s.plan.resume:
             self.resume_store.save(s.plan.token_id, point)
@@ -330,6 +337,7 @@ class Controller:
                     token_id=s.plan.token_id,
                     item_index=point.item_index,
                     position_ms=point.position_ms,
+                    item_key=point.item_key,
                 ),
             )
 

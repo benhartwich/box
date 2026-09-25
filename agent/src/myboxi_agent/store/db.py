@@ -84,6 +84,40 @@ MIGRATIONS: list[str] = [
         created_at TEXT NOT NULL
     );
     """,
+    # 2: SPEC v0.8 §3.10, §4, §8.2 (podcasts). No foreign keys to ``content``: activating a
+    # snapshot replaces the content rows (SPEC §5.2), episodes must survive that.
+    """
+    ALTER TABLE resume_position ADD COLUMN item_key TEXT;
+    CREATE TABLE podcast_feed (
+        content_id TEXT PRIMARY KEY,
+        feed_url TEXT NOT NULL,
+        etag TEXT,
+        last_modified TEXT,
+        checked_at TEXT,
+        ok_at TEXT,
+        error TEXT,
+        failures INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE TABLE podcast_episode (
+        content_id TEXT NOT NULL,
+        episode_key TEXT NOT NULL,
+        title TEXT NOT NULL,
+        url TEXT NOT NULL,
+        mime TEXT,
+        length INTEGER,
+        published_at TEXT,
+        feed_order INTEGER NOT NULL,
+        duration_ms INTEGER NOT NULL DEFAULT 0,
+        selected INTEGER NOT NULL DEFAULT 0,
+        rank INTEGER,
+        sha256 TEXT,
+        gain_db REAL,
+        measured INTEGER NOT NULL DEFAULT 0,
+        failures INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (content_id, episode_key)
+    );
+    CREATE INDEX podcast_episode_sha ON podcast_episode (sha256);
+    """,
 ]
 
 

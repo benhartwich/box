@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime as dt
 import random
+import uuid
 from dataclasses import dataclass
 from typing import Any
 
@@ -11,7 +12,15 @@ import pytest
 
 from myboxi_agent.core.clock import FakeClock
 from myboxi_agent.core.controller import RESUME_SAVE_EVERY_S, Controller
-from myboxi_agent.core.model import Action, Loading, Prompt, ResumePoint, Unavailable
+from myboxi_agent.core.model import (
+    Action,
+    Loading,
+    PlanItem,
+    Playable,
+    Prompt,
+    ResumePoint,
+    Unavailable,
+)
 from myboxi_agent.testing import (
     FakeAnnouncer,
     FakeLibrary,
@@ -328,3 +337,51 @@ def test_pairing_code_is_announced_repeated_and_confirmed(box: Box) -> None:
     box.clock.advance(60)
     box.ctl.tick()
     assert box.announcer.said[-1] == (Prompt.PAIRING_DONE,)
+
+
+# --- SPEC v0.8 §8.2, §3.10: podcasts ------------------------------------------------------
+
+
+def _episodes(*keys: str) -> tuple[PlanItem, ...]:
+    return tuple(PlanItem(f"/p/{k}.mp3", k, 60_000, key=k) for k in keys)
+
+
+def test_podcast_resumes_the_same_episode_after_a_new_one_arrived(box: Box) -> None:
+    token = uuid.uuid4()
+    before = Playable(token, uuid.uuid4(), _episodes("e2", "e1"), True, False, "off", "podcast")
+    box.library.by_uid[UID] = before
+    box.ctl.token_placed(UID)
+    box.player.index, box.player.position_ms = 1, 30_000  # listening to e1
+    box.ctl.token_removed()
+    assert box.resume.points[token] == ResumePoint(1, 30_000, "e1")
+    assert box.outbox.of("resume_position")[-1] == ResumePositionData(
+        token_id=token, item_index=1, position_ms=30_000, item_key="e1"
+    )
+    # a new episode e3 shifts the list: the box continues e1, now at index 2
+    box.library.by_uid[UID] = Playable(
+        token, before.content_id, _episodes("e3", "e2", "e1"), True, False, "off", "podcast"
+    )
+    box.ctl.token_placed(UID)
+    assert box.player.calls[-1] == "play:2@30000"
+
+
+def test_podcast_starts_over_when_the_saved_episode_is_gone(box: Box) -> None:
+    token = uuid.uuid4()
+    box.resume.points[token] = ResumePoint(0, 30_000, "old")
+    box.library.by_uid[UID] = Playable(
+        token, uuid.uuid4(), _episodes("new"), True, False, "off", "podcast"
+    )
+    box.ctl.token_placed(UID)
+    assert box.player.calls == ["play:0@0"]
+
+
+def test_player_error_reports_the_real_provider(box: Box) -> None:
+    token = uuid.uuid4()
+    box.library.by_uid[UID] = Playable(
+        token, uuid.uuid4(), _episodes("e1"), True, False, "off", "podcast"
+    )
+    box.ctl.token_placed(UID)
+    box.ctl.player_error("decode_error")
+    assert box.outbox.of("playback_error") == [
+        PlaybackErrorData(token_id=token, provider="podcast", code="decode_error")
+    ]

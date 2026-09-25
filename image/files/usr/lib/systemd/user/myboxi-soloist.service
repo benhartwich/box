@@ -1,0 +1,23 @@
+# Spotify Soloist (SPEC v0.9 §8.1) in the user session of "myboxi", next to PipeWire.
+# Never part of the image: myboxi-soloist-update.service downloads it from Spotify. The agent
+# starts and stops this unit (no WantedBy) when Spotify is switched on or off for the box.
+[Unit]
+Description=Spotify Soloist for Myboxi
+After=pipewire.service wireplumber.service
+Wants=pipewire.service wireplumber.service
+ConditionUser=myboxi
+
+[Service]
+Type=exec
+EnvironmentFile=/etc/myboxi-agent/myboxi-agent.env
+WorkingDirectory=/var/lib/myboxi
+# Reads the key from the box database and replaces itself with Soloist; the WebSocket API
+# listens on 127.0.0.1 only (SPEC §10).
+ExecStart=/opt/myboxi-agent/current/.venv/bin/myboxi-agent soloist exec
+# Exit code 10: the build expired. Mark it and fetch a new one at once.
+ExecStopPost=/opt/myboxi-agent/current/.venv/bin/myboxi-agent soloist stopped
+Restart=on-failure
+RestartSec=5
+RestartPreventExitStatus=10
+NoNewPrivileges=yes
+TimeoutStopSec=10

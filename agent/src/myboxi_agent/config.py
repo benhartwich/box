@@ -38,6 +38,15 @@ class Settings(BaseSettings):
     prompts_dir: Path = Path("/opt/myboxi-agent/prompts")
 
     sync_interval_s: int = Field(default=15 * 60, ge=60)
+
+    # Software updates (SPEC v0.7 §11.1); used by the root service myboxi-updater.
+    update_manifest_url: str = (
+        "https://github.com/benhartwich/myboxi/releases/download/channel-stable/manifest.json"
+    )
+    update_keys_dir: Path = Path("/etc/myboxi-agent/update-keys")
+    install_dir: Path = Path("/opt/myboxi-agent")
+    update_work_dir: Path = Path("/var/lib/myboxi-updater")
+    agent_user: str = "myboxi"
     log_level: str = "INFO"
     log_format: Literal["json", "console"] = "json"
 
@@ -57,6 +66,11 @@ class Settings(BaseSettings):
     @property
     def control_socket(self) -> Path:
         return self.data_dir / "control.sock"
+
+    @property
+    def update_state_file(self) -> Path:
+        """Written by the updater (root), read by the agent for ``reported.update``."""
+        return self.data_dir / "update-state.json"
 
     @property
     def pins(self) -> dict[ButtonName, int]:

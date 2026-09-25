@@ -167,15 +167,15 @@ class GpioButtons:
 Runner = Callable[[list[str]], int]
 
 
-def _run(cmd: list[str]) -> int:
+def run_command(cmd: list[str]) -> int:
     # Fixed argument lists only, no shell.
-    return subprocess.run(cmd, check=False, timeout=30).returncode  # noqa: S603
+    return subprocess.run(cmd, check=False, timeout=60).returncode  # noqa: S603
 
 
 class SystemdSystem:
     """``core.ports.System``: setup mode is the root service myboxi-setupd (polkit-allowed)."""
 
-    def __init__(self, runner: Runner = _run) -> None:
+    def __init__(self, runner: Runner = run_command) -> None:
         self.runner = runner
         self.on_repair: Callable[[], None] | None = None
 
@@ -187,6 +187,12 @@ class SystemdSystem:
     def request_repair(self) -> None:
         if self.on_repair is not None:
             self.on_repair()
+
+    def request_update(self) -> None:
+        """SPEC v0.7 §11.1: look for an update now (online again); polkit allows exactly this."""
+        code = self.runner(["systemctl", "start", "--no-block", "myboxi-updater.service"])
+        if code != 0:
+            log.warning("could not start the updater", extra={"code": code})
 
 
 def hardware_adapters(settings: Settings) -> Adapters:  # pragma: no cover - wiring for the Pi

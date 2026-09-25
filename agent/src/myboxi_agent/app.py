@@ -6,7 +6,7 @@ import asyncio
 import logging
 import random
 from collections.abc import Callable
-from typing import Any
+from typing import Any, get_args
 
 from myboxi_agent import __version__
 from myboxi_agent.adapters.base import Placed
@@ -39,9 +39,11 @@ from myboxi_agent.store.repos import (
 )
 from myboxi_agent.sync.client import DeviceApi
 from myboxi_agent.sync.engine import Api, SyncEngine
-from myboxi_protocol.reported import ReportedData
+from myboxi_agent.update.installer import read_state
+from myboxi_protocol.reported import ReportedData, UpdateState
 
 log = logging.getLogger(__name__)
+UPDATE_STATES = frozenset(get_args(UpdateState))
 
 TICK_S = 0.1
 CONTROLLER_TICK_S = 1.0
@@ -133,7 +135,7 @@ class App:
                         NetworkManager(),
                         self.adapters.system,
                         self.adapters.clock,
-                        self.sync.trigger,
+                        self._online_again,
                     )
                     tg.create_task(watch.run())
                 tg.create_task(self._stop_on_request())
@@ -146,6 +148,13 @@ class App:
 
     def stop(self) -> None:
         self._stopping.set()
+
+    def _online_again(self) -> None:
+        """Sync (SPEC §5.2) and look for a software update (SPEC v0.7 §11.1)."""
+        self.sync.trigger()
+        system: Any = self.adapters.system
+        if hasattr(system, "request_update"):
+            system.request_update()
 
     async def _stop_on_request(self) -> None:
         await self._stopping.wait()
@@ -216,14 +225,31 @@ class App:
                 "button_test": (
                     {"seen": sorted(self.setup_phase.seen)} if self.setup_phase.active() else None
                 ),
+                "update": self.update_status(),
             }
         )
+
+    def update_status(self) -> dict[str, Any] | None:
+        """SPEC v0.7 §6.4 from the updater's state file (the updater runs as root)."""
+        data = read_state(self.settings.update_state_file)
+        if data is None:
+            return None
+        state = data.get("state")
+        state = "waiting" if state == "installing" else state
+        if state not in UPDATE_STATES:
+            return None
+        status: dict[str, Any] = {"state": state}
+        for key in ("version", "code"):
+            if isinstance(data.get(key), str):
+                status[key] = data[key]
+        return status
 
     def status(self) -> dict[str, Any]:
         st = self.state.get()
         playback = self.controller.status()
         return {
             "ok": True,
+            "version": __version__,
             "device_id": str(st.device_id),
             "paired": st.tenant_id is not None,
             "server_url": self.sync.server_url(),

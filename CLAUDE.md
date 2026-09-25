@@ -47,7 +47,7 @@ Pakete aus den Debian-Repos haben Vorrang vor Fremdquellen. Kein Docker für den
 | Hardware | `gpiozero` (Taster), Adafruit PN532 via Blinka (I2C) |
 | Audio | PipeWire (von Soloist vorausgesetzt), `mpv` über JSON-IPC |
 | Netzwerk | `httpx`, `aiomqtt`, `websockets` (Soloist, nur `127.0.0.1`) |
-| Verteilung | ab M5 als `.deb` mit gebündeltem Venv über eigenes apt-Repo |
+| Verteilung | Pi-Image; danach signierte Update-Pakete, die die Box selbst installiert (SPEC §11.1) |
 
 Neue Abhängigkeiten nur mit Begründung. Auf dem Agent zählt jedes MB (Zielhardware: Pi Zero 2 W, 512 MB RAM).
 
@@ -144,4 +144,4 @@ Vor jedem Commit: Tests, ruff, pyright und `reuse lint` grün.
 
 ## Aktueller Stand
 
-Agent: **M0** · Server: **M1** (siehe SPEC §12). Offene Punkte: SPEC §13. Spec-Version: v0.6.
+Agent: **M0** · Server: **M1** (siehe SPEC §12). Offene Punkte: SPEC §13. Spec-Version: v0.7.

@@ -51,6 +51,19 @@ class ButtonTest(ProtocolModel):
     seen: Annotated[list[HealthCode], Field(max_length=16)]
 
 
+UpdateState = Literal[
+    "up_to_date", "available", "downloading", "waiting", "installed", "failed", "rolled_back"
+]
+
+
+class UpdateStatus(ProtocolModel):
+    """Software updates of the box (SPEC v0.7 §6.4, §11.1)."""
+
+    state: UpdateState
+    version: Annotated[str, StringConstraints(max_length=32)] | None = None
+    code: HealthCode | None = None
+
+
 class ReportedData(ProtocolModel):
     agent_version: Annotated[str, StringConstraints(min_length=1, max_length=32)]
     image_version: Annotated[str, StringConstraints(max_length=32)] | None = None
@@ -67,6 +80,8 @@ class ReportedData(ProtocolModel):
     # SPEC v0.6
     health: Annotated[list[HealthCheck], Field(max_length=32)] | None = None
     button_test: ButtonTest | None = None
+    # SPEC v0.7
+    update: UpdateStatus | None = None
 
 
 class ReportedMessage(EnvelopeBase):

@@ -57,6 +57,7 @@ class DeviceConfig(ProtocolModel):
     providers_enabled: list[ProviderName] = Field(
         default_factory=lambda: ["local", "podcast"]  # pyright: ignore[reportUnknownLambdaType]
     )
+    auto_update: bool = True  # SPEC v0.7 §3.4
 
 
 class TokenUpsert(ProtocolModel):

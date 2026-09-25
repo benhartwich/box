@@ -26,6 +26,7 @@ from myboxi_protocol.pairing import (
 )
 from myboxi_protocol.reported import ReportedData, ReportedMessage
 from myboxi_protocol.state import DeviceConfig, QuietHours, StateResponse
+from myboxi_protocol.updates import UpdateManifest, is_newer
 
 DEV = "0192f3a4-5b6c-7d8e-9f01-23456789abcd"
 TENANT = "0192f3a4-0000-7000-8000-000000000001"
@@ -134,6 +135,7 @@ def test_reported_6_4() -> None:
                     {"check": "audio", "level": "fail", "code": "no_output"},
                 ],
                 "button_test": {"seen": ["play_pause", "volume_up"]},
+                "update": {"state": "waiting", "version": "0.3.0"},
             },
         },
     )
@@ -432,3 +434,40 @@ def test_quiet_hours_3_4(payload: dict[str, Any], ok: bool) -> None:
     else:
         with pytest.raises(ValidationError):
             QuietHours.model_validate(payload)
+
+
+def test_update_manifest_11_1() -> None:
+    manifest = roundtrip(
+        UpdateManifest,
+        {
+            "channel": "stable",
+            "version": "0.3.0",
+            "released_at": "2026-09-25T12:00:00Z",
+            "bundle": {
+                "url": "https://example.org/myboxi-agent-0.3.0-arm64.tar.xz",
+                "sha256": "a" * 64,
+                "size": 41234567,
+            },
+        },
+    )
+    assert manifest.bundle.size == 41234567
+
+
+@pytest.mark.parametrize(
+    ("candidate", "current", "newer"),
+    [
+        ("0.3.0", "0.2.0", True),
+        ("0.10.0", "0.9.9", True),
+        ("0.2.0", "0.2.0", False),
+        ("0.1.9", "0.2.0", False),
+        ("1.0.0", "garbage", True),
+        ("garbage", "0.0.1", False),
+    ],
+)
+def test_update_versions(candidate: str, current: str, newer: bool) -> None:
+    assert is_newer(candidate, current) is newer
+
+
+def test_auto_update_defaults_on() -> None:
+    assert DeviceConfig().auto_update is True
+    assert DeviceConfig.model_validate({"auto_update": False}).auto_update is False

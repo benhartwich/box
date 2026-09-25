@@ -1,9 +1,10 @@
 {% extends "base.html" %}
+{% import "_icons.html" as icon %}
 {% block title %}Neuer Inhalt · Myboxi{% endblock %}
 {% block content %}
-<p><a href="/t/{{ tid }}/contents">← Inhalte</a></p>
+<a class="back" href="/t/{{ tid }}/contents">{{ icon.back() }}Inhalte</a>
 <h1>{{ kind_labels[kind] }} anlegen</h1>
-<form method="post" action="/t/{{ tid }}/contents" class="stack">
+<form method="post" action="/t/{{ tid }}/contents" class="card stack">
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   <input type="hidden" name="kind" value="{{ kind.value }}">
   <label>Titel <input name="title" value="{{ form.title or '' }}" maxlength="200" required></label>

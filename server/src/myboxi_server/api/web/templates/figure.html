@@ -1,9 +1,15 @@
 {% extends "base.html" %}
+{% import "_icons.html" as icon %}
 {% block title %}{{ token.label }} · Myboxi{% endblock %}
 {% block content %}
-<p><a href="/t/{{ tid }}/figures">← Figuren</a></p>
-<h1>{% if token.icon %}{{ token.icon }} {% endif %}{{ token.label }}</h1>
-<p class="muted">UID <code>{{ token.uid }}</code></p>
+<a class="back" href="/t/{{ tid }}/figures">{{ icon.back() }}Figuren</a>
+<div class="row">
+  <span class="avatar" aria-hidden="true">{{ token.icon or (token.label[:1] | upper) }}</span>
+  <div>
+    <h1>{{ token.label }}</h1>
+    <p class="muted">UID <code>{{ token.uid }}</code></p>
+  </div>
+</div>
 
 <section class="card">
   <h2>Zuordnung</h2>
@@ -31,7 +37,7 @@
   {% if binding and editable %}
   <form method="post" action="/t/{{ tid }}/figures/{{ token.id }}/binding/delete">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <button class="secondary">Zuordnung lösen</button>
+    <button class="secondary small">Zuordnung lösen</button>
   </form>
   {% endif %}
   {% else %}
@@ -45,9 +51,12 @@
   <form method="post" action="/t/{{ tid }}/figures/{{ token.id }}" class="stack">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <label>Name <input name="label" value="{{ token.label }}" maxlength="100" required></label>
-    <label>Symbol (Emoji, optional) <input name="icon" value="{{ token.icon or '' }}" maxlength="16"></label>
+    <label>Symbol (ein Zeichen oder Emoji, optional) <input name="icon" value="{{ token.icon or '' }}" maxlength="16"></label>
     <button type="submit">Speichern</button>
   </form>
+</section>
+<section class="card danger-zone">
+  <h2>Figur löschen</h2>
   <form method="post" action="/t/{{ tid }}/figures/{{ token.id }}/delete">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <button class="danger">Figur löschen</button>

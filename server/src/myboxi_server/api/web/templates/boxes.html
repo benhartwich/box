@@ -1,23 +1,21 @@
 {% extends "base.html" %}
+{% import "_icons.html" as icon %}
 {% block title %}Boxen · Myboxi{% endblock %}
 {% block content %}
-<h1>Boxen</h1>
+<div class="page-head">
+  <h1>Boxen</h1>
+  {% if ctx.can(Perm.DEVICE_CLAIM) %}<a class="button small secondary" href="/t/{{ tid }}/setup">Box hinzufügen</a>{% endif %}
+</div>
 {% if devices %}
-<ul class="list">
+<div class="stack">
   {% for d in devices %}
-  <li>
-    <div>
-      <a href="/t/{{ tid }}/boxes/{{ d.id }}"><strong>{{ d.name or "Box" }}</strong></a>
-      <div class="muted">{{ d.hw_model }} · zuletzt gesehen {{ d.last_seen_at | localtime }}</div>
-    </div>
-  </li>
+  <a class="card" href="/t/{{ tid }}/boxes/{{ d.id }}">
+    <div class="card-head"><h2 class="display-s">{{ d.name or "Box" }}</h2>{{ icon.next() }}</div>
+    <p class="muted">{{ d.hw_model }} · zuletzt gesehen {{ d.last_seen_at | localtime }}</p>
+  </a>
   {% endfor %}
-</ul>
+</div>
 {% else %}
 <p class="muted">Noch keine Box gekoppelt.</p>
-{% endif %}
-
-{% if ctx.can(Perm.DEVICE_CLAIM) %}
-<p><a class="button" href="/t/{{ tid }}/setup">Box hinzufügen</a></p>
 {% endif %}
 {% endblock %}

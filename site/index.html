@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Myboxi – offene Audiobox für Kinder</title>
+<meta name="description" content="Figur drauf, Geschichte läuft: Myboxi spielt Hörspiele, Musik und eigene Dateien, sobald eine Figur auf der Box steht. Ohne Bildschirm, ohne Werbung, auch offline. Open Source zum Selberbauen.">
+<meta name="theme-color" content="#f6f1e7">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="/fonts/fraunces-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="wrap site-head">
+  <a class="brand" href="/" aria-label="myboxi Startseite">
+    <svg width="34" height="34" viewBox="0 0 28 28" aria-hidden="true"><rect width="28" height="28" rx="8" fill="#2E6B5C"/><circle cx="14" cy="10.5" r="4.5" fill="#FFFDF8"/><path d="M8.5 22 C9.5 17 11.5 15.5 14 15.5 C16.5 15.5 18.5 17 19.5 22 Z" fill="#FFFDF8"/></svg>
+    <span>myboxi</span>
+  </a>
+  <nav class="site-nav" aria-label="Hauptnavigation">
+    <a href="#so-gehts">So funktioniert's</a>
+    <a href="#eltern">Für Eltern</a>
+    <a href="#bauen">Selbst bauen</a>
+    <a href="#datenschutz">Datenschutz</a>
+    <a href="#fragen">Fragen</a>
+  </nav>
+  <div class="head-actions">
+    <a class="login" href="https://app.myboxi.eu/login">Anmelden</a>
+    <a class="btn small" href="#bauen">Box bauen</a>
+  </div>
+</header>
+
+<main>
+<section class="wrap hero" aria-labelledby="hero-title">
+  <div class="hero-text">
+    <span class="tag">Offene Audiobox für Kinder ab 3</span>
+    <h1 id="hero-title">Figur drauf.<br>Geschichte läuft.</h1>
+    <p class="lead">Myboxi spielt Hörspiele, Musik und eure eigenen Dateien, sobald eine Figur auf der Box steht. Ohne Bildschirm, ohne Werbung und auch ohne Internet.</p>
+    <div class="actions">
+      <a class="btn" href="#bauen">Box selbst bauen</a>
+      <a class="btn ghost" href="#so-gehts">So funktioniert's</a>
+    </div>
+    <p class="facts-line"><span>Open Source</span><span aria-hidden="true">·</span><span>Raspberry Pi</span><span aria-hidden="true">·</span><span>Eigener Server möglich</span></p>
+  </div>
+  <div class="hero-art">
+    <svg width="540" height="480" viewBox="0 0 520 460" role="img" aria-label="Myboxi mit einer Bären-Figur obendrauf">
+      <ellipse cx="260" cy="432" rx="190" ry="14" fill="#1D2927" opacity="0.10"/>
+      <rect x="90" y="190" width="340" height="232" rx="44" fill="#EAC9A1" stroke="#1D2927" stroke-width="4"/>
+      <rect x="112" y="212" width="176" height="188" rx="28" fill="#DDB68A"/>
+      <g fill="#1D2927" opacity="0.78">
+        <circle cx="140" cy="244" r="6"/><circle cx="170" cy="244" r="6"/><circle cx="200" cy="244" r="6"/><circle cx="230" cy="244" r="6"/><circle cx="260" cy="244" r="6"/>
+        <circle cx="140" cy="276" r="6"/><circle cx="170" cy="276" r="6"/><circle cx="200" cy="276" r="6"/><circle cx="230" cy="276" r="6"/><circle cx="260" cy="276" r="6"/>
+        <circle cx="140" cy="308" r="6"/><circle cx="170" cy="308" r="6"/><circle cx="200" cy="308" r="6"/><circle cx="230" cy="308" r="6"/><circle cx="260" cy="308" r="6"/>
+        <circle cx="140" cy="340" r="6"/><circle cx="170" cy="340" r="6"/><circle cx="200" cy="340" r="6"/><circle cx="230" cy="340" r="6"/><circle cx="260" cy="340" r="6"/>
+        <circle cx="140" cy="372" r="6"/><circle cx="170" cy="372" r="6"/><circle cx="200" cy="372" r="6"/><circle cx="230" cy="372" r="6"/><circle cx="260" cy="372" r="6"/>
+      </g>
+      <circle cx="340" cy="262" r="22" fill="#2E6B5C" stroke="#1D2927" stroke-width="4"/>
+      <path d="M334 251 L349 262 L334 273 Z" fill="#FFFDF8"/>
+      <circle cx="392" cy="262" r="22" fill="#FFFDF8" stroke="#1D2927" stroke-width="4"/>
+      <path d="M392 253 V271 M383 262 H401" stroke="#1D2927" stroke-width="4" stroke-linecap="round"/>
+      <circle cx="340" cy="330" r="22" fill="#FFFDF8" stroke="#1D2927" stroke-width="4"/>
+      <path d="M331 330 H349" stroke="#1D2927" stroke-width="4" stroke-linecap="round"/>
+      <circle cx="392" cy="330" r="22" fill="#FFFDF8" stroke="#1D2927" stroke-width="4"/>
+      <path d="M383 322 L391 330 L383 338 M393 322 L401 330 L393 338" fill="none" stroke="#1D2927" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <ellipse cx="260" cy="192" rx="72" ry="11" fill="#1D2927" opacity="0.14"/>
+      <rect x="206" y="176" width="108" height="18" rx="9" fill="#2E6B5C" stroke="#1D2927" stroke-width="4"/>
+      <path d="M222 180 C226 142 236 124 260 124 C284 124 294 142 298 180 Z" fill="#E0874F" stroke="#1D2927" stroke-width="4" stroke-linejoin="round"/>
+      <circle cx="236" cy="78" r="12" fill="#C8763F" stroke="#1D2927" stroke-width="4"/>
+      <circle cx="284" cy="78" r="12" fill="#C8763F" stroke="#1D2927" stroke-width="4"/>
+      <circle cx="260" cy="100" r="31" fill="#D98A52" stroke="#1D2927" stroke-width="4"/>
+      <ellipse cx="260" cy="110" rx="14" ry="10" fill="#F6DDBF"/>
+      <circle cx="249" cy="95" r="3.6" fill="#1D2927"/><circle cx="271" cy="95" r="3.6" fill="#1D2927"/>
+      <path d="M254 112 q6 6 12 0" fill="none" stroke="#1D2927" stroke-width="3.5" stroke-linecap="round"/>
+      <path d="M458 238 q22 34 0 68" fill="none" stroke="#2E6B5C" stroke-width="6" stroke-linecap="round"/>
+      <path d="M480 214 q36 58 0 116" fill="none" stroke="#2E6B5C" stroke-width="6" stroke-linecap="round" opacity="0.55"/>
+    </svg>
+  </div>
+</section>
+
+<section id="so-gehts" class="band section" aria-labelledby="so-gehts-title">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">So funktioniert's</span>
+      <h2 id="so-gehts-title">Drei Schritte, dann hört das Kind selbst.</h2>
+    </div>
+    <ol class="steps">
+      <li><span class="num">1</span><h3>Inhalte hochladen</h3><p>Hörspiele, Musik oder Geschichten als Datei in die App laden. Myboxi gleicht die Lautstärke aller Titel an, damit nichts plötzlich laut wird.</p></li>
+      <li><span class="num">2</span><h3>Figur zuordnen</h3><p>Einen NFC-Aufkleber unter die Lieblingsfigur, einmal auflegen, in der App den Inhalt wählen. Jede Figur, die ihr schon habt, wird so zur Hörfigur.</p></li>
+      <li><span class="num">3</span><h3>Auflegen und hören</h3><p>Die Box lädt alles vorher herunter und spielt dann auch ohne WLAN. Figur runter heißt Pause, wieder drauf: weiter an derselben Stelle.</p></li>
+    </ol>
+  </div>
+</section>
+
+<section id="eltern" class="wrap section" aria-labelledby="eltern-title">
+  <div class="split-head">
+    <div class="section-head">
+      <span class="eyebrow">Für Eltern</span>
+      <h2 id="eltern-title">Ihr stellt die Regeln ein. Die Box hält sich daran.</h2>
+    </div>
+    <p class="muted">Alles in der App am Handy, für jede Box einzeln. Die Grenzen gelten auch, wenn das Kind an den Tasten dreht.</p>
+  </div>
+  <ul class="features">
+    <li><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg><h3>Höchstlautstärke</h3><p>Gilt für jede Figur und jede Taste. Lauter als erlaubt geht nicht.</p></li>
+    <li><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg><h3>Ruhezeiten</h3><p>Abends leiser oder ganz still, nach eurer Uhrzeit. Morgens geht es von selbst wieder.</p></li>
+    <li><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 8.8a15 15 0 0 1 20 0"/><path d="M5 12.5a10 10 0 0 1 14 0"/><path d="M8.5 16a5 5 0 0 1 7 0"/><path d="M3 3l18 18"/></svg><h3>Offline zuerst</h3><p>Einmal geladen, spielt alles ohne Internet. Auch im Urlaub und im Auto.</p></li>
+    <li><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.6"/><path d="M4 4v4h4"/><path d="M12 8v4l3 2"/></svg><h3>Weiterhören</h3><p>Die Box merkt sich die Stelle, auch wenn jemand einfach den Stecker zieht.</p></li>
+    <li><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5"/><circle cx="17.5" cy="9" r="2.5"/><path d="M17 14.5c2.3.2 4 1.8 4.5 4.5"/></svg><h3>Familie hilft mit</h3><p>Großeltern laden Hörspiele hoch und ordnen Figuren zu, ohne Einstellungen ändern zu können.</p></li>
+    <li><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 19h16"/></svg><h3>Updates von selbst</h3><p>Neue Funktionen und Sicherheitsupdates kommen automatisch, nie mitten in einer Geschichte.</p></li>
+  </ul>
+</section>
+
+<section class="wrap" aria-labelledby="setup-title">
+  <div class="showcase">
+    <div class="stack-l">
+      <span class="eyebrow">Einrichten in Minuten</span>
+      <h2 id="setup-title">Die App zeigt live, was die Box gerade meldet.</h2>
+      <p class="lead">Der Einrichtungs-Assistent führt vom Einschalten bis zur ersten Figur. Er prüft NFC-Leser, Lautsprecher und Tasten und sagt genau, welches Kabel zu prüfen ist, wenn etwas nicht stimmt.</p>
+      <ul class="checks">
+        <li><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>WLAN über das Handy, ohne Kabel und ohne Bildschirm</li>
+        <li><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>Die Box sagt ihren Kopplungscode selbst an</li>
+        <li><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>Selbsttest und Tastentest mit klaren Hinweisen</li>
+      </ul>
+    </div>
+    <div class="phone" aria-hidden="true">
+      <div class="phone-screen">
+        <span class="title">Kinderzimmer</span>
+        <span class="small">5 von 8 Schritten erledigt</span>
+        <div class="bar"><span></span></div>
+        <div class="mini"><span class="mark">✓</span>Box meldet sich</div>
+        <div class="mini"><span class="mark">✓</span>Selbsttest</div>
+        <div class="mini active">Tastentest
+          <div class="chips"><span class="on">Play/Pause</span><span class="on">Lauter</span><span>Leiser</span><span>Weiter</span></div>
+        </div>
+        <div class="mini waiting"><span class="mark">5</span>Erste Figur</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="bauen" class="wrap section build" aria-labelledby="bauen-title">
+  <div class="build-text">
+    <span class="eyebrow">Selbst bauen, offen für alle</span>
+    <h2 id="bauen-title">Eine Box, die euch gehört.</h2>
+    <p class="lead">Myboxi läuft auf einem Raspberry Pi mit Standardteilen. Die ganze Software ist Open Source: Ihr könnt nachsehen, was die Box tut, und sie auch mit eurem eigenen Server betreiben.</p>
+    <div class="actions">
+      <a class="btn" href="https://github.com/benhartwich/myboxi/blob/main/docs/hardware.md">Bauanleitung</a>
+      <a class="btn ghost" href="https://github.com/benhartwich/myboxi">Quellcode auf GitHub</a>
+    </div>
+    <p class="licenses"><span>Box-Software GPL-3.0</span><span>Server AGPL-3.0</span><span>Protokoll Apache-2.0</span></p>
+  </div>
+  <div class="parts">
+    <h3>Das braucht ihr</h3>
+    <dl>
+      <div><dt>Raspberry Pi 4</dt><dd>2 GB reichen</dd></div>
+      <div><dt>NFC-Leser PN532</dt><dd>über I2C</dd></div>
+      <div><dt>Verstärker MAX98357A</dt><dd>mit Lautsprecher 3 W</dd></div>
+      <div><dt>Vier Taster</dt><dd>Play, lauter, leiser, weiter</dd></div>
+      <div><dt>microSD-Karte</dt><dd>32 GB</dd></div>
+      <div><dt>NFC-Aufkleber</dt><dd>NTAG213 oder NTAG215</dd></div>
+    </dl>
+  </div>
+</section>
+
+<section id="datenschutz" class="wrap" aria-labelledby="privacy-title">
+  <div class="privacy">
+    <h2 id="privacy-title">Ruhig, auch bei den Daten.</h2>
+    <dl>
+      <div><dt>Kein Mikrofon</dt><dd>Die Box kann nicht zuhören. Es ist keines verbaut.</dd></div>
+      <div><dt>Wenig und kurz gespeichert</dt><dd>Die Box meldet nur wenige Ereignisse, etwa welche Figur gespielt hat. Nach 30 Tagen werden sie gelöscht.</dd></div>
+      <div><dt>Keine Werbung, kein Tracking</dt><dd>Keine Analyse-Dienste in App und Box, keine Schriften oder Skripte von Dritten auf dieser Seite.</dd></div>
+      <div><dt>Eigener Server möglich</dt><dd>Wer möchte, betreibt die App komplett selbst.</dd></div>
+    </dl>
+  </div>
+</section>
+
+<section id="fragen" class="wrap section faq" aria-labelledby="faq-title">
+  <div class="section-head">
+    <span class="eyebrow">Fragen</span>
+    <h2 id="faq-title">Was Eltern oft wissen wollen</h2>
+  </div>
+  <div>
+    <details open><summary>Braucht die Box dauernd Internet?</summary><p>Nein. Nur zum Einrichten, für Updates und um neue Inhalte zu laden. Was einmal auf der Box ist, spielt auch offline.</p></details>
+    <details><summary>Welche Figuren funktionieren?</summary><p>Jede Figur mit einem NFC-Aufkleber (NTAG213 oder NTAG215) darunter.</p></details>
+    <details><summary>Gehen auch Podcasts oder Spotify?</summary><p>Daran arbeiten wir. Heute spielt die Box eigene Dateien.</p></details>
+    <details><summary>Was kostet Myboxi?</summary><p>Die Software ist Open Source und kostenlos. Für die Box braucht ihr die Bauteile aus der Einkaufsliste.</p></details>
+    <details><summary>Mehrere Kinder, mehrere Boxen?</summary><p>Ja. Jede Box hat ihre eigenen Einstellungen, die Figuren und Inhalte teilt ihr im Haushalt.</p></details>
+  </div>
+</section>
+</main>
+
+<footer class="wrap site-foot">
+  <a class="brand" href="/">
+    <svg width="26" height="26" viewBox="0 0 28 28" aria-hidden="true"><rect width="28" height="28" rx="8" fill="#2E6B5C"/><circle cx="14" cy="10.5" r="4.5" fill="#FFFDF8"/><path d="M8.5 22 C9.5 17 11.5 15.5 14 15.5 C16.5 15.5 18.5 17 19.5 22 Z" fill="#FFFDF8"/></svg>
+    <span>myboxi</span>
+  </a>
+  <nav aria-label="Rechtliches">
+    <a href="/impressum">Impressum</a>
+    <a href="/datenschutz">Datenschutz</a>
+    <a href="https://github.com/benhartwich/myboxi">GitHub</a>
+  </nav>
+  <span>© 2026 Benjamin Hartwich</span>
+</footer>
+</body>
+</html>

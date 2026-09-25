@@ -1,16 +1,23 @@
 {% extends "base.html" %}
 {% block title %}Anmelden · Myboxi{% endblock %}
 {% block content %}
-<h1>Anmelden</h1>
-<form method="post" action="/login" class="stack">
-  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-  <input type="hidden" name="next" value="{{ next or '/' }}">
-  <label>E-Mail-Adresse
-    <input type="email" name="email" value="{{ email or '' }}" autocomplete="username" required>
-  </label>
-  <label>Passwort
-    <input type="password" name="password" autocomplete="current-password" required>
-  </label>
-  <button type="submit">Anmelden</button>
-</form>
+<div class="auth">
+  <div class="auth-head">
+    {% include "_bear.html" %}
+    <h1>Willkommen bei myboxi</h1>
+    <p class="muted">Melde dich an, um Figuren, Inhalte und eure Boxen zu verwalten.</p>
+  </div>
+  <form method="post" action="/login" class="card stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="next" value="{{ next or '/' }}">
+    <label>E-Mail-Adresse
+      <input type="email" name="email" value="{{ email or '' }}" autocomplete="username" required>
+    </label>
+    <label>Passwort
+      <input type="password" name="password" autocomplete="current-password" required>
+    </label>
+    <button type="submit">Anmelden</button>
+  </form>
+  <p class="muted">Noch kein Zugang? Öffne die Einladung aus deiner E-Mail. Nach dem Anmelden kannst du auch einen eigenen Haushalt anlegen.</p>
+</div>
 {% endblock %}

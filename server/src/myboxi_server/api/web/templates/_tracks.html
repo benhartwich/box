@@ -3,12 +3,12 @@
   {% if polling %}hx-get="/t/{{ tid }}/contents/{{ content.id }}/tracks" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}>
   <h2>Titel</h2>
   {% if uploads %}
-  <ul class="list uploads" aria-live="polite">
+  <ul class="list uploads stack" aria-live="polite">
     {% for u in uploads %}
-    <li>
-      <div>{{ u.original_filename }} <span class="badge status-{{ u.status.value }}">{{ status_labels[u.status] }}</span>
-        {% if u.error %}<div class="error-text">{{ u.error }}</div>{% endif %}
-      </div>
+    <li class="upload{% if u.status.value == 'failed' %} failed{% endif %}">
+      <div class="card-head"><strong>{{ u.original_filename }}</strong> <span class="badge status-{{ u.status.value }}">{{ status_labels[u.status] }}</span></div>
+      {% if u.status.value in ('pending', 'processing') %}<progress aria-label="{{ u.original_filename }} {{ status_labels[u.status] }}"></progress>{% endif %}
+      {% if u.error %}<div class="error-text">{{ u.error }}</div>{% endif %}
       {% if u.status.value == 'failed' and ctx.can(Perm.UPLOAD) %}
       <form method="post" action="/t/{{ tid }}/contents/{{ content.id }}/uploads/{{ u.id }}/dismiss" class="inline"
             hx-post="/t/{{ tid }}/contents/{{ content.id }}/uploads/{{ u.id }}/dismiss" hx-target="#tracks" hx-swap="outerHTML">
@@ -21,15 +21,15 @@
   </ul>
   {% endif %}
   {% if items %}
-  <ol class="list tracks">
+  <ol class="tracks">
     {% for item, asset in items %}
     <li>
-      <div>
+      <div class="title">
         <strong>{{ item.title }}</strong>
         <span class="muted">{{ item.duration_ms | duration }} · {{ asset.bytes | filesize }}</span>
       </div>
       {% if ctx.can(Perm.CONTENT_WRITE) %}
-      <div class="row">
+      <div class="row nowrap">
         {% for direction, symbol, label, show in [("up", "↑", "nach oben", not loop.first), ("down", "↓", "nach unten", not loop.last)] %}
         {% if show %}
         <form method="post" action="/t/{{ tid }}/contents/{{ content.id }}/items/{{ item.id }}/move" class="inline"

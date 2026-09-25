@@ -1,14 +1,17 @@
 {% set p = progress %}
 {% set back = "/t/" ~ tid ~ "/boxes/" ~ device.id ~ "/setup" %}
-<section id="setup-steps"{% if not p.done %} hx-get="{{ back }}/status" hx-trigger="every 3s" hx-swap="outerHTML" hx-vals='{"v": "{{ p.key }}"}'{% endif %}>
-  <p class="muted">{{ p.completed }} von {{ p.steps | length }} Schritten erledigt{% if not p.done %} · die Seite aktualisiert sich von selbst{% endif %}</p>
+<section id="setup-steps" class="stack"{% if not p.done %} hx-get="{{ back }}/status" hx-trigger="every 3s" hx-swap="outerHTML" hx-vals='{"v": "{{ p.key }}"}'{% endif %}>
+  <div class="stack">
+    <div class="card-head"><span class="muted">{{ p.completed }} von {{ p.steps | length }} Schritten erledigt</span>{% if not p.done %}<span class="muted live"><span class="dot"></span>aktualisiert sich von selbst</span>{% endif %}</div>
+    <progress value="{{ p.completed }}" max="{{ p.steps | length }}">{{ p.completed }} von {{ p.steps | length }}</progress>
+  </div>
   <ol class="checklist">
     {% for s in p.steps %}
     <li class="step step-{{ s.status }}">
       <span class="step-mark" aria-hidden="true">{% if s.status == "done" %}✓{% elif s.status == "problem" %}!{% elif s.status == "skipped" %}–{% else %}{{ loop.index }}{% endif %}</span>
       <div class="step-body">
-        <strong>{{ s.title }}</strong>
-        {% if s.status == "active" %}<span class="badge">jetzt</span>{% elif s.status == "problem" %}<span class="badge status-failed">Problem</span>{% elif s.status == "skipped" %}<span class="muted">übersprungen</span>{% endif %}
+        <div class="step-title"><strong>{{ s.title }}</strong>
+        {% if s.status == "active" %}<span class="badge ok">jetzt</span>{% elif s.status == "problem" %}<span class="badge problem">Problem</span>{% elif s.status == "skipped" %}<span class="badge">übersprungen</span>{% endif %}</div>
         {% if s.text %}<p>{{ s.text }}</p>{% endif %}
         {% if s.hints %}
         <ul class="hints">{% for h in s.hints %}<li class="hint-{{ h.level }}">{{ h.text }}</li>{% endfor %}</ul>
@@ -21,7 +24,7 @@
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
           <input type="hidden" name="uid" value="{{ p.unknown_uid }}">
           <input type="hidden" name="next" value="{{ back }}">
-          <input name="label" maxlength="200" placeholder="z. B. Bibi Blocksberg" aria-label="Name der Figur" required>
+          <input name="label" maxlength="200" placeholder="z. B. Drache Fridolin" aria-label="Name der Figur" required>
           <button type="submit">Übernehmen</button>
         </form>
         {% endif %}
@@ -48,7 +51,7 @@
   <section class="card highlight">
     <h2>Fertig!</h2>
     <p>Die Box ist eingerichtet. Stell jetzt noch die höchste Lautstärke und die Ruhezeiten ein.</p>
-    <p class="row"><a class="button" href="/t/{{ tid }}/boxes/{{ device.id }}">Box-Einstellungen</a> <a href="/t/{{ tid }}/figures">Weitere Figuren</a></p>
+    <div class="actions"><a class="button" href="/t/{{ tid }}/boxes/{{ device.id }}">Box-Einstellungen</a> <a class="button secondary" href="/t/{{ tid }}/figures">Weitere Figuren</a></div>
   </section>
   {% endif %}
 </section>

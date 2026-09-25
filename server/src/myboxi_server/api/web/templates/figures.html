@@ -4,7 +4,7 @@
 <h1>Figuren</h1>
 
 {% if unknown %}
-<section class="card highlight">
+<section class="card attention">
   <h2>Unbekannte Figuren</h2>
   <p class="muted">Diese Figuren wurden auf einer Box aufgelegt, sind aber noch nicht angelegt.</p>
   <ul class="list">
@@ -12,10 +12,11 @@
     <li>
       <div><code>{{ u.uid }}</code> <span class="muted">zuletzt {{ u.last_seen | localtime }}{% if u.count > 1 %}, {{ u.count }}×{% endif %}</span></div>
       {% if ctx.can(Perm.TOKEN_WRITE) %}
-      <form method="post" action="/t/{{ tid }}/figures/adopt" class="inline">
+      <form method="post" action="/t/{{ tid }}/figures/adopt" class="row">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <input type="hidden" name="uid" value="{{ u.uid }}">
-        <button>Übernehmen</button>
+        <input class="grow" name="label" maxlength="200" placeholder="Name der Figur" aria-label="Name für {{ u.uid }}">
+        <button class="small dark">Übernehmen</button>
       </form>
       {% endif %}
     </li>
@@ -25,32 +26,35 @@
 {% endif %}
 
 {% if tokens %}
-<ul class="list">
+<ul class="fig-grid">
   {% for t in tokens %}
+  {% set b = bindings.get(t.id) %}
   <li>
-    <div>
-      <a href="/t/{{ tid }}/figures/{{ t.id }}"><strong>{% if t.icon %}{{ t.icon }} {% endif %}{{ t.label }}</strong></a>
-      <div class="muted">
-        {% set b = bindings.get(t.id) %}
-        {% if b %}→ {{ content_titles.get(b.content_id, "?") }}{% else %}noch keinem Inhalt zugeordnet{% endif %}
-      </div>
-    </div>
+    <a class="fig-card{% if not b %} unbound{% endif %}" href="/t/{{ tid }}/figures/{{ t.id }}">
+      <span class="avatar{% if not b %} c5{% else %} c{{ loop.index0 % 5 }}{% endif %}" aria-hidden="true">{{ t.icon or (t.label[:1] | upper) }}</span>
+      <strong>{{ t.label }}</strong>
+      {% if b %}<span class="muted">{{ content_titles.get(b.content_id, "?") }}</span>
+      {% else %}<span class="muted warn">noch keinem Inhalt zugeordnet</span>{% endif %}
+    </a>
   </li>
   {% endfor %}
 </ul>
 {% else %}
-<p class="muted">Noch keine Figuren.</p>
+<p class="muted">Noch keine Figuren. Leg eine neue Figur auf eine Box, dann erscheint sie hier.</p>
 {% endif %}
 
 {% if ctx.can(Perm.TOKEN_WRITE) %}
-<h2>Figur anlegen</h2>
-<form method="post" action="/t/{{ tid }}/figures" class="stack">
-  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-  <label>UID (vom NFC-Tag)
-    <input name="uid" value="{{ form.uid or '' }}" placeholder="04A2B3C4D5E680" autocapitalize="characters" required>
-  </label>
-  <label>Name <input name="label" value="{{ form.label or '' }}" maxlength="100" placeholder="Bibi" required></label>
-  <button type="submit">Anlegen</button>
-</form>
+<section class="card">
+  <h2>Figur anlegen</h2>
+  <p class="muted">Einfacher: Figur auf die Box legen und oben übernehmen. Hier nur, wenn du die UID kennst.</p>
+  <form method="post" action="/t/{{ tid }}/figures" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>UID (vom NFC-Tag)
+      <input name="uid" value="{{ form.uid or '' }}" placeholder="04A2B3C4D5E680" autocapitalize="characters" required>
+    </label>
+    <label>Name <input name="label" value="{{ form.label or '' }}" maxlength="100" placeholder="Drache Fridolin" required></label>
+    <button type="submit">Anlegen</button>
+  </form>
+</section>
 {% endif %}
 {% endblock %}

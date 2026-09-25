@@ -32,6 +32,7 @@ from myboxi_server.api.web.templating import STATIC_DIR
 from myboxi_server.db import create_engine, create_sessionmaker
 from myboxi_server.domain.authz import PermissionDeniedError
 from myboxi_server.domain.errors import NotFoundError
+from myboxi_server.domain.updates import UpdateChannel
 from myboxi_server.jobs.app import open_job_app
 from myboxi_server.settings import Settings, get_settings
 from myboxi_server.storage.filesystem import FilesystemAssetStore
@@ -178,6 +179,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         openapi_url="/api/openapi.json" if settings.is_dev else None,
     )
     app.state.settings = settings
+    app.state.update_channel = UpdateChannel(settings.update_manifest_url)
     app.state.asset_store = FilesystemAssetStore(settings.asset_dir, settings.accel_redirect_prefix)
     app.add_middleware(AccessLogMiddleware)
     _install_error_handlers(app)

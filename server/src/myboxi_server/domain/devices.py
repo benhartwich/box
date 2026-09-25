@@ -118,5 +118,6 @@ async def update_config(
     cfg.locale = config.locale
     cfg.timezone = config.timezone
     cfg.providers_enabled = list(dict.fromkeys(config.providers_enabled))
+    cfg.auto_update = config.auto_update
     await db.flush()
     return cfg

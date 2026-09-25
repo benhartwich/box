@@ -87,6 +87,7 @@ class DeviceConfig(Timestamps, Base):
     providers_enabled: Mapped[list[str]] = mapped_column(
         ARRAY(Text), server_default=text("ARRAY['local','podcast']::text[]")
     )
+    auto_update: Mapped[bool] = mapped_column(server_default=text("true"))  # SPEC v0.7 §3.4
 
 
 class Pairing(UuidPk, Timestamps, Base):

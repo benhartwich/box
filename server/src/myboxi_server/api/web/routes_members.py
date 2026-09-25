@@ -17,6 +17,7 @@ from myboxi_server.domain import devices, members, tokens
 from myboxi_server.domain.authz import Perm, TenantContext
 from myboxi_server.domain.errors import DomainError, NotFoundError
 from myboxi_server.domain.setup import reported_data
+from myboxi_server.domain.updates import software_view
 from myboxi_server.jobs.mail import send_invitation_mail
 from myboxi_server.models import Content, Tenant, Token
 from myboxi_server.models.enums import Role
@@ -54,11 +55,18 @@ async def tenant_home(
             select(func.count()).select_from(Content).where(Content.tenant_id == ctx.tenant_id)
         ),
     }
+    latest = request.app.state.update_channel.latest()
+    update_notices = [
+        (d, view)
+        for d in boxes
+        if (r := reports[d.id]) is not None and (view := software_view(r, latest)).notice
+    ]
     return render(
         request,
         "home.html",
         {
             "tenant": tenant,
+            "update_notices": update_notices,
             "boxes": [(d, reports[d.id]) for d in boxes],
             "labels": labels,
             "counts": counts,

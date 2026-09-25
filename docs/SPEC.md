@@ -1,6 +1,6 @@
-# Myboxi — Spezifikation v0.5: Datenmodell & Geräteprotokoll
+# Myboxi — Spezifikation v0.6: Datenmodell & Geräteprotokoll
 
-Status: Entwurf · Stand: 2026-09-24 · Änderungen: §14
+Status: Entwurf · Stand: 2026-09-25 · Änderungen: §14
 Scope: Der Vertrag zwischen **Box-Agent** (Raspberry Pi) und **Server**.
 Nicht im Scope: Web-UI, Gehäuse, Image-Build, Rechtliches (eigene Dokumente).
 
@@ -61,6 +61,8 @@ Alle IDs sind UUIDv7 (zeitlich sortierbar), außer wo angegeben. Alle Tabellen h
 | `admin` | Boxen koppeln/entfernen, Regeln (Lautstärke, Ruhezeiten), alles von `contributor` |
 | `contributor` | Inhalte hochladen, Figuren anlegen und zuordnen (Großeltern) |
 | `viewer` | nur lesen |
+
+Neue Mandanten: Jeder angemeldete Nutzer kann einen Mandanten („Haushalt“) anlegen und wird dessen `owner`; höchstens 10 Mandanten mit Rolle `owner` je Nutzer. Den ersten Nutzer einer Installation legt der Betreiber an (`myboxi-server create-admin`).
 
 ### 3.3 `device`
 | Feld | Typ | Notiz |
@@ -301,7 +303,7 @@ Standard-TTL: 60 Sekunden.
 `result`: `ok` \| `expired` \| `rejected` \| `error`, optional `message`.
 
 ### 6.4 `reported` — Box → Server, QoS 1, retained
-Bei Änderung, höchstens alle 30 s, mindestens alle 10 min. Ohne MQTT-Verbindung sendet die Box denselben Envelope per `POST /device/reported` (§7.3).
+Bei Änderung, höchstens alle 30 s (in der Einrichtungsphase alle 5 s, §9.6), mindestens alle 10 min. Ohne MQTT-Verbindung sendet die Box denselben Envelope per `POST /device/reported` (§7.3).
 ```json
 {
   "type": "reported",
@@ -316,11 +318,28 @@ Bei Änderung, höchstens alle 30 s, mindestens alle 10 min. Ohne MQTT-Verbindun
     "wifi_rssi": -61,
     "time_trusted": true,
     "playback": { "status": "playing", "token_id": "...", "volume": 35 },
-    "soloist": { "installed": true, "build_expires_at": "2026-12-01" }
+    "soloist": { "installed": true, "build_expires_at": "2026-12-01" },
+    "health": [
+      { "check": "nfc", "level": "ok", "code": "ok" },
+      { "check": "audio", "level": "fail", "code": "no_output" }
+    ],
+    "button_test": { "seen": ["play_pause", "volume_up"] }
   }
 }
 ```
 Der Server warnt die Eltern, wenn `soloist.build_expires_at` weniger als 14 Tage entfernt ist und die Box das Update nicht selbst geschafft hat.
+
+Optionale Felder (fehlen sie, weiß der Server es nicht):
+- `wifi_rssi`: Signalstärke des WLANs in dBm.
+- `health`: Selbsttest der Box, ein Eintrag je Prüfung. `level` ist `ok`, `warn` oder `fail`. `check` und `code` sind Maschinencodes (`^[a-z0-9_]{1,32}$`); unbekannte Werte zeigt der Server neutral an, damit neue Prüfungen ältere Server nicht brechen. Kein Freitext, keine WLAN-Namen, keine Pfade.
+
+  | `check` | `code` bei Problemen |
+  |---|---|
+  | `nfc` | `no_i2c` (I2C-Bus fehlt), `not_responding` (Leser antwortet nicht), `read_error` (Lesefehler, Leser wird neu geöffnet) |
+  | `audio` | `player_down` (Wiedergabeprozess läuft nicht), `no_output` (kein Audioausgang) |
+  | `buttons` | `gpio_error` (Taster lassen sich nicht einrichten) |
+  | `prompts` | `missing` (Ansagen fehlen) |
+- `button_test`: nur in der Einrichtungsphase (§9.6); die Namen der Tasten (§9.4), die seit Beginn der Phase gedrückt wurden.
 
 ### 6.5 `events` — Box → Server, QoS 1
 Die Box schreibt Events zuerst in die `outbox` und löscht sie erst nach PUBACK. Der Server dedupliziert über die Event-ID.
@@ -473,6 +492,13 @@ Details:
 - Sie sagt den Code nach einem Hinweiston an, danach alle 30 s und bei `play_pause` erneut.
 - Läuft der Code ab, holt sie einen neuen. Nach erfolgreicher Kopplung: Bestätigungsansage und sofortige Synchronisierung.
 
+### 9.6 Einrichtungsphase
+Die ersten 60 min nach einer erfolgreichen Kopplung, gemessen ab `paired_at` (Wanduhr der Box; ohne verlässliche Zeit nur bis zum nächsten Neustart). In dieser Phase:
+- synchronisiert die Box alle 30 s statt im normalen Intervall;
+- sendet sie `reported` bei Änderung höchstens alle 5 s statt alle 30 s (§6.4);
+- sammelt sie die gedrückten Tasten für `button_test` (§6.4);
+- quittiert sie jeden Tastendruck, während nichts spielt, mit einem kurzen Ton (prüft zugleich den Lautsprecher).
+
 ---
 
 ## 10. Sicherheit & Datenschutz
@@ -483,6 +509,7 @@ Details:
 - Soloist-Key und Device-Secret nie in Logs, Crash-Reports oder Sync-Payloads.
 - v1 ohne Mikrofon. Kommt Sprache in v2, bleibt die Verarbeitung vollständig lokal; kein Audio zum Server.
 - Events: nur die Liste in §6.5, 30 Tage Aufbewahrung.
+- `button_test` enthält nur Tastennamen, keine Zeitpunkte, und nur während der Einrichtungsphase (§9.6).
 - Mandanten-Isolation serverseitig durchgängig; automatisierte Tests, die mandantenübergreifenden Zugriff versuchen, sind Teil der CI.
 
 ---
@@ -524,6 +551,12 @@ Der Agent wird in M0 gegen einen **Mock-Server** entwickelt, der die Endpunkte a
 ---
 
 ## 14. Änderungen
+
+**v0.6 (2026-09-25)** — Einrichtung mit Selbsttest; Protokollversion bleibt `v1`, alle Änderungen additiv.
+- §3.2: Nutzer legen Mandanten selbst an (höchstens 10 als `owner`).
+- §6.4: optionale Felder `health` und `button_test`; `wifi_rssi` erläutert.
+- §9.6: Einrichtungsphase nach der Kopplung.
+- §10: Datenschutz von `button_test`.
 
 **v0.5 (2026-09-24)** — Box-Verhalten für den Agent; Protokollversion bleibt `v1`.
 - §4: Pfade auf der Box; lokale Bibliothek mit `origin = local` (M0).

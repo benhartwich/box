@@ -6,11 +6,12 @@ import asyncio
 import logging
 import uuid
 
-from myboxi_server.auth.mail import invitation_mail, send_smtp
-from myboxi_server.domain import members
+from myboxi_server.auth.mail import Mail, invitation_mail, send_smtp
+from myboxi_server.domain import case_requests, members
+from myboxi_server.domain.case_mails import confirm_mail, notify_mails
 from myboxi_server.jobs.app import job_app
 from myboxi_server.jobs.context import job_sessionmaker, job_settings
-from myboxi_server.models import Invitation, Tenant
+from myboxi_server.models import CaseRequest, Invitation, Tenant
 
 log = logging.getLogger(__name__)
 
@@ -32,3 +33,30 @@ async def send_invitation_mail(invitation_id: str) -> None:
         link = f"{settings.base_url.rstrip('/')}/invite?token={token}"
         mail = invitation_mail(inv.email, tenant.name if tenant else "", link)
     await asyncio.to_thread(send_smtp, settings, mail)
+
+
+@job_app.task(name="send_case_confirmation", queue="mail", retry=5)
+async def send_case_confirmation(request_id: str) -> None:
+    """Double opt-in for an order request; the token is rotated here, never queued."""
+    settings = job_settings()
+    async with job_sessionmaker()() as db:
+        token = await case_requests.rotate_token(db, uuid.UUID(request_id))
+        req = await db.get(CaseRequest, uuid.UUID(request_id))
+        if token is None or req is None:
+            return
+        await db.commit()
+        mail = confirm_mail(settings, req, token)
+    await asyncio.to_thread(send_smtp, settings, mail)
+
+
+@job_app.task(name="send_case_notification", queue="mail", retry=5)
+async def send_case_notification(request_id: str) -> None:
+    """A confirmed request: mail to the operator (reply goes to the requester) and a receipt."""
+    settings = job_settings()
+    async with job_sessionmaker()() as db:
+        req = await db.get(CaseRequest, uuid.UUID(request_id))
+        if req is None:
+            return
+        mails: list[Mail] = notify_mails(settings, req)
+    for mail in mails:
+        await asyncio.to_thread(send_smtp, settings, mail)

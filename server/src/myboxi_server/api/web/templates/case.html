@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% import "_icons.html" as icon %}
+{% block title %}Box gestalten · Myboxi{% endblock %}
+{% block head %}<script type="module" src="/static/case.js"></script>{% endblock %}
+{% block main_class %}wide{% endblock %}
+{% block content %}
+<div class="case-head">
+  <p class="eyebrow">Druckvorlage</p>
+  <h1>Box gestalten</h1>
+  <p class="muted">Form, Farben und Namen wählen. Danach lädst du die Druckdateien herunter: fertig für den 3D-Drucker, auch mehrfarbig.</p>
+</div>
+
+<div class="case">
+  <section class="viewer" aria-label="Vorschau">
+    <div class="viewer-stage" id="stage" data-preview="/gestalten/vorschau">
+      <img class="viewer-fallback" src="/static/case/{{ cfg.form }}.png" alt="{{ form_label }} (Beispielbild)" width="480" height="360">
+      <p class="viewer-note" id="viewer-note" role="status" hidden></p>
+    </div>
+    <div class="viewer-tools js-only">
+      <button type="button" class="toggle" data-toggle="explode" aria-pressed="false">Auseinander</button>
+      <button type="button" class="toggle" data-toggle="inside" aria-pressed="false">Innenleben</button>
+      <span class="muted viewer-hint">Ziehen zum Drehen</span>
+    </div>
+  </section>
+
+  <form class="case-form" method="get" action="/gestalten" id="case-form" data-defaults="{{ defaults_json }}" data-suggested="{{ suggested_json }}">
+    <fieldset class="field">
+      <legend>Form</legend>
+      <div class="form-cards">
+        {% for key, label, text in forms %}
+        <label class="form-card">
+          <input type="radio" name="form" value="{{ key }}" {% if cfg.form == key %}checked{% endif %}>
+          <img src="/static/case/{{ key }}.png" alt="" width="240" height="180" loading="lazy">
+          <strong>{{ label }}</strong>
+          <span class="muted">{{ text }}</span>
+        </label>
+        {% endfor %}
+      </div>
+    </fieldset>
+
+    <label class="field">Name auf der Front
+      <input name="name" value="{{ cfg.name }}" maxlength="{{ max_name }}" placeholder="z. B. Lotta" autocomplete="off">
+      <span class="muted">Bis {{ max_name }} Zeichen, auch mit Umlauten. Leer lassen geht auch.</span>
+    </label>
+
+    {% for field, role, label in color_roles %}
+    <fieldset class="field">
+      <legend>Farbe {{ label }}</legend>
+      <div class="swatches">
+        {% for key, color in palette.items() %}
+        <label class="swatch" title="{{ color[0] }}">
+          <input type="radio" name="{{ field }}" value="{{ key }}" {% if chosen[role] == key %}checked{% endif %}>
+          <span class="dot sw-{{ key }}" aria-hidden="true"></span>
+          <span class="sr-only">{{ color[0] }}</span>
+        </label>
+        {% endfor %}
+      </div>
+    </fieldset>
+    {% endfor %}
+
+    <fieldset class="field">
+      <legend>Lautsprechergitter</legend>
+      <div class="choice-row">
+        {% for key, label in grilles %}
+        <label class="choice"><input type="radio" name="grille" value="{{ key }}" {% if cfg.grille == key %}checked{% endif %}><span>{{ label }}</span></label>
+        {% endfor %}
+      </div>
+    </fieldset>
+
+    <details class="field tech" {% if cfg.board != 'zero2w' or cfg.power != 'usbc' or cfg.speaker != 40 or cfg.button != 16 or cfg.colors != 'multi' or cfg.fastening != 'self_tap' or cfg.tolerance != 0.2 %}open{% endif %}>
+      <summary>Technik</summary>
+      <div class="stack">
+        <label>Platine
+          <select name="board">
+            <option value="zero2w" {% if cfg.board == 'zero2w' %}selected{% endif %}>Raspberry Pi Zero 2 W (klein, günstig)</option>
+            <option value="pi4" {% if cfg.board == 'pi4' %}selected{% endif %}>Raspberry Pi 4</option>
+          </select>
+        </label>
+        <label>Strom
+          <select name="power">
+            <option value="usbc" {% if cfg.power == 'usbc' %}selected{% endif %}>USB-C-Buchse hinten (Netzteil)</option>
+            <option value="powerbank" {% if cfg.power == 'powerbank' %}selected{% endif %}>Powerbank im Gehäuse (nur Radio mit Pi Zero 2 W)</option>
+          </select>
+        </label>
+        <label>Lautsprecher
+          <select name="speaker">
+            {% for d in (40, 50, 57) %}<option value="{{ d }}" {% if cfg.speaker == d %}selected{% endif %}>{{ d }} mm{% if d != 40 %} (nur Radio){% endif %}</option>{% endfor %}
+          </select>
+        </label>
+        <label>Taster
+          <select name="button">
+            <option value="16" {% if cfg.button == 16 %}selected{% endif %}>16 mm Einbautaster</option>
+            <option value="24" {% if cfg.button == 24 %}selected{% endif %}>24 mm Arcade-Taster (nur Radio)</option>
+          </select>
+        </label>
+        <label>Druck
+          <select name="colors">
+            <option value="multi" {% if cfg.colors == 'multi' %}selected{% endif %}>Mehrfarbig (z. B. Snapmaker U1, AMS)</option>
+            <option value="mono" {% if cfg.colors == 'mono' %}selected{% endif %}>Einfarbig, Name graviert</option>
+          </select>
+        </label>
+        <label>Befestigung
+          <select name="fastening">
+            <option value="self_tap" {% if cfg.fastening == 'self_tap' %}selected{% endif %}>Selbstschneidende Schrauben</option>
+            <option value="insert" {% if cfg.fastening == 'insert' %}selected{% endif %}>Gewindeeinsätze (Lötkolben nötig)</option>
+          </select>
+        </label>
+        <label>Spiel für Passungen
+          <select name="tolerance">
+            {% for t in (0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4) %}<option value="{{ t }}" {% if cfg.tolerance == t %}selected{% endif %}>{{ '%.2f' | format(t) | replace('.', ',') }} mm{% if t == 0.2 %} (passt meistens){% endif %}</option>{% endfor %}
+          </select>
+        </label>
+      </div>
+    </details>
+
+    <button type="submit" class="secondary no-js-only">Vorschau aktualisieren</button>
+  </form>
+</div>
+
+<section class="card case-result" aria-live="polite">
+  <p class="msg error" id="case-error" {% if not layout_error %}hidden{% endif %}>{{ layout_error or '' }}</p>
+  <div class="actions">
+    <a class="button" id="case-download" href="/gestalten/download.zip{% if query %}?{{ query }}{% endif %}" {% if layout_error %}aria-disabled="true"{% endif %}>{{ icon.download(20) }}Druckdateien laden</a>
+    {% if orders %}
+    <a class="button secondary" id="case-order" href="/gestalten/anfrage{% if query %}?{{ query }}{% endif %}">Gedruckt bestellen</a>
+    {% endif %}
+  </div>
+  <p class="muted">ZIP mit 3MF (Farben und Druckköpfe für Orca und Snapmaker U1 schon zugeordnet), STL-Dateien, Stückliste und Anleitung. Druckdateien stehen unter CC BY-SA 4.0.</p>
+  {% if not orders %}
+  <p class="muted">Kein 3D-Drucker? Gedruckte Gehäuse zum Bestellen kommen bald, wir testen gerade den ersten Druck.</p>
+  {% endif %}
+  <p class="muted"><a href="{{ docs_url }}/gehaeuse.md">Anleitung, Maße und Stückliste</a> · <a href="{{ docs_url }}/hardware.md">Verkabelung</a></p>
+</section>
+{% endblock %}

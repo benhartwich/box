@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% import "_icons.html" as icon %}
+{% block title %}Gehäuse anfragen · Myboxi{% endblock %}
+{% block content %}
+<a class="back" href="/gestalten{% if query %}?{{ query }}{% endif %}">{{ icon.back() }}Zurück zur Gestaltung</a>
+<h1>Gedrucktes Gehäuse anfragen</h1>
+<p class="muted">Wir drucken dein Gehäuse und schicken dir vorher ein Angebot mit Preis, Versand und Lieferzeit. Die Anfrage ist unverbindlich; bestellt ist erst, wenn du das Angebot annimmst. Elektronik ist nicht dabei.</p>
+
+<section class="card">
+  <div class="row summary">
+    <img class="thumb-case" src="/static/case/{{ cfg.form }}.png" alt="" width="120" height="90">
+    <dl class="facts">
+      {% for label, value in rows %}<dt>{{ label }}</dt><dd>{{ value }}</dd>{% endfor %}
+    </dl>
+  </div>
+</section>
+
+<form method="post" action="/gestalten/anfrage" class="card stack">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input type="hidden" name="config" value="{{ query }}">
+  <label>Dein Name <input name="name" value="{{ form.name or '' }}" maxlength="100" autocomplete="name" required></label>
+  <label>E-Mail-Adresse <input type="email" name="email" value="{{ form.email or '' }}" maxlength="254" autocomplete="email" required></label>
+  <label>Land
+    <select name="country" required>
+      {% for code, label in countries.items() %}<option value="{{ code }}" {% if form.country == code %}selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Anzahl
+    <select name="quantity">
+      {% for n in range(1, max_quantity + 1) %}<option value="{{ n }}" {% if form.quantity == n | string %}selected{% endif %}>{{ n }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Nachricht (optional) <textarea name="message" rows="4" maxlength="2000">{{ form.message or '' }}</textarea></label>
+  <label class="hp" aria-hidden="true">Website <input name="website" tabindex="-1" autocomplete="off"></label>
+  <label class="check"><input type="checkbox" name="consent" value="1" required>
+    <span>Ihr dürft meine Angaben für diese Anfrage verwenden. Unbestätigte Anfragen werden nach 48 Stunden gelöscht, alle anderen nach 12 Monaten (<a href="https://myboxi.eu/datenschutz">Datenschutz</a>).</span>
+  </label>
+  <button type="submit">Anfrage senden</button>
+  <p class="muted">Du bekommst gleich eine E-Mail mit einem Bestätigungslink.</p>
+</form>
+{% endblock %}

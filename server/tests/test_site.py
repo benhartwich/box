@@ -23,6 +23,8 @@ def test_no_third_party_resources(page: Path) -> None:
     for tag in re.findall(r"<(?:link|img|source|iframe)\b[^>]*>", html):
         for url in re.findall(r'(?:href|src)="([^"]+)"', tag):
             assert url.startswith("/"), f"{page.name}: {tag}"
+            if tag.startswith("<img"):
+                assert (SITE / url.lstrip("/")).is_file(), url
 
 
 def test_stylesheet_uses_local_fonts_only() -> None:

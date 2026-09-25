@@ -74,6 +74,7 @@ server/                 FastAPI-Server (ab M1)
     mqtt/               Dynsec-Provisionierung, notify/cmd
   migrations/           Alembic
 tools/mock-server/      Statischer Mock der Geräte-API aus SPEC §7
+hardware/case/          Gehäuse-Generator „Box gestalten“ (manifold3d), docs/gehaeuse.md
 fixtures/               Beispiel-Bibliotheken, Test-Audio (kurz, CC0)
 deploy/                 systemd-Units, Mosquitto-Config, docker-compose
 image/                  Pi-Image-Build (ab M5)
@@ -97,6 +98,8 @@ uv run pytest server                     # braucht lokales PostgreSQL, siehe ser
 uv run alembic -c server/alembic.ini upgrade head
 uv run myboxi-server dev                    # Dev-Server ohne nginx
 uv run myboxi-server worker                 # Job-Worker
+uv run myboxi-case check --all              # Gehäuse: alle Kombinationen prüfen
+uv run myboxi-case render form=bear --out bear.png
 ```
 
 Vor jedem Commit: Tests, ruff, pyright und `reuse lint` grün.
@@ -131,7 +134,7 @@ Vor jedem Commit: Tests, ruff, pyright und `reuse lint` grün.
 
 ## Konventionen
 
-- Lizenzen je Pfad in `REUSE.toml`: Server, `tools/`, `deploy/` AGPL-3.0-or-later; `agent/` GPL-3.0-or-later; `packages/protocol/` Apache-2.0; `docs/`, README, CLAUDE.md CC BY 4.0. Beim ersten Agent-Commit `reuse download GPL-3.0-or-later` ausführen. Fremdcode nur mit eigener Annotation in `REUSE.toml` und kompatibler Lizenz.
+- Lizenzen je Pfad in `REUSE.toml`: Server, `tools/`, `deploy/` AGPL-3.0-or-later; `agent/` und `hardware/` GPL-3.0-or-later (erzeugte Druckdateien CC BY-SA 4.0); `packages/protocol/` Apache-2.0; `docs/`, README, CLAUDE.md CC BY 4.0. Beim ersten Agent-Commit `reuse download GPL-3.0-or-later` ausführen. Fremdcode nur mit eigener Annotation in `REUSE.toml` und kompatibler Lizenz.
 - Code, Identifier, Kommentare, Commit-Messages: Englisch. Doku unter `docs/`: Deutsch.
 - Commits: Conventional Commits (`feat(agent): …`, `fix(protocol): …`).
 - Kleine, reviewbare Schritte. Nach jedem abgeschlossenen Schritt kurz zusammenfassen, was fertig ist und was als Nächstes kommt.

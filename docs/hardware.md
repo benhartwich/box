@@ -1,4 +1,4 @@
-# Myboxi-Hardware (Raspberry Pi 4)
+# Myboxi-Hardware (Raspberry Pi 4 oder Zero 2 W)
 
 Referenzaufbau für das Image aus `image/`. Andere Pins lassen sich über `/etc/myboxi-agent/myboxi-agent.env` einstellen (`MYBOXI_AGENT_PIN_*`).
 
@@ -6,7 +6,8 @@ Referenzaufbau für das Image aus `image/`. Andere Pins lassen sich über `/etc/
 
 | Teil | Hinweis |
 |---|---|
-| Raspberry Pi 4 (2 GB reichen) | |
+| Raspberry Pi 4 (2 GB reichen) oder Raspberry Pi Zero 2 W | Zero 2 W: gleiche Pins, Stiftleiste anlöten; mit dem Image noch nicht auf echter Hardware getestet |
+| Gehäuse | 3D-gedruckt, Vorlagen unter app.myboxi.eu/gestalten (`docs/gehaeuse.md`) |
 | Netzteil USB-C 5,1 V / 3 A | Offizielles Pi-Netzteil oder Powerbank mit mindestens 3 A |
 | microSD-Karte 32 GB, A1 | Markenware; der Stromausfall ist Normalbetrieb |
 | NFC-Modul PN532 „V3“ | Per DIP-Schalter auf I2C gestellt |

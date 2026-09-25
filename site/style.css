@@ -107,6 +107,12 @@ h3 { font-size: 22px; }
 .chips span.on { background: var(--moss); border-color: var(--moss); color: var(--paper); }
 @media (min-width: 60rem) { .showcase { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
 
+/* gallery */
+.gallery { list-style: none; padding: 0; margin: 0 0 32px; display: grid; gap: 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.gallery li { display: grid; gap: 6px; justify-items: center; padding: 12px; border-radius: 24px; background: var(--paper); border: 1px solid var(--line); font-weight: 700; }
+.gallery img { width: 100%; height: auto; }
+@media (min-width: 48rem) { .gallery { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
 /* build */
 .build { display: grid; gap: 48px; align-items: start; }
 .build-text { display: grid; gap: 20px; }

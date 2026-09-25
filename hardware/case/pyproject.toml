@@ -1,0 +1,20 @@
+[project]
+name = "myboxi-case"
+version = "0.1.0"
+description = "Myboxi case generator: 3D-printable enclosures for the box (Box gestalten)"
+license = "GPL-3.0-or-later"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+  # Pinned: the generated files and their digests depend on the exact geometry kernel.
+  "manifold3d==3.5.4",
+  "fonttools>=4.60",
+  "numpy>=2.2",
+  "pydantic>=2.11",
+]
+
+[project.scripts]
+myboxi-case = "myboxi_case.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.12,<0.13"]
+build-backend = "uv_build"

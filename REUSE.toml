@@ -28,11 +28,22 @@ path = ["agent/**", "image/**"]
 SPDX-FileCopyrightText = "2026 Benjamin Hartwich"
 SPDX-License-Identifier = "GPL-3.0-or-later"
 
+# Case generator (code). The generated print files are CC BY-SA 4.0 (see their LIESMICH.txt).
+[[annotations]]
+path = "hardware/**"
+SPDX-FileCopyrightText = "2026 Benjamin Hartwich"
+SPDX-License-Identifier = "GPL-3.0-or-later"
+
 # Vendored third-party files.
 [[annotations]]
 path = "server/src/myboxi_server/api/web/static/htmx.min.js"
 SPDX-FileCopyrightText = "Big Sky Software (htmx.org)"
 SPDX-License-Identifier = "0BSD"
+
+[[annotations]]
+path = "server/src/myboxi_server/api/web/static/vendor/three-0.186.1/**"
+SPDX-FileCopyrightText = "2010-2026 Three.js Authors"
+SPDX-License-Identifier = "MIT"
 
 [[annotations]]
 path = "server/migrations/sql/procrastinate_3.10.0_schema.sql"
@@ -45,7 +56,7 @@ SPDX-License-Identifier = "MIT"
 
 # Fonts, self-hosted (web UI and landing page).
 [[annotations]]
-path = ["**/figtree-latin-wght-normal.woff2"]
+path = ["**/figtree-latin-wght-normal.woff2", "**/figtree-latin*-800-normal.woff"]
 SPDX-FileCopyrightText = "2022 The Figtree Project Authors (https://github.com/erikdkennedy/figtree)"
 SPDX-License-Identifier = "OFL-1.1"
 

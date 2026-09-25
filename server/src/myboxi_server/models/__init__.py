@@ -1,6 +1,7 @@
 """SQLAlchemy models (SPEC §3)."""
 
 from myboxi_server.models.base import Base
+from myboxi_server.models.case import CaseRequest
 from myboxi_server.models.device import Device, DeviceConfig, Pairing
 from myboxi_server.models.event import Event, RateLimit
 from myboxi_server.models.library import (
@@ -18,6 +19,7 @@ __all__ = [
     "Asset",
     "Base",
     "Binding",
+    "CaseRequest",
     "Content",
     "ContentItem",
     "Device",

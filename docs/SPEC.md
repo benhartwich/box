@@ -564,7 +564,7 @@ Der Agent wird in M0 gegen einen **Mock-Server** entwickelt, der die Endpunkte a
 - [ ] TTS offline für Ansagen: Piper mit deutscher Stimme, Speicherbedarf auf Zero 2 W prüfen.
 - [x] Tech-Stack festgelegt (siehe `CLAUDE.md`).
 - [x] Lizenz: Server AGPL-3.0-or-later, Agent GPL-3.0-or-later, `packages/protocol` Apache-2.0, Spezifikation und Doku CC BY 4.0 (siehe `REUSE.toml`).
-- [ ] Rechtliche Einordnung Gehäuseverkauf (Produktsicherheit, Spielzeugrecht) — außerhalb dieser Spec.
+- [ ] Rechtliche Einordnung Gehäuseverkauf (Produktsicherheit, Spielzeugrecht) — außerhalb dieser Spec. Anfragen für gedruckte Gehäuse sind umgesetzt, bleiben aber abgeschaltet, bis das geklärt ist (`docs/gehaeuse.md`).
 
 ---
 

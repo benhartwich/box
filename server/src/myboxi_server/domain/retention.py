@@ -1,4 +1,5 @@
-"""Data retention (SPEC §3.11, §10): events 30 days; expired auth artefacts."""
+"""Data retention (SPEC §3.11, §10): events 30 days; expired auth artefacts; case requests
+(unconfirmed 48 h, otherwise 12 months, docs/gehaeuse.md)."""
 
 from __future__ import annotations
 
@@ -10,8 +11,16 @@ from sqlalchemy import delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from myboxi_server.auth.sessions import IDLE_TIMEOUT
-from myboxi_server.models import Event, Invitation, Pairing, RateLimit, Upload, WebSession
-from myboxi_server.models.enums import UploadStatus
+from myboxi_server.models import (
+    CaseRequest,
+    Event,
+    Invitation,
+    Pairing,
+    RateLimit,
+    Upload,
+    WebSession,
+)
+from myboxi_server.models.enums import CaseRequestStatus, UploadStatus
 
 EVENT_RETENTION = dt.timedelta(days=30)
 PAIRING_RETENTION = dt.timedelta(days=1)
@@ -19,6 +28,7 @@ INVITATION_RETENTION = dt.timedelta(days=30)
 RATE_LIMIT_RETENTION = dt.timedelta(days=1)
 UPLOAD_RETENTION = dt.timedelta(days=30)
 TMP_FILE_RETENTION = dt.timedelta(hours=24)
+CASE_REQUEST_RETENTION = dt.timedelta(days=365)  # unconfirmed ones go after 48 h
 
 
 async def purge_expired(db: AsyncSession, now: dt.datetime | None = None) -> dict[str, int]:
@@ -32,6 +42,13 @@ async def purge_expired(db: AsyncSession, now: dt.datetime | None = None) -> dic
         "pairing": delete(Pairing).where(Pairing.expires_at < now - PAIRING_RETENTION),
         "invitation": delete(Invitation).where(Invitation.expires_at < now - INVITATION_RETENTION),
         "rate_limit": delete(RateLimit).where(RateLimit.window_start < now - RATE_LIMIT_RETENTION),
+        "case_request": delete(CaseRequest).where(
+            or_(
+                (CaseRequest.status == CaseRequestStatus.UNCONFIRMED)
+                & (CaseRequest.token_expires_at < now),
+                CaseRequest.updated_at < now - CASE_REQUEST_RETENTION,
+            )
+        ),
     }
     counts: dict[str, int] = {}
     for name, stmt in statements.items():

@@ -56,6 +56,30 @@ Gut zu wissen:
 - Feed und Folgen kommen direkt vom Anbieter des Podcasts, nicht über den Myboxi-Server. Der Anbieter sieht dabei die IP-Adresse eures Anschlusses.
 - Lässt sich ein Feed nicht lesen, steht das auf der Box-Seite unter „Probleme bei der Wiedergabe“.
 
+## 7. Spotify
+
+Voraussetzungen:
+- Spotify Premium.
+- Ein eigener Spotify-Schlüssel: im [Spotify-Entwicklerportal](https://developer.spotify.com/dashboard) anmelden, „Spotify Soloist API Key“ öffnen und einen Schlüssel erzeugen. Er gehört zu eurem Konto und wird nicht weitergegeben.
+- Die Spotify-Bedingungen erlauben nur private, nicht-kommerzielle Nutzung.
+
+Einrichten:
+1. Einrichtungsmodus starten (**`volume_up` + `volume_down` 5 Sekunden halten**). Auf der Einrichtungsseite unter „Spotify (optional)“ den Schlüssel einfügen, dazu wie gewohnt WLAN und Passwort. Die Seite zeigt den Schlüssel nie wieder an. Leer lassen behält ihn, „Schlüssel löschen“ entfernt ihn.
+2. In der Web-UI auf der Box-Seite unter **Quellen** „Spotify“ einschalten.
+3. Die Box lädt Spotify Soloist selbst von Spotify herunter (etwa 13 MB). Die Box-Seite zeigt „Spotify wird eingerichtet …“, danach „Noch kein Spotify-Konto verbunden“.
+4. Einmal anmelden: Handy im selben WLAN, in der Spotify-App unten auf das Geräte-Symbol tippen und **Myboxi NNNN** wählen. Danach steht auf der Box-Seite „bereit“.
+5. Unter **Inhalte → Spotify** ein Album oder eine Playlist anlegen (Link aus der Spotify-App teilen und einfügen) und einer Figur zuordnen.
+
+So verhält sich die Box:
+- Figur auflegen: Das Album spielt, beim nächsten Mal an derselben Stelle weiter. Die Weiter-Taste springt zum nächsten Titel.
+- Ist das Album zu Ende, hält die Box an. Titel, die Spotify von selbst anhängt (Autoplay), spielt sie nicht.
+- Titel mit Explicit-Kennzeichnung überspringt die Box, außer ihr erlaubt sie auf der Box-Seite.
+- Aus der Spotify-App lässt sich die Box wie ein Lautsprecher nutzen. Höchstlautstärke, Ruhezeiten und Einschlaf-Timer gelten trotzdem. Legt jemand eine Figur auf, hat die Figur Vorrang.
+- Ohne Internet spielt Spotify nicht; die Box sagt „Das geht gerade leider nicht“.
+- Spotify-Versionen laufen nach 90 Tagen ab. Die Box holt sich rechtzeitig eine neue, aber nie während Spotify spielt.
+
+Im Heimnetz: Damit die Spotify-App die Box findet, ist sie bei eingeschaltetem Spotify im Heimnetz sichtbar. Aus dem Internet ist die Box nicht erreichbar; ihre Firewall lässt nur Verbindungen aus dem Heimnetz zu.
+
 ## Updates
 
 Ab Image 0.3.0 aktualisiert sich die Box selbst, sobald sie online ist, aber nie während etwas spielt. Den Stand zeigt die App auf der Box-Seite unter „Software“; dort lassen sich automatische Updates auch abschalten. Sicherheitsupdates des Systems kommen täglich, ein nötiger Neustart erst nach 10 ruhigen Minuten. Boxen mit einem älteren Image brauchen einmal das neue Image. Details: `docs/updates.md`.
@@ -80,6 +104,7 @@ Mit SSH (Schlüssel über den Imager gesetzt):
 sudo -u myboxi XDG_RUNTIME_DIR=/run/user/$(id -u myboxi) /opt/myboxi-agent/current/.venv/bin/myboxi-agent doctor
 sudo journalctl _SYSTEMD_USER_UNIT=myboxi-agent.service -f      # Agent
 sudo journalctl -u myboxi-setupd -f                             # Einrichtungsmodus
+sudo journalctl _SYSTEMD_USER_UNIT=myboxi-soloist.service -f    # Spotify
 ```
 
 Die mitgelieferten Ansagen spricht die Stimme „Thorsten-Voice/Kokoro“ (Apache-2.0, Lizenzhinweis in `/opt/myboxi-agent/current/prompts/NOTICE.txt`).

@@ -119,5 +119,6 @@ async def update_config(
     cfg.timezone = config.timezone
     cfg.providers_enabled = list(dict.fromkeys(config.providers_enabled))
     cfg.auto_update = config.auto_update
+    cfg.spotify_allow_explicit = config.spotify_allow_explicit
     await db.flush()
     return cfg

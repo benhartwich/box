@@ -53,7 +53,7 @@ class Ui:
     def url(self, path: str) -> str:
         return f"/t/{self.tid}{path}"
 
-    async def post(self, path: str, **data: str) -> httpx.Response:
+    async def post(self, path: str, **data: str | list[str]) -> httpx.Response:
         return await self.client.post(self.url(path), data=data | {"csrf_token": self.csrf})
 
     async def config_rev(self) -> int:
@@ -514,6 +514,70 @@ async def test_box_page_lists_playback_problems(ui: Ui) -> None:
     assert "Hase" in page.text
     assert "2-mal" in page.text
     assert "Spotify: brand_new_code" in page.text  # unknown codes stay neutral
+
+
+async def test_spotify_problem_texts() -> None:
+    from myboxi_server.api.web.routes_boxes import problem_text
+
+    assert "Spotify-App" in problem_text("spotify", "not_logged_in")
+    assert "Explicit" in problem_text("spotify", "explicit")
+    assert problem_text("spotify", "disabled").startswith("Spotify ist für diese Box aus")
+
+
+async def test_spotify_explicit_setting_reaches_state(ui: Ui) -> None:
+    """SPEC v0.9 §3.4: off by default, switched on per box."""
+    dev = await pair_device(ui.app, ui.client, ui.tid)
+    state = StateResponse.model_validate_json(
+        (await ui.client.get("/api/v1/device/state", headers=dev.auth)).content
+    )
+    assert state.device_config.spotify_allow_explicit is False
+    await ui.post(
+        f"/boxes/{dev.device_id}/config",
+        max_volume="45", start_volume="20", on_token_removed="pause", locale="de-AT",
+        timezone="Europe/Vienna", providers=["local", "spotify"], spotify_allow_explicit="true",
+    )  # fmt: skip
+    state = StateResponse.model_validate_json(
+        (await ui.client.get("/api/v1/device/state", headers=dev.auth)).content
+    )
+    assert state.device_config.spotify_allow_explicit is True
+    assert state.device_config.providers_enabled == ["local", "spotify"]
+
+
+@pytest.mark.parametrize(
+    ("soloist", "text"),
+    [
+        ({"installed": False, "state": "no_key"}, "Spotify-Schlüssel fehlt"),
+        ({"installed": True, "build_expires_at": "2026-12-24", "state": "ready",
+          "logged_in": False, "device_name": "Myboxi 4711"}, "das Gerät „Myboxi 4711“ auswählen"),
+        ({"installed": True, "build_expires_at": "2099-12-24", "state": "ready",
+          "logged_in": True, "device_name": "Myboxi 4711"}, "bereit als „Myboxi 4711“"),
+        ({"installed": True, "state": "expired"}, "Spotify-Version ist abgelaufen"),
+    ],
+)  # fmt: skip
+async def test_spotify_state_on_the_box_page(ui: Ui, soloist: dict[str, Any], text: str) -> None:
+    """SPEC v0.9 §6.4: the page says what the family has to do."""
+    dev = await pair_device(ui.app, ui.client, ui.tid)
+    await ui.client.post(
+        "/api/v1/device/reported",
+        headers=dev.auth,
+        json={
+            "v": 1, "id": "01J8Z3M5W6XK2C4B7N9P0QRSTW", "ts": "2026-09-24T18:02:11Z",
+            "type": "reported",
+            "data": {
+                "agent_version": "0.5.0", "hw_model": "rpi-zero2w", "applied_config_rev": 0,
+                "applied_device_rev": 0, "storage": {"free_mb": 9120}, "time_trusted": True,
+                "playback": {"status": "stopped", "volume": 35}, "soloist": soloist,
+            },
+        },
+    )  # fmt: skip
+    page = await ui.client.get(ui.url(f"/boxes/{dev.device_id}"))
+    assert text in page.text
+
+
+async def test_spotify_is_ready(ui: Ui) -> None:
+    page = await ui.client.get(ui.url("/contents"))
+    spotify = page.text.split("Spotify</strong>")[1].split("</li>")[0]
+    assert "bald auf der Box" not in spotify
 
 
 async def test_podcasts_are_ready(ui: Ui) -> None:

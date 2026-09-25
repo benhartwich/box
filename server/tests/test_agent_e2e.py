@@ -36,7 +36,11 @@ async def test_agent_pairs_syncs_plays_and_reports(
     lib = await seed_library(app, t.tenant_id, n_items=2)
     settings = AgentSettings(data_dir=tmp_path / "box", sim=True, default_server_url=live_server)
     agent = AgentApp(settings, sim_adapters())
-    reader, player, announcer = agent.adapters.reader, agent.adapters.player, agent.announcer
+    reader, player, announcer = (
+        agent.adapters.reader,
+        _local(agent.adapters.player),
+        agent.announcer,
+    )
     assert isinstance(reader, SimReader)
     assert isinstance(player, SimPlayer)
     assert isinstance(announcer, SimAnnouncer)
@@ -94,3 +98,10 @@ async def test_agent_pairs_syncs_plays_and_reports(
         agent.stop()
         with contextlib.suppress(asyncio.CancelledError):
             await task
+
+
+def _local(player: object) -> object:
+    """The file player behind the routing player (SPEC v0.9: mpv and Spotify)."""
+    from myboxi_agent.adapters.routing import RoutingPlayer
+
+    return player.local if isinstance(player, RoutingPlayer) else player

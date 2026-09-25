@@ -39,9 +39,9 @@
       {% if r.wifi_rssi is not none %}<dt>WLAN</dt><dd>{{ r.wifi_rssi }} dBm</dd>{% endif %}
       <dt>Uhrzeit</dt><dd>{% if r.time_trusted %}synchron{% else %}<span class="warn">unsicher (Ruhezeiten gelten als Obergrenze)</span>{% endif %}</dd>
       {% if r.image_version %}<dt>Image</dt><dd>{{ r.image_version }}</dd>{% endif %}
-      {% if r.soloist and r.soloist.installed %}
+      {% if reported.spotify %}
         <dt>Spotify</dt>
-        <dd>{% if reported.soloist_warning %}<span class="warn">Update nötig, läuft ab am {{ r.soloist.build_expires_at.strftime('%d.%m.%Y') }}</span>{% else %}eingerichtet{% endif %}</dd>
+        <dd>{% if reported.spotify.level in ('warn', 'fail') %}<span class="warn">{{ reported.spotify.text }}</span>{% else %}{{ reported.spotify.text }}{% endif %}</dd>
       {% endif %}
     {% else %}
       <dt>Gemeldet</dt><dd class="muted">noch keine Meldung</dd>
@@ -141,6 +141,7 @@
         {% for value, label in providers %}
         <label class="check"><input type="checkbox" name="providers" value="{{ value }}" {% if value in cfg.providers_enabled %}checked{% endif %}> {{ label }}</label>
         {% endfor %}
+        <label class="check"><input type="checkbox" name="spotify_allow_explicit" value="true" {% if cfg.spotify_allow_explicit %}checked{% endif %}> Spotify: auch Titel mit Explicit-Kennzeichnung spielen</label>
       </fieldset>
       {% if editable %}<button type="submit">Speichern</button>{% endif %}
     </fieldset>

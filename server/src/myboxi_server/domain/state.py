@@ -49,6 +49,7 @@ def device_config_message(cfg: DeviceConfig | None) -> DeviceConfigMsg:
             "timezone": cfg.timezone,
             "providers_enabled": cfg.providers_enabled,
             "auto_update": cfg.auto_update,
+            "spotify_allow_explicit": cfg.spotify_allow_explicit,
         }
     )
 

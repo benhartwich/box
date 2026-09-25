@@ -14,7 +14,7 @@ const download = document.getElementById('case-download');
 const order = document.getElementById('case-order');
 const defaults = JSON.parse(form.dataset.defaults);
 const suggested = JSON.parse(form.dataset.suggested);
-let coloursChosen = new URLSearchParams(location.search).has('color_body');
+let coloursChosen = [...new URLSearchParams(location.search).keys()].some((k) => k.startsWith('color_'));
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 const EXPLODE_MM = 45;
@@ -23,6 +23,8 @@ const HIDDEN_WHEN_INSIDE = new Set(['body', 'body_inlay', 'front', 'front_inlay'
 function query() {
   const params = new URLSearchParams();
   for (const [key, value] of new FormData(form)) {
+    // Until someone picks colours, the server uses the colours suggested for the form.
+    if (key.startsWith('color_') && !coloursChosen) continue;
     const text = String(value).trim();
     if (text !== '' && text !== String(defaults[key])) params.set(key, text);
   }

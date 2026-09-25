@@ -43,13 +43,13 @@
       <span class="muted">Bis {{ max_name }} Zeichen, auch mit Umlauten. Leer lassen geht auch.</span>
     </label>
 
-    {% for field, label in color_roles %}
+    {% for field, role, label in color_roles %}
     <fieldset class="field">
       <legend>Farbe {{ label }}</legend>
       <div class="swatches">
         {% for key, color in palette.items() %}
         <label class="swatch" title="{{ color[0] }}">
-          <input type="radio" name="{{ field }}" value="{{ key }}" {% if cfg[field] == key %}checked{% endif %}>
+          <input type="radio" name="{{ field }}" value="{{ key }}" {% if chosen[role] == key %}checked{% endif %}>
           <span class="dot sw-{{ key }}" aria-hidden="true"></span>
           <span class="sr-only">{{ color[0] }}</span>
         </label>

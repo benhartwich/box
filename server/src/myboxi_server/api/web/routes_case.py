@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import PlainTextResponse, RedirectResponse, Response
 from pydantic import ValidationError
 
-from myboxi_case.config import MAX_NAME, PALETTE, CaseConfig
+from myboxi_case.config import MAX_NAME, PALETTE, ROLES, SUGGESTED, CaseConfig
 from myboxi_case.export import file_stem
 from myboxi_case.layout import LayoutError, layout_for
 from myboxi_server.api.web.deps import (
@@ -45,21 +45,11 @@ FORMS = (
     ("bunny", "Hase", "Lange Ohren und kleine Zähne."),
     ("frog", "Frosch", "Glubschaugen oben und ein breites Lächeln."),
 )
-# Colours that suit each form; the page applies them until someone picks colours themselves.
-SUGGESTED = {
-    "radio": ("sand", "moos", "creme"),
-    "cube": ("salbei", "creme", "moos"),
-    "bear": ("braun", "sand", "anthrazit"),
-    "unicorn": ("weiss", "flieder", "sonne"),
-    "cat": ("apricot", "creme", "anthrazit"),
-    "bunny": ("flieder", "weiss", "anthrazit"),
-    "frog": ("moos", "salbei", "anthrazit"),
-}
 GRILLES = (("dots", "Punkte"), ("stars", "Sterne"), ("hearts", "Herzen"), ("lines", "Streifen"))
 COLOR_ROLES = (
-    ("color_body", "Gehäuse"),
-    ("color_front", "Front"),
-    ("color_accent", "Name und Symbole"),
+    ("color_body", "body", "Gehäuse"),
+    ("color_front", "front", "Front"),
+    ("color_accent", "accent", "Name und Symbole"),
 )
 
 
@@ -112,6 +102,7 @@ async def case_page(request: Request, session: OptionalSession, settings: Settin
             },
             separators=(",", ":"),
         ),
+        "chosen": {role: cfg.color_key(role) for role in ROLES},
         "forms": FORMS,
         "form_label": next(label for key, label, _ in FORMS if key == cfg.form),
         "grilles": GRILLES,

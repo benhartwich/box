@@ -187,6 +187,8 @@ rsync -a /var/lib/myboxi-server/assets/ backup-host:/backups/myboxi-server/asset
 
 **Links im Einrichtungs-Assistenten:** `MYBOXI_SERVER_IMAGE_URL` (Download der Box-Images, Vorgabe: GitHub-Releases) und `MYBOXI_SERVER_DOCS_URL` (Hardware-Anleitung). Für eigene Builds oder Forks anpassen.
 
+**Box gestalten:** Die Seite `/gestalten` ist öffentlich und braucht keine Einstellung. Vorschauen und Druckdateien entstehen im Server-Prozess (etwa 30 ms je Gehäuse) und liegen in einem Zwischenspeicher von `MYBOXI_SERVER_CASE_CACHE_MB` (Vorgabe 64). Anfragen für gedruckte Gehäuse gibt es erst, wenn `MYBOXI_SERVER_ORDER_NOTIFY_EMAIL` gesetzt ist; bestätigte Anfragen gehen per Mail dorthin (SMTP nötig). Verwaltung: `myboxi-server case-requests list|show|status|delete`. Siehe `docs/gehaeuse.md`.
+
 **Upload-Größe:** `MYBOXI_SERVER_MAX_UPLOAD_MB` gilt pro Datei. `client_max_body_size` in der nginx-Site begrenzt die gesamte Anfrage und muss dazu passen.
 
 **Sicherheit:**

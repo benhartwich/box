@@ -34,9 +34,11 @@ def orders_on(app: FastAPI, settings: Settings) -> Settings:
 def logged(monkeypatch: pytest.MonkeyPatch) -> list[mail_module.Mail]:
     """Mails of the log backend (development and tests)."""
     mails: list[mail_module.Mail] = []
-    monkeypatch.setattr(
-        "myboxi_server.api.web.routes_case.log_mail", lambda _s, mail: mails.append(mail)
-    )
+
+    def capture(_settings: Settings, mail: mail_module.Mail) -> None:
+        mails.append(mail)
+
+    monkeypatch.setattr("myboxi_server.api.web.routes_case.log_mail", capture)
     return mails
 
 
@@ -141,7 +143,11 @@ async def test_smtp_mails_go_through_the_worker(
     app: FastAPI, client: httpx.AsyncClient, orders_on: Settings, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     sent: list[mail_module.Mail] = []
-    monkeypatch.setattr("myboxi_server.jobs.mail.send_smtp", lambda _s, mail: sent.append(mail))
+
+    def capture(_settings: Settings, mail: mail_module.Mail) -> None:
+        sent.append(mail)
+
+    monkeypatch.setattr("myboxi_server.jobs.mail.send_smtp", capture)
     smtp = orders_on.model_copy(update={"mail_backend": "smtp", "smtp_host": "localhost"})
     app.state.settings = smtp
     job_context.configure(smtp)

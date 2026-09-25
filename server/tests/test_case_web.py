@@ -32,6 +32,14 @@ async def test_page_is_public_and_keeps_the_choices(client: httpx.AsyncClient) -
     assert 'href="/login"' in r.text  # public header
 
 
+async def test_colours_follow_the_form_until_chosen(client: httpx.AsyncClient) -> None:
+    r = await client.get("/gestalten?form=unicorn")
+    assert 'name="color_body" value="weiss" checked' in r.text
+    assert 'name="color_accent" value="sonne" checked' in r.text
+    assert CaseConfig(form="unicorn").color("accent") == "#F2C66D"
+    assert CaseConfig(form="unicorn", color_accent="rot").color("accent") == "#D64541"
+
+
 async def test_page_for_signed_in_people(app: FastAPI, client: httpx.AsyncClient) -> None:
     t = await make_tenant(app)
     await login(client, t.owner_email)

@@ -50,6 +50,19 @@ ColorKey = Literal[
 ]  # fmt: skip
 
 
+# Colours that suit each form (body, front, accent); used while none are chosen.
+SUGGESTED: dict[str, tuple[str, str, str]] = {
+    "radio": ("sand", "moos", "creme"),
+    "cube": ("salbei", "creme", "moos"),
+    "bear": ("braun", "sand", "anthrazit"),
+    "unicorn": ("weiss", "flieder", "sonne"),
+    "cat": ("apricot", "creme", "anthrazit"),
+    "bunny": ("flieder", "weiss", "anthrazit"),
+    "frog": ("moos", "salbei", "anthrazit"),
+}
+ROLES = ("body", "front", "accent")
+
+
 def _squash(value: object) -> object:
     return " ".join(value.split()) if isinstance(value, str) else value
 
@@ -77,9 +90,10 @@ class CaseConfig(BaseModel):
     speaker: Literal[40, 50, 57] = 40
     button: Literal[16, 24] = 16
     colors: Colors = "multi"
-    color_body: ColorKey = "sand"
-    color_front: ColorKey = "moos"
-    color_accent: ColorKey = "creme"
+    # None: the colour suggested for the form (SUGGESTED).
+    color_body: ColorKey | None = None
+    color_front: ColorKey | None = None
+    color_accent: ColorKey | None = None
     tolerance: Annotated[float, Field(ge=0.1, le=0.4)] = 0.2
     fastening: Fastening = "self_tap"
 
@@ -110,7 +124,7 @@ class CaseConfig(BaseModel):
         out: dict[str, str] = {}
         for key in type(self).model_fields:
             value = getattr(self, key)
-            if value != getattr(default, key):
+            if value is not None and value != getattr(default, key):
                 out[key] = str(value)
         return out
 
@@ -121,6 +135,9 @@ class CaseConfig(BaseModel):
         data = f"{GENERATOR_VERSION}\n{self.canonical_json()}".encode()
         return hashlib.sha256(data).hexdigest()
 
+    def color_key(self, role: Literal["body", "front", "accent"]) -> str:
+        chosen = {"body": self.color_body, "front": self.color_front, "accent": self.color_accent}
+        return chosen[role] or SUGGESTED[self.form][ROLES.index(role)]
+
     def color(self, role: Literal["body", "front", "accent"]) -> str:
-        key = {"body": self.color_body, "front": self.color_front, "accent": self.color_accent}
-        return PALETTE[key[role]][1]
+        return PALETTE[self.color_key(role)][1]

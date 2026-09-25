@@ -13,7 +13,7 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from myboxi_case import GENERATOR_VERSION
-from myboxi_case.config import PALETTE, CaseConfig
+from myboxi_case.config import PALETTE, ROLES, CaseConfig
 from myboxi_server.auth.tokens import hash_token, new_token
 from myboxi_server.domain.errors import InvalidInputError, NotFoundError
 from myboxi_server.domain.members import normalize_email
@@ -39,7 +39,7 @@ def describe(cfg: CaseConfig) -> list[tuple[str, str]]:
         ("Name", cfg.name or "(ohne)"),
         (
             "Farben",
-            ", ".join(PALETTE[c][0] for c in (cfg.color_body, cfg.color_front, cfg.color_accent)),
+            ", ".join(PALETTE[cfg.color_key(role)][0] for role in ROLES),
         ),
         ("Gitter", GRILLE_LABELS[cfg.grille]),
         ("Platine", BOARD_LABELS[cfg.board]),

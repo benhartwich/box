@@ -335,6 +335,7 @@ a.button[aria-disabled="true"] { opacity: .45; pointer-events: none; }
 .sw-anthrazit { background: #3A3F3E; }
 .sw-weiss { background: #FAFAF7; }
 .thumb-case { width: 120px; height: auto; border-radius: var(--radius-s); flex: none; }
+.row.summary { align-items: flex-start; gap: 16px; }
 .hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
 label.check { display: flex; gap: 10px; align-items: flex-start; font-weight: 500; }
 label.check input { width: 22px; height: 22px; min-height: 0; padding: 0; flex: none; margin-top: 2px; }

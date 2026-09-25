@@ -51,7 +51,7 @@ class DeviceConfig(ProtocolModel):
     start_volume: Percent = 35
     quiet_hours: QuietHours | None = None
     sleep_timer_min: Annotated[int, Field(ge=1, le=24 * 60)] | None = None
-    on_token_removed: OnTokenRemoved = "pause"  # noqa: S105
+    on_token_removed: OnTokenRemoved = "pause"
     locale: Annotated[str, StringConstraints(pattern=r"^[a-z]{2,3}(?:-[A-Z]{2})?$")] = "de-AT"
     timezone: Annotated[str, StringConstraints(min_length=1, max_length=64)] = "Europe/Vienna"
     providers_enabled: list[ProviderName] = Field(

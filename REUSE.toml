@@ -22,9 +22,9 @@ path = "packages/protocol/**"
 SPDX-FileCopyrightText = "2026 Benjamin Hartwich"
 SPDX-License-Identifier = "Apache-2.0"
 
-# Box agent.
+# Box agent and the Raspberry Pi image.
 [[annotations]]
-path = "agent/**"
+path = ["agent/**", "image/**"]
 SPDX-FileCopyrightText = "2026 Benjamin Hartwich"
 SPDX-License-Identifier = "GPL-3.0-or-later"
 

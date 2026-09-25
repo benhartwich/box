@@ -1,5 +1,5 @@
 [tool.uv.workspace]
-members = ["packages/protocol", "server"]
+members = ["packages/protocol", "server", "agent"]
 
 [tool.uv]
 python-preference = "only-system"
@@ -21,15 +21,16 @@ extend-exclude = ["server/migrations/versions"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "SIM", "ASYNC", "S", "DTZ", "RUF", "PT", "TID", "C4", "RET", "PTH"]
-ignore = ["S311"]
+# S105/S106: "token" is the domain word for figures, not a credential.
+ignore = ["S311", "S105", "S106"]
 # German UI texts use typographic dashes and quotes.
 allowed-confusables = ["–", "„", "“", "×"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["myboxi_server", "myboxi_protocol"]
+known-first-party = ["myboxi_server", "myboxi_protocol", "myboxi_agent"]
 
 [tool.ruff.lint.per-file-ignores]
-"**/tests/**" = ["S101", "S105", "S106", "S603", "S607"]
+"**/tests/**" = ["S101", "S603", "S607", "ASYNC109", "ASYNC110", "ASYNC240"]
 "tools/**" = ["S101", "S603", "S607"]
 
 [tool.pyright]
@@ -37,13 +38,14 @@ typeCheckingMode = "strict"
 pythonVersion = "3.13"
 venvPath = "."
 venv = ".venv"
-include = ["packages", "server", "tools"]
-exclude = ["**/__pycache__", ".venv", "server/migrations/versions"]
+include = ["packages", "server", "agent", "tools"]
+# kokoro_tts.py runs in its own build venv (torch, kokoro), see tools/prompts/build_prompts.py.
+exclude = ["**/__pycache__", ".venv", "server/migrations/versions", "tools/prompts/kokoro_tts.py"]
 reportMissingTypeStubs = false
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"
 asyncio_default_test_loop_scope = "session"
-testpaths = ["packages/protocol/tests", "server/tests"]
+testpaths = ["packages/protocol/tests", "server/tests", "agent/tests"]
 addopts = "--import-mode=importlib"

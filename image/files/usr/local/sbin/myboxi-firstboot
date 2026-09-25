@@ -1,0 +1,19 @@
+#!/bin/sh
+# Runs once. Keeps anything set in Raspberry Pi Imager (host name, Wi-Fi country).
+set -eu
+
+if [ "$(hostname)" = "raspberrypi" ]; then
+    serial=$(awk '/^Serial/ {print $3}' /proc/cpuinfo)
+    name=$(python3 -c 'import sys; s = sys.argv[1] or "0"; print(f"myboxi-{int(s, 16) % 10000:04d}")' "$serial")
+    hostnamectl set-hostname "$name"
+    sed -i "s/\braspberrypi\b/$name/g" /etc/hosts
+fi
+
+# Raspberry Pi OS keeps Wi-Fi blocked until a country is set; setup mode needs the radio.
+if [ -z "$(raspi-config nonint get_wifi_country 2>/dev/null || true)" ]; then
+    raspi-config nonint do_wifi_country AT || true
+fi
+rfkill unblock wifi || true
+
+install -d -o myboxi -g myboxi /var/lib/myboxi
+touch /var/lib/myboxi/.firstboot-done

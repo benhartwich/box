@@ -1,0 +1,13 @@
+[Unit]
+Description=Myboxi first boot: host name and Wi-Fi country
+After=cloud-final.service systemd-hostnamed.service
+Before=NetworkManager.service
+ConditionPathExists=!/var/lib/myboxi/.firstboot-done
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/myboxi-firstboot
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

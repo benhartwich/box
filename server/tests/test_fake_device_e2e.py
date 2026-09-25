@@ -2,22 +2,13 @@
 
 from __future__ import annotations
 
-import asyncio
 import importlib.util
-import socket
 import sys
-from collections.abc import AsyncIterator
 from pathlib import Path
 from types import ModuleType
 
 import httpx
-import pytest
-import uvicorn
 from fastapi import FastAPI
-from sqlalchemy.ext.asyncio import AsyncEngine
-
-from myboxi_server.app import create_app
-from myboxi_server.settings import Settings
 
 from .helpers import PASSWORD, make_tenant, seed_library
 
@@ -32,32 +23,6 @@ def _load_fake_device() -> ModuleType:
     sys.modules["fake_device"] = module
     spec.loader.exec_module(module)
     return module
-
-
-def _free_port() -> int:
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return int(s.getsockname()[1])
-
-
-@pytest.fixture
-async def live_server(settings: Settings, engine: AsyncEngine) -> AsyncIterator[str]:
-    port = _free_port()
-    config = uvicorn.Config(
-        create_app(settings), host="127.0.0.1", port=port, log_config=None, access_log=False
-    )
-    server = uvicorn.Server(config)
-    task = asyncio.create_task(server.serve())
-    for _ in range(100):
-        if server.started:
-            break
-        await asyncio.sleep(0.05)
-    assert server.started
-    try:
-        yield f"http://127.0.0.1:{port}"
-    finally:
-        server.should_exit = True
-        await task
 
 
 async def test_fake_device_complete_flow(live_server: str, app: FastAPI) -> None:

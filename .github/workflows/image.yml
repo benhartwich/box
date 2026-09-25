@@ -1,0 +1,92 @@
+# Myboxi image for the Raspberry Pi 4 (docs/box-inbetriebnahme.md).
+# Native build on an arm64 runner; artifact for branch builds, GitHub release for box-v* tags.
+name: image
+
+on:
+  workflow_dispatch:
+  push:
+    # Branch pushes build when anything that goes into the image changes; tag pushes (paths
+    # are not evaluated for tags) publish a release.
+    branches: ["**"]
+    tags: ["box-v*"]
+    paths:
+      - "image/**"
+      - "agent/**"
+      - "packages/protocol/**"
+      - "tools/prompts/**"
+      - "uv.lock"
+      - ".github/workflows/image.yml"
+
+permissions:
+  contents: write
+
+# One build per branch (a newer push replaces it); release builds for tags always finish.
+concurrency:
+  group: image-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref_type == 'branch' }}
+
+env:
+  UV_VERSION: "0.12.18"
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - name: build tools
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg parted e2fsprogs xz-utils espeak-ng
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          version: ${{ env.UV_VERSION }}
+      - name: prompts (Kokoro TTS at build time only)
+        run: |
+          uv venv build/tts --python 3.13
+          uv pip install -p build/tts --index-url https://download.pytorch.org/whl/cpu torch==2.14.0
+          uv pip install -p build/tts -r tools/prompts/requirements-tts.txt
+          build/tts/bin/python tools/prompts/build_prompts.py --out build/prompts
+          rm -rf build/tts build/voices  # disk space for the image
+      - name: image
+        run: |
+          VERSION="${GITHUB_REF_NAME#box-v}"
+          [ "$GITHUB_REF_TYPE" = tag ] || VERSION="$(date -u +%Y.%m.%d)-${GITHUB_SHA::7}"
+          sudo env UV_BIN="$(command -v uv)" MYBOXI_IMAGE_VERSION="$VERSION" \
+            PROMPTS_DIR=build/prompts image/build.sh
+          sudo chown -R "$(id -u):$(id -g)" build
+      - name: artifact
+        if: github.ref_type != 'tag'
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: myboxi-image
+          path: |
+            build/myboxi-*.img.xz
+            build/myboxi-*.img.xz.sha256
+          retention-days: 14
+          compression-level: 0
+      - name: release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          docs="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/$GITHUB_REF_NAME/docs"
+          pre="" hint=""
+          case "$GITHUB_REF_NAME" in
+            box-v0.*) pre="--prerelease" hint=" Vorabversion, auf echter Hardware noch nicht vollständig erprobt." ;;
+          esac
+          cat > build/notes.md <<EOF
+          Image für den Raspberry Pi 4 (Raspberry Pi OS Lite, Trixie, arm64).$hint
+
+          - Anleitung: [Inbetriebnahme]($docs/box-inbetriebnahme.md), [Hardware]($docs/hardware.md)
+          - Im Raspberry Pi Imager „Eigenes Image verwenden“ und die \`.img.xz\` wählen. Prüfsumme: \`.sha256\`.
+
+          Ansagen und Lizenz der Stimme (im Image unter \`/opt/myboxi-agent/prompts/NOTICE.txt\`):
+
+          $(sed 's/^/> /' build/prompts/NOTICE.txt)
+
+          Quellcode: dieses Repository. Die Pakete von Raspberry Pi OS und Debian mit ihren Quellen: archive.raspberrypi.com, deb.debian.org.
+          EOF
+          gh release create "$GITHUB_REF_NAME" build/myboxi-*.img.xz build/myboxi-*.img.xz.sha256 \
+            --title "Myboxi ${GITHUB_REF_NAME#box-v}" --notes-file build/notes.md $pre

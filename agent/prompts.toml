@@ -1,0 +1,79 @@
+# Prompts of the box (SPEC §1.7: every situation is audible).
+# Built into Opus files by tools/prompts/build_prompts.py (speech: Kokoro at image build time).
+# Own recordings override them: /var/lib/myboxi/prompts/<id>.opus (SPEC v0.5 §4).
+#
+# tone:   list of [frequency_hz, milliseconds]; 0 Hz is a pause
+# text:   German speech
+# before: a tone played right before the speech
+
+[tone_start]
+tone = [[660, 110], [880, 170]]
+
+[tone_attention]
+tone = [[988, 140], [0, 60], [988, 140]]
+
+[tone_error]
+tone = [[440, 160], [330, 260]]
+
+[tone_loading]
+tone = [[523, 90], [659, 90], [784, 90]]
+
+[hello]
+text = "Hallo! Deine Myboxi ist bereit."
+
+[unknown_token]
+before = "tone_attention"
+text = "Diese Figur kenne ich noch nicht."
+
+[loading]
+before = "tone_loading"
+text = "Das wird gerade noch geladen. Probier es gleich noch einmal."
+
+[unavailable]
+text = "Das geht gerade leider nicht."
+
+[quiet_time]
+text = "Jetzt ist Ruhezeit. Gute Nacht!"
+
+[pairing_intro]
+text = "Dein Code ist:"
+
+[pairing_done]
+text = "Geschafft! Die Box ist jetzt verbunden."
+
+[repair]
+text = "Die Box wird neu verbunden."
+
+[setup_start]
+before = "tone_attention"
+text = "Einrichtung. Verbinde dein Handy mit dem WLAN Myboxi, Nummer:"
+
+[setup_connected]
+text = "Die Box ist mit dem WLAN verbunden."
+
+[setup_failed]
+text = "Das hat leider nicht geklappt. Bitte prüfe den WLAN-Namen und das Passwort."
+
+[setup_end]
+text = "Einrichtung beendet."
+
+[digit_0]
+text = "null"
+[digit_1]
+text = "eins"
+[digit_2]
+text = "zwei"
+[digit_3]
+text = "drei"
+[digit_4]
+text = "vier"
+[digit_5]
+text = "fünf"
+[digit_6]
+text = "sechs"
+[digit_7]
+text = "sieben"
+[digit_8]
+text = "acht"
+[digit_9]
+text = "neun"

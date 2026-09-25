@@ -16,6 +16,7 @@ from myboxi_server.api.web.deps import (
     TokenWriteCtx,
     csrf_protect,
 )
+from myboxi_server.api.web.redirects import tenant_path
 from myboxi_server.api.web.render import render
 from myboxi_server.auth.sessions import SessionInfo
 from myboxi_server.domain import bindings, contents, tokens
@@ -101,15 +102,17 @@ async def adopt_unknown(
     ctx: TokenWriteCtx,
     uid: Annotated[str, Form(max_length=64)],
     label: Annotated[str, Form(max_length=200)] = "Neue Figur",
+    next: Annotated[str | None, Form()] = None,
 ) -> Response:
     """One click: an unknown UID reported by a box becomes a figure (SPEC §2)."""
     try:
-        token = await tokens.create_token(db, ctx, uid=uid, label=label or "Neue Figur")
+        token = await tokens.create_token(db, ctx, uid=uid, label=label.strip() or "Neue Figur")
     except DomainError as exc:
         await db.rollback()
         return await _list_page(request, db, session, ctx, error=exc.message, status_code=400)
     await db.commit()
-    return RedirectResponse(f"/t/{ctx.tenant_id}/figures/{token.id}", status_code=303)
+    target = tenant_path(ctx.tenant_id, next) or f"/t/{ctx.tenant_id}/figures/{token.id}"
+    return RedirectResponse(target, status_code=303)
 
 
 async def _figure_page(
@@ -189,11 +192,14 @@ async def set_binding(
     repeat: Annotated[RepeatMode, Form()] = RepeatMode.OFF,
     resume: Annotated[bool, Form()] = False,
     shuffle: Annotated[bool, Form()] = False,
+    next: Annotated[str | None, Form()] = None,
 ) -> Response:
     await bindings.set_binding(
         db, ctx, token_id, content_id=content_id, resume=resume, shuffle=shuffle, repeat=repeat
     )
     await db.commit()
+    if target := tenant_path(ctx.tenant_id, next):
+        return RedirectResponse(target, status_code=303)
     return await _figure_page(request, db, session, ctx, token_id, notice="Zuordnung gespeichert.")
 
 

@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Box einrichten · Myboxi{% endblock %}
+{% block content %}
+<h1>Box einrichten</h1>
+
+{% if unfinished %}
+<section class="card highlight">
+  <h2>Einrichtung fortsetzen</h2>
+  <ul class="list">
+    {% for p in unfinished %}
+    <li><a href="/t/{{ tid }}/boxes/{{ p.device.id }}/setup">{{ p.device.name or "Box" }}</a>
+      <span class="muted">{{ p.completed }} von {{ p.steps | length }} Schritten</span></li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+<p class="muted">Vier Schritte bis zur Kopplung. Danach zeigt dir diese Seite live, was die Box meldet, bis die erste Figur spielt.</p>
+
+<ol class="guide">
+  <li class="card">
+    <h2>1. Hardware bereitlegen</h2>
+    <p>Raspberry Pi 4, NFC-Leser PN532, Verstärker MAX98357A mit Lautsprecher, vier Taster, microSD-Karte (32 GB) und Netzteil (5,1 V / 3 A).</p>
+    <p><a href="{{ docs_url }}/hardware.md" rel="noopener">Einkaufsliste und Verdrahtung</a></p>
+  </li>
+  <li class="card">
+    <h2>2. Image auf die SD-Karte</h2>
+    <p>Lade das neueste Image herunter (<code>myboxi-….img.xz</code>). Im <a href="https://www.raspberrypi.com/software/" rel="noopener">Raspberry Pi Imager</a>: Gerät „Raspberry Pi 4“, „Eigenes Image verwenden“, die Datei und die SD-Karte wählen, schreiben.</p>
+    <p><a class="button" href="{{ image_url }}" rel="noopener">Image herunterladen</a></p>
+  </li>
+  <li class="card">
+    <h2>3. Einschalten und WLAN einrichten</h2>
+    <ol>
+      <li>SD-Karte einlegen, Netzteil anstecken. Der erste Start dauert etwa zwei Minuten.</li>
+      <li>Die Box sagt „Einrichtung …“. Verbinde dein Handy mit dem WLAN <strong>Myboxi-NNNN</strong>. Die Einrichtungsseite öffnet sich von selbst, sonst <code>http://10.42.0.1/</code> aufrufen.</li>
+      <li>Heim-WLAN wählen und das Passwort eingeben.
+        {% if custom_server %}Als Server <strong>{{ server_url }}</strong> eintragen.{% else %}Den Server nicht ändern.{% endif %}</li>
+    </ol>
+    <p class="muted">Kein WLAN „Myboxi-…“ zu sehen? „Lauter“ und „Leiser“ gleichzeitig 5 Sekunden halten, dann startet die Einrichtung neu.</p>
+  </li>
+  <li class="card" id="code">
+    <h2>4. Code eingeben</h2>
+    <p>Sobald die Box online ist, sagt sie einen sechsstelligen Code an. „Play/Pause“ wiederholt ihn.</p>
+    {% if ctx.can(Perm.DEVICE_CLAIM) %}
+    {% if claim_error %}<p class="msg error" role="alert">{{ claim_error }}</p>{% endif %}
+    <form method="post" action="/t/{{ tid }}/boxes/add" class="stack">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label>Kopplungscode
+        <input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9 ]{6,11}" maxlength="11" value="{{ form.code or '' }}" required>
+      </label>
+      <label>Name der Box <input name="name" maxlength="64" placeholder="Kinderzimmer" value="{{ form.name or '' }}" required></label>
+      <button type="submit">Box koppeln</button>
+    </form>
+    {% else %}
+    <p class="muted">Nur Owner und Admins des Haushalts können Boxen koppeln.</p>
+    {% endif %}
+  </li>
+</ol>
+{% endblock %}

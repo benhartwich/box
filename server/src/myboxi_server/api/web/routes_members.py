@@ -10,8 +10,9 @@ from fastapi.responses import RedirectResponse, Response
 
 from myboxi_server.api.web.deps import CurrentSession, DbSession, SettingsDep, csrf_protect, require
 from myboxi_server.api.web.render import render
+from myboxi_server.api.web.routes_setup import unfinished
 from myboxi_server.auth.mail import invitation_mail, log_mail
-from myboxi_server.domain import members
+from myboxi_server.domain import devices, members
 from myboxi_server.domain.authz import Perm, TenantContext
 from myboxi_server.domain.errors import DomainError, NotFoundError
 from myboxi_server.jobs.mail import send_invitation_mail
@@ -30,7 +31,17 @@ async def tenant_home(
     request: Request, db: DbSession, session: CurrentSession, ctx: ReadCtx
 ) -> Response:
     tenant = await db.get(Tenant, ctx.tenant_id)
-    return render(request, "home.html", {"tenant": tenant}, session=session, ctx=ctx)
+    return render(
+        request,
+        "home.html",
+        {
+            "tenant": tenant,
+            "has_boxes": bool(await devices.list_devices(db, ctx)),
+            "unfinished": await unfinished(db, ctx),
+        },
+        session=session,
+        ctx=ctx,
+    )
 
 
 async def _members_page(

@@ -374,8 +374,11 @@ async def test_add_box_by_code_and_configure(ui: Ui) -> None:
         "/boxes/add", code=f"{started.code[:3]} {started.code[3:]}", name="Kinderzimmer"
     )
     assert r.status_code == 303
-    device_id = uuid.UUID(r.headers["location"].rsplit("/", 1)[1])
+    device_id = uuid.UUID(r.headers["location"].split("/")[4])
+    assert r.headers["location"] == ui.url(f"/boxes/{device_id}/setup")  # into the wizard
     page = await ui.client.get(r.headers["location"])
+    assert "Einrichtung: Kinderzimmer" in page.text
+    page = await ui.client.get(ui.url(f"/boxes/{device_id}"))
     assert "Kinderzimmer" in page.text
     assert "noch keine Meldung" in page.text
 

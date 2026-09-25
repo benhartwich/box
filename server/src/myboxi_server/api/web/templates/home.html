@@ -2,6 +2,20 @@
 {% block title %}{{ tenant.name }} · Myboxi{% endblock %}
 {% block content %}
 <h1>{{ tenant.name }}</h1>
+{% if not has_boxes %}
+<section class="card highlight">
+  <h2>Erste Box einrichten</h2>
+  <p>Der Assistent führt dich vom Image auf der SD-Karte bis zur ersten Figur, die spielt.</p>
+  <a class="button" href="/t/{{ tid }}/setup">Los geht's</a>
+</section>
+{% endif %}
+{% for p in unfinished %}
+<section class="card highlight">
+  <h2>Einrichtung fortsetzen: {{ p.device.name or "Box" }}</h2>
+  <p class="muted">{{ p.completed }} von {{ p.steps | length }} Schritten erledigt</p>
+  <a class="button" href="/t/{{ tid }}/boxes/{{ p.device.id }}/setup">Weiter</a>
+</section>
+{% endfor %}
 <ul class="tiles">
   <li><a href="/t/{{ tid }}/boxes">Boxen</a></li>
   <li><a href="/t/{{ tid }}/figures">Figuren</a></li>

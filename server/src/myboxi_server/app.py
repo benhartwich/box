@@ -24,6 +24,7 @@ from myboxi_server.api.web import (
     routes_contents,
     routes_figures,
     routes_members,
+    routes_setup,
 )
 from myboxi_server.api.web.deps import LoginRequiredError
 from myboxi_server.api.web.render import render
@@ -185,6 +186,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(routes_auth.router)
     app.include_router(routes_members.router)
     app.include_router(routes_boxes.router)
+    app.include_router(routes_setup.router)
     app.include_router(routes_figures.router)
     app.include_router(routes_contents.router)
     app.include_router(device_router.router)

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from typing import Annotated
-from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse, Response
@@ -16,6 +15,7 @@ from myboxi_server.api.web.deps import (
     client_ip,
     csrf_protect,
 )
+from myboxi_server.api.web.redirects import local_path
 from myboxi_server.api.web.render import render
 from myboxi_server.auth import ratelimit
 from myboxi_server.auth.sessions import ABSOLUTE_LIFETIME, create_session, delete_session
@@ -28,10 +28,7 @@ router = APIRouter(dependencies=[Depends(csrf_protect)])
 
 def _safe_next(target: str | None) -> str:
     """Only allow local redirects."""
-    if not target or not target.startswith("/") or target.startswith("//"):
-        return "/"
-    parts = urlsplit(target)
-    return "/" if parts.scheme or parts.netloc else target
+    return local_path(target) or "/"
 
 
 def _set_session_cookie(response: Response, settings: Settings, token: str) -> None:

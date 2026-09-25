@@ -33,6 +33,18 @@
   </dl>
 </section>
 
+<section class="card">
+  <h2>Selbsttest</h2>
+  {% if reported and reported.health %}
+  <ul class="hints">{% for h in reported.health %}<li class="hint-{{ h.level }}">{{ h.text }}</li>{% endfor %}</ul>
+  {% elif reported %}
+  <p class="muted">Diese Box meldet noch keinen Selbsttest (Image ab Version 0.2).</p>
+  {% else %}
+  <p class="muted">Noch keine Meldung der Box.</p>
+  {% endif %}
+  <p><a href="/t/{{ tid }}/boxes/{{ device.id }}/setup">Einrichtungs-Assistent</a></p>
+</section>
+
 {% if ctx.can(Perm.DEVICE_RENAME) %}
 <section class="card">
   <h2>Name</h2>

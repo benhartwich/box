@@ -9,6 +9,14 @@
   {% endfor %}
 </ul>
 {% else %}
-<p>Du gehörst noch zu keinem Haushalt. Bitte lass dich einladen.</p>
+<p>Du gehörst noch zu keinem Haushalt. Leg einen an oder lass dich von jemandem einladen.</p>
 {% endif %}
+
+<h2>Neuen Haushalt anlegen</h2>
+<p class="muted">Du wirst Besitzer des Haushalts. Danach führt dich der Assistent durch die Einrichtung der ersten Box.</p>
+<form method="post" action="/households" class="stack">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <label>Name <input name="name" maxlength="100" placeholder="Familie Muster" value="{{ name or '' }}" required></label>
+  <button type="submit">Haushalt anlegen</button>
+</form>
 {% endblock %}

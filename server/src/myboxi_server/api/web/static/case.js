@@ -117,10 +117,17 @@ function setupRenderer() {
   renderer.setAnimationLoop(frame);
 }
 
+const MAX_WIDTH = 1600;
+let sizedWidth = 0;
+
+// The canvas size follows the stage width only (4:3), never its height: a size that fed back
+// into the layout could grow without end (it did with a stale stylesheet).
 function resize() {
-  const { clientWidth: w, clientHeight: h } = stage;
-  if (!w || !h) return;
-  renderer.setSize(w, h, false);
+  const w = Math.min(stage.clientWidth, MAX_WIDTH);
+  if (!w || w === sizedWidth) return;
+  sizedWidth = w;
+  const h = Math.round((w * 3) / 4);
+  renderer.setSize(w, h);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
 }

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
+from functools import cache
 from pathlib import Path
 from typing import Any, cast
 from zoneinfo import ZoneInfo
@@ -22,6 +24,20 @@ _globals["ROLE_LABELS"] = {
     Role.CONTRIBUTOR: "Mitwirkend",
     Role.VIEWER: "Nur lesen",
 }
+
+
+@cache
+def _static_digest(path: str) -> str:
+    return hashlib.sha256((STATIC_DIR / path).read_bytes()).hexdigest()[:10]
+
+
+def asset(path: str) -> str:
+    """URL of a static file with its content hash: browsers never keep an old copy after an
+    update (without it they may reuse a cached stylesheet for hours)."""
+    return f"/static/{path}?v={_static_digest(path)}"
+
+
+_globals["asset"] = asset
 
 # Times in the UI are shown in the household's usual zone (SPEC default timezone).
 UI_ZONE = ZoneInfo("Europe/Vienna")

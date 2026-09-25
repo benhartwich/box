@@ -8,7 +8,7 @@ Requires=NetworkManager.service
 [Service]
 Type=simple
 EnvironmentFile=/etc/myboxi-agent/myboxi-agent.env
-ExecStart=/opt/myboxi-agent/.venv/bin/myboxi-agent setupd
+ExecStart=/opt/myboxi-agent/current/.venv/bin/myboxi-agent setupd
 TimeoutStopSec=20
 NoNewPrivileges=yes
 ProtectHome=yes

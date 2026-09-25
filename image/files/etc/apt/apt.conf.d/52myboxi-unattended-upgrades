@@ -1,0 +1,14 @@
+// Myboxi (SPEC v0.7 §11.1): only security and stable updates; the Myboxi updater reboots
+// when the box has been quiet for 10 minutes, never unattended-upgrades itself.
+Unattended-Upgrade::Origins-Pattern {
+        "origin=Debian,codename=${distro_codename},label=Debian";
+        "origin=Debian,codename=${distro_codename}-security,label=Debian-Security";
+        "origin=Debian,codename=${distro_codename}-updates";
+        "origin=Raspberry Pi Foundation,codename=${distro_codename},label=Raspberry Pi Foundation";
+};
+Unattended-Upgrade::Automatic-Reboot "false";
+Unattended-Upgrade::Remove-Unused-Dependencies "true";
+Dpkg::Options {
+        "--force-confdef";
+        "--force-confold";
+};

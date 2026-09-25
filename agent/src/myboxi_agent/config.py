@@ -35,7 +35,7 @@ class Settings(BaseSettings):
 
     mpv_path: str = "mpv"
     audio_output: str = "pipewire"
-    prompts_dir: Path = Path("/opt/myboxi-agent/prompts")
+    prompts_dir: Path = Path("/opt/myboxi-agent/current/prompts")
 
     sync_interval_s: int = Field(default=15 * 60, ge=60)
 

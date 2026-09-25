@@ -59,7 +59,7 @@ Mit SSH-Zugang (siehe `docs/box-inbetriebnahme.md`):
 
 ```text
 sudo i2cdetect -y 1                       # PN532 erscheint als 24
-sudo -u myboxi XDG_RUNTIME_DIR=/run/user/$(id -u myboxi) /opt/myboxi-agent/.venv/bin/myboxi-agent doctor
+sudo -u myboxi XDG_RUNTIME_DIR=/run/user/$(id -u myboxi) /opt/myboxi-agent/current/.venv/bin/myboxi-agent doctor
 ```
 
 `doctor` prüft NFC-Leser, Audio, Netzwerk, Agent und Server und nennt, was fehlt.

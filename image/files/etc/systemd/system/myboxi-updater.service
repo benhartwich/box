@@ -1,0 +1,15 @@
+# Software updates (SPEC v0.7 §11.1): one run per start; the timer starts it hourly and the
+# agent (polkit rule 50-myboxi-setupd.rules) whenever the box is online again.
+[Unit]
+Description=Myboxi software update
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/myboxi-agent/myboxi-agent.env
+ExecStart=/opt/myboxi-agent/current/.venv/bin/myboxi-agent update
+# Waits for a quiet box (up to 2 h) and, for system updates, 10 quiet minutes before a reboot.
+TimeoutStartSec=5h
+Nice=10
+IOSchedulingClass=idle

@@ -369,3 +369,28 @@ def test_agent_reports_the_update_state(tmp_path: Path) -> None:
     update = app.reported_data().update
     assert update is not None
     assert (update.state, update.code) == ("rolled_back", "unhealthy")
+
+
+def test_release_manifest_tool_matches_the_protocol(tmp_path: Path) -> None:
+    import importlib.util
+
+    from myboxi_protocol.updates import UpdateManifest
+
+    script = Path(__file__).resolve().parents[2] / "tools" / "release" / "make_manifest.py"
+    spec = importlib.util.spec_from_file_location("make_manifest", script)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    bundle = tmp_path / "b.tar.xz"
+    bundle.write_bytes(bundle_bytes("0.3.0"))
+    url = "https://github.com/benhartwich/myboxi/releases/download/box-v0.3.0/b.tar.xz"
+    out = tmp_path / "manifest.json"
+    assert module.main(["--version", "0.3.0", "--bundle", str(bundle), "--url", url,
+                        "--out", str(out)]) == 0  # fmt: skip
+    parsed = UpdateManifest.model_validate_json(out.read_bytes())
+    assert parsed.bundle.sha256 == hashlib.sha256(bundle.read_bytes()).hexdigest()
+    assert parsed.bundle.size == bundle.stat().st_size
+    with pytest.raises(SystemExit):
+        module.main(["--version", "v0.3", "--bundle", str(bundle), "--url", url,
+                     "--out", str(out)])  # fmt: skip

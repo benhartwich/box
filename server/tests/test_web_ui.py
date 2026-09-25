@@ -366,7 +366,7 @@ async def test_upload_through_ui_and_worker(ui: Ui, settings: Settings, media: P
 
 
 async def test_create_collection_with_files_in_one_step(ui: Ui, media: Path) -> None:
-    """"Dateien hochladen": title and first files in one form, no hidden second step."""
+    """ "Dateien hochladen": title and first files in one form, no hidden second step."""
     page = await ui.client.get(ui.url("/contents"))
     assert "Dateien hochladen" in page.text
     assert "Sammlung" not in page.text

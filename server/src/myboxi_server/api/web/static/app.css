@@ -54,8 +54,8 @@ code { font-family: ui-monospace, "SFMono-Regular", monospace; font-size: .92em;
 .pill { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 14px; border-radius: 999px;
         border: 1px solid #d8cfbd; background: var(--paper); color: var(--ink); font-weight: 600; font-size: 14px;
         text-decoration: none; }
-/* Narrow phones (or large text): sign out lives on the households page. */
-@media (max-width: 30rem) { .appbar .logout { display: none; } }
+/* Narrow phones (or large text): inside a household, sign out lives on the households page. */
+@media (max-width: 30rem) { .appbar .logout.in-tenant { display: none; } }
 .tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; display: grid; grid-template-columns: repeat(4, 1fr);
           padding: 6px 8px calc(10px + env(safe-area-inset-bottom)); background: var(--paper); border-top: 1px solid var(--line); }
 .tabbar a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 56px;
@@ -104,6 +104,8 @@ a.card:hover { border-color: var(--line-strong); color: inherit; }
              border-bottom: 1px solid var(--sand); align-items: center; }
 .list > li:last-child { border-bottom: 0; }
 .card > .list > li:first-child { padding-top: 0; }
+/* A list that is itself the card: the list reset would drop the card padding. */
+.list.card { display: block; padding: 4px 18px; }
 .facts { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; }
 .facts dt { color: var(--ink-2); }
 .facts dd { margin: 0; }
@@ -251,3 +253,16 @@ input.copy { font-family: ui-monospace, monospace; font-size: .85em; }
 .bear { display: block; }
 .app-foot { margin-top: 12px; text-align: center; font-size: 14px; color: var(--ink-2); }
 .app-foot a { color: var(--ink-2); }
+
+/* --- new content: kind choices ----------------------------------------------------------------- */
+ul.kinds { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+@media (min-width: 40rem) { ul.kinds { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.kind { display: flex; gap: 14px; align-items: flex-start; flex-wrap: wrap; height: 100%; padding: 16px; border-radius: var(--radius);
+        background: var(--paper); border: 1px solid var(--line); text-decoration: none; color: var(--ink); }
+.kind:hover { border-color: var(--line-strong); color: var(--ink); }
+.kind.primary { border: 2px solid var(--moss); }
+.kind .stack-0 { flex: 1; min-width: 10rem; gap: 2px; }
+.kind .badge { margin-left: 62px; }
+.kind-icon { width: 48px; height: 48px; border-radius: var(--radius-s); background: var(--moss-soft); color: var(--moss);
+             display: grid; place-items: center; flex: none; }
+.kind.primary .kind-icon { background: var(--moss); color: var(--paper); }

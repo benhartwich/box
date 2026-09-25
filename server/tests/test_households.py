@@ -42,7 +42,11 @@ async def test_create_household_and_become_owner(app: FastAPI, client: httpx.Asy
             )
         )
     assert role == Role.OWNER
-    assert "Oma und Opa" in (await client.get("/households")).text
+    page = await client.get("/households")
+    assert "Oma und Opa" in page.text
+    assert "Besitzer" in page.text
+    assert page.text.count("Abmelden") == 1  # in the app bar only
+    assert 'href="/households"' not in page.text  # no switcher on the switcher page
 
 
 async def test_household_needs_login_csrf_and_a_name(

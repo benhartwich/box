@@ -17,7 +17,7 @@ templates = Jinja2Templates(directory=TEMPLATE_DIR)
 _globals = cast(dict[str, Any], templates.env.globals)
 _globals["Perm"] = Perm
 _globals["ROLE_LABELS"] = {
-    Role.OWNER: "Owner",
+    Role.OWNER: "Besitzer",
     Role.ADMIN: "Admin",
     Role.CONTRIBUTOR: "Mitwirkend",
     Role.VIEWER: "Nur lesen",

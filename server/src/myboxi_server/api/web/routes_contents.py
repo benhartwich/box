@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -36,16 +37,56 @@ from myboxi_server.storage.filesystem import FilesystemAssetStore
 router = APIRouter(prefix="/t/{tid}", dependencies=[Depends(csrf_protect)])
 
 KIND_LABELS = {
-    ContentKind.COLLECTION: "Sammlung",
+    ContentKind.COLLECTION: "Eigene Dateien",
     ContentKind.PODCAST: "Podcast",
     ContentKind.SPOTIFY: "Spotify",
-    ContentKind.STREAM: "Stream",
+    ContentKind.STREAM: "Radio",
 }
+KIND_HEADINGS = {
+    ContentKind.COLLECTION: "Dateien hochladen",
+    ContentKind.PODCAST: "Podcast hinzufügen",
+    ContentKind.SPOTIFY: "Spotify hinzufügen",
+    ContentKind.STREAM: "Radiosender hinzufügen",
+}
+
+
+@dataclass(frozen=True)
+class KindChoice:
+    kind: ContentKind
+    icon: str
+    title: str
+    text: str
+    ready: bool  # the box can play it (SPEC §8)
+
+
+KIND_CHOICES = (
+    KindChoice(
+        ContentKind.COLLECTION, "upload", "Dateien hochladen",
+        "Hörspiele, Musik oder eigene Aufnahmen als MP3, M4A oder WAV. Spielt auch ohne Internet.",
+        ready=True,
+    ),
+    KindChoice(
+        ContentKind.PODCAST, "rss", "Podcast",
+        "Neue Folgen kommen von selbst auf die Box.", ready=False,
+    ),
+    KindChoice(
+        ContentKind.SPOTIFY, "disc", "Spotify",
+        "Album, Playlist oder Hörbuch. Braucht Spotify Premium und Internet.", ready=False,
+    ),
+    KindChoice(
+        ContentKind.STREAM, "radio", "Radio",
+        "Internetradio über eine Stream-Adresse.", ready=False,
+    ),
+)  # fmt: skip
+PROFILES = (
+    (UploadProfile.MUSIC, "Musik (Stereo)"),
+    (UploadProfile.SPEECH, "Sprache/Hörspiel (Mono)"),
+)
 STATUS_LABELS = {
     UploadStatus.PENDING: "wartet",
     UploadStatus.PROCESSING: "wird umgewandelt",
     UploadStatus.DONE: "fertig",
-    UploadStatus.DUPLICATE: "bereits in der Sammlung",
+    UploadStatus.DUPLICATE: "bereits vorhanden",
     UploadStatus.FAILED: "fehlgeschlagen",
 }
 MAX_COVER_BYTES = 10 * 1024 * 1024
@@ -58,7 +99,11 @@ async def content_list(
     return render(
         request,
         "contents.html",
-        {"contents": await contents.list_contents(db, ctx), "kind_labels": KIND_LABELS},
+        {
+            "contents": await contents.list_contents(db, ctx),
+            "kind_labels": KIND_LABELS,
+            "kind_choices": KIND_CHOICES,
+        },
         session=session,
         ctx=ctx,
     )
@@ -74,7 +119,7 @@ async def new_content_form(
     return render(
         request,
         "content_new.html",
-        {"kind": kind, "kind_labels": KIND_LABELS, "form": {}},
+        {"kind": kind, "kind_headings": KIND_HEADINGS, "profiles": PROFILES, "form": {}},
         session=session,
         ctx=ctx,
     )
@@ -109,9 +154,13 @@ async def create_content(
     db: DbSession,
     session: CurrentSession,
     ctx: ContentWriteCtx,
+    settings: SettingsDep,
     kind: Annotated[ContentKind, Form()],
     title: Annotated[str, Form(max_length=300)],
+    files: Annotated[list[UploadFile] | None, File()] = None,
+    profile: Annotated[UploadProfile, Form()] = UploadProfile.MUSIC,
 ) -> Response:
+    """Create a content; a collection comes with its first files in the same form."""
     fields = await _form_fields(request)
     try:
         content = await contents.create_content(
@@ -122,12 +171,20 @@ async def create_content(
         return render(
             request,
             "content_new.html",
-            {"kind": kind, "kind_labels": KIND_LABELS, "form": fields, "error": exc.message},
+            {
+                "kind": kind,
+                "kind_headings": KIND_HEADINGS,
+                "profiles": PROFILES,
+                "form": fields,
+                "error": exc.message,
+            },
             session=session,
             ctx=ctx,
             status_code=400,
         )
     await db.commit()
+    if kind == ContentKind.COLLECTION and files:
+        return await _accept_files(request, db, settings, session, ctx, content.id, files, profile)
     return RedirectResponse(f"/t/{ctx.tenant_id}/contents/{content.id}", status_code=303)
 
 
@@ -160,10 +217,7 @@ async def _content_page(
     data: dict[str, Any] = {
         "content": content,
         "kind_labels": KIND_LABELS,
-        "profiles": [
-            (UploadProfile.MUSIC, "Musik (Stereo)"),
-            (UploadProfile.SPEECH, "Sprache/Hörspiel (Mono)"),
-        ],
+        "profiles": PROFILES,
         "error": error,
         "notice": notice,
     }
@@ -318,8 +372,21 @@ async def upload_files(
     files: Annotated[list[UploadFile], File()],
     profile: Annotated[UploadProfile, Form()] = UploadProfile.MUSIC,
 ) -> Response:
-    """Stage every file, register it and defer transcoding (SPEC §3.8)."""
     await contents.get_content(db, ctx, content_id)
+    return await _accept_files(request, db, settings, session, ctx, content_id, files, profile)
+
+
+async def _accept_files(
+    request: Request,
+    db: DbSession,
+    settings: Settings,
+    session: SessionInfo,
+    ctx: TenantContext,
+    content_id: uuid.UUID,
+    files: list[UploadFile],
+    profile: UploadProfile,
+) -> Response:
+    """Stage every file, register it and defer transcoding (SPEC §3.8)."""
     limit = settings.max_upload_mb * 1024 * 1024
     errors: list[str] = []
     created: list[uuid.UUID] = []

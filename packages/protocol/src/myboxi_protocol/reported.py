@@ -32,9 +32,19 @@ class Playback(ProtocolModel):
     volume: Percent
 
 
+# SPEC v0.9 §6.4: no_key, installing, starting, ready, expired, failed. A machine code, not a
+# closed set, so a newer box does not break an older server.
+SOLOIST_STATES = ("no_key", "installing", "starting", "ready", "expired", "failed")
+
+
 class Soloist(ProtocolModel):
+    """Spotify on the box (SPEC §6.4, v0.9 §8.1)."""
+
     installed: bool
     build_expires_at: dt.date | None = None
+    state: HealthCode | None = None
+    logged_in: bool | None = None
+    device_name: Annotated[str, StringConstraints(max_length=64)] | None = None
 
 
 class HealthCheck(ProtocolModel):

@@ -58,6 +58,7 @@ class DeviceConfig(ProtocolModel):
         default_factory=lambda: ["local", "podcast"]  # pyright: ignore[reportUnknownLambdaType]
     )
     auto_update: bool = True  # SPEC v0.7 §3.4
+    spotify_allow_explicit: bool = False  # SPEC v0.9 §3.4, §8.1
 
 
 class TokenUpsert(ProtocolModel):

@@ -1,4 +1,4 @@
-# Myboxi — Spezifikation v0.8: Datenmodell & Geräteprotokoll
+# Myboxi — Spezifikation v0.9: Datenmodell & Geräteprotokoll
 
 Status: Entwurf · Stand: 2026-09-25 · Änderungen: §14
 Scope: Der Vertrag zwischen **Box-Agent** (Raspberry Pi) und **Server**.
@@ -89,6 +89,7 @@ Neue Mandanten: Jeder angemeldete Nutzer kann einen Mandanten („Haushalt“) a
 | timezone | text | `Europe/Vienna` | IANA-Zeitzone, in der `quiet_hours` gelten |
 | providers_enabled | text[] | `["local","podcast"]` | `spotify` nur wenn auf der Box eingerichtet |
 | auto_update | bool | `true` | Software-Updates selbst installieren (§11); `false`: nur herunterladen |
+| spotify_allow_explicit | bool | `false` | Spotify-Titel mit der Kennzeichnung `explicit` spielen (§8.1) |
 
 ### 3.5 `token` (Figur)
 | Feld | Typ | Notiz |
@@ -172,7 +173,7 @@ Tabellen spiegeln den für die Box relevanten Ausschnitt: `token`, `content`, `c
 | `sync_state` | applied_config_rev, applied_device_rev, server_url |
 | `staged_change` | Empfangene, noch nicht aktivierte Änderungen (wartet auf Assets) |
 | `outbox` | Ausstehende Events, bis vom Server bestätigt |
-| `secret` | device_secret; Soloist-API-Key (**nie** synchronisiert, nie geloggt) |
+| `secret` | `device_secret`; `soloist_api_key` (**nie** synchronisiert, nie geloggt) |
 | `podcast_feed` | Je Podcast-Inhalt: Feed-URL, ETag, Last-Modified, letzte Abfrage, Fehlercode (§8.2) |
 | `podcast_episode` | Abspielbare Folgen eines Podcasts (§8.2): `episode_key`, Titel, Enclosure-URL, Datum, Rang (0 = neueste), `selected` (gehört zu den neuesten `keep_latest`), sha256, `gain_db` |
 
@@ -324,7 +325,7 @@ Bei Änderung, höchstens alle 30 s (in der Einrichtungsphase alle 5 s, §9.6), 
     "wifi_rssi": -61,
     "time_trusted": true,
     "playback": { "status": "playing", "token_id": "...", "volume": 35 },
-    "soloist": { "installed": true, "build_expires_at": "2026-12-01" },
+    "soloist": { "installed": true, "build_expires_at": "2026-12-01", "state": "ready", "logged_in": true, "device_name": "Myboxi 4711" },
     "health": [
       { "check": "nfc", "level": "ok", "code": "ok" },
       { "check": "audio", "level": "fail", "code": "no_output" }
@@ -347,6 +348,10 @@ Optionale Felder (fehlen sie, weiß der Server es nicht):
   | `buttons` | `gpio_error` (Taster lassen sich nicht einrichten) |
   | `prompts` | `missing` (Ansagen fehlen) |
 - `button_test`: nur in der Einrichtungsphase (§9.6); die Namen der Tasten (§9.4), die seit Beginn der Phase gedrückt wurden.
+- `soloist`: nur wenn `spotify` in `providers_enabled` steht oder Soloist installiert ist (§8.1).
+  - `state`: `no_key` (kein API-Key auf der Box), `installing`, `starting`, `ready` (WebSocket verbunden), `expired` (Build abgelaufen, noch kein neuer), `failed` (Download oder Start fehlgeschlagen).
+  - `logged_in`: ein Spotify-Konto ist verbunden.
+  - `device_name`: Name der Box in der Spotify-App.
 - `update`: Stand der Software-Updates (§11). `state` ist einer von `up_to_date`, `available` (neue Version bekannt, `auto_update` aus), `downloading`, `waiting` (geladen, wartet auf Ruhe), `installed` (seit dem letzten Update läuft die neue Version), `failed`, `rolled_back` (neue Version war nicht gesund, die alte läuft). `version`: die betroffene Version. `code` (nur bei `failed`/`rolled_back`) ist ein Maschinencode wie `bad_signature`, `checksum`, `no_space`, `download`, `unhealthy`.
 
 ### 6.5 `events` — Box → Server, QoS 1
@@ -374,6 +379,12 @@ Der Envelope-`type` ist der Event-Typ aus der Tabelle. `resume_position` aktuali
 | alle | `decode_error`, `player_restart` | Datei nicht abspielbar bzw. Player abgestürzt |
 | `podcast` | `feed_error` | Feed nicht abrufbar oder nicht lesbar, keine Folge auf der Box (§8.2) |
 | `podcast` | `no_episodes` | Feed gelesen, aber keine passende Folge (§8.2) |
+| `spotify` | `not_configured` | Kein Soloist-API-Key auf der Box (§8.1) |
+| `spotify` | `not_running` | Soloist wird noch geladen oder startet gerade |
+| `spotify` | `expired` | Soloist-Build abgelaufen, noch kein neuer installiert |
+| `spotify` | `not_logged_in` | Noch kein Spotify-Konto verbunden |
+| `spotify` | `explicit` | Nur Titel mit `explicit`, die die Box nicht spielen darf |
+| `spotify` | `soloist_error` | Soloist meldet einen Fehler, z. B. ohne Internet |
 
 ### 6.6 `online` — Last Will, retained
 Box setzt beim Verbinden `"1"`, Broker setzt bei Verbindungsabbruch `"0"`.
@@ -467,10 +478,37 @@ resolve(content) -> PlaybackPlan | Unavailable(reason)
 | `stream` | nein | Direkt-URL |
 
 ### 8.1 Spotify-Provider
-- Soloist wird **nicht** im Image ausgeliefert. Der Agent lädt es von der offiziellen Spotify-Downloadquelle nach, wenn der Nutzer Spotify auf der Box aktiviert.
-- Der Soloist-API-Key wird ausschließlich über die lokale Setup-Seite der Box eingegeben (§9) und liegt nur in `secret`.
-- Update-Job (systemd-Timer, täglich): neuen Build prüfen und installieren, sobald weniger als 30 Tage Restlaufzeit.
-- **Wächter gegen Katalog-Drift:** Meldet Soloist ein `context_changed` auf einen Kontext, der nicht der gebundenen URI entspricht (z. B. durch Autoplay), pausiert der Agent sofort.
+**Voraussetzungen**
+- Spotify Premium und ein eigener Soloist-API-Key je Haushalt (Spotify for Developers). Die Spotify-Bedingungen erlauben nur private, nicht-kommerzielle Nutzung.
+- `spotify` in `providers_enabled` und der Key auf der Box. Er wird nur auf der Setup-Seite der Box eingegeben (§9.3) und liegt nur in `secret`.
+
+**Installation und Updates**
+- Soloist wird **nicht** mitgeliefert. Die Box lädt es selbst von `https://soloist-builds.spotifycdn.com/soloist_release_<arm64|arm32|x86_64>.tar.gz`, nur über HTTPS; Prüfsummen veröffentlicht Spotify nicht.
+- Vor der Installation prüft die Box: ausführbare ELF-Datei der eigenen Architektur, `soloist --version` endet mit 0. Ablage unter `/var/lib/myboxi/soloist/releases/<Build>/`, umgeschaltet über einen Symlink; die vorige Version bleibt.
+- Builds laufen 90 Tage nach ihrem Build-Datum ab. `build_expires_at` = `Last-Modified` des Archivs + 90 Tage; das Build-Datum liegt nie danach.
+- Update-Job täglich: einen neuen Build installieren, sobald die laufende Version weniger als 30 Tage Restlaufzeit hat; sofort, wenn noch keiner installiert ist oder Soloist mit Code 10 (abgelaufen) endet. Neu gestartet wird Soloist erst, wenn Spotify nicht spielt.
+
+**Betrieb**
+- Soloist läuft dauerhaft als Dienst des Benutzers `myboxi` mit `--device-name "Myboxi NNNN"` (Ziffern wie §9.3) und `--ws 127.0.0.1:<Port>`. Daten und Cache liegen unter `/var/lib/myboxi/soloist/`.
+- Anmeldung einmalig über Spotify Connect: in der Spotify-App im selben WLAN die Box auswählen. Danach startet die Box gebundene URIs ohne Handy.
+- Dafür bietet Soloist Spotify Connect im Heimnetz an. Das ist die einzige Ausnahme von §9.3 (§10).
+
+**Wiedergabe einer Figur**
+- `play` mit der gebundenen URI. `shuffle` und `repeat` der Zuordnung gehen über `set_shuffle`, `set_repeat_context` und `set_repeat_track`. `next` sendet `skip_next`.
+- Resume: `item_index` ist die Titelnummer im Kontext, `item_key` die Titel-URI.
+  - Ablauf: stumm `play` → `pause` → `item_index` × `skip_next` (höchstens 50, je Schritt höchstens 3 s) → Titel-URI vergleichen → `seek` → Lautstärke zurück → `play`.
+  - Passt die URI nicht oder klappt ein Schritt nicht, beginnt der Kontext von vorn. Mit `shuffle` gibt es kein Resume.
+- **Wächter gegen Katalog-Drift:**
+  - Spielt Soloist einen Titel aus der Quelle `autoplay`, pausiert der Agent sofort; der Inhalt ist zu Ende (§9.1).
+  - Wechselt der Kontext, nachdem der letzte Titel des Kontexts lief, gilt dasselbe.
+  - Wechselt der Kontext vorher, hat jemand in der Spotify-App etwas anderes gewählt. Die Figur-Wiedergabe endet (Position gesichert), weiter wie bei einer Connect-Sitzung.
+- **Explicit:** Ohne `spotify_allow_explicit` überspringt der Agent Titel mit der Kennzeichnung `explicit`. Nach 10 übersprungenen Titeln in Folge endet die Wiedergabe mit `playback_error` `explicit`.
+
+**Connect-Sitzungen aus der Spotify-App**
+- Startet jemand in der Spotify-App eine Wiedergabe auf der Box, gelten dieselben Regeln wie für Figuren: Lautstärke-Policy (§9.2), Ruhezeiten, Sleep-Timer, Wächter, Explicit-Filter.
+- Die jüngste Aktion gewinnt: Eine Connect-Sitzung pausiert eine laufende Figur (Position gesichert); eine aufgelegte Figur ersetzt die Connect-Sitzung.
+
+**Nicht verfügbar:** Ansage und Fehlerton, `playback_error` mit `disabled`, `not_configured`, `not_running`, `expired` oder `not_logged_in` (§6.5).
 
 ### 8.2 Podcast-Provider
 **Aktualisierung**
@@ -535,7 +573,10 @@ Nur im Setup-Modus erreichbar (Tastenkombination 5 s halten oder beim Erststart 
 Details:
 - Der Setup-Modus startet automatisch, wenn kein WLAN konfiguriert ist oder das konfigurierte WLAN 2 min lang nicht erreichbar ist und keine Ethernet-Verbindung besteht; außerdem mit `volume_up` + `volume_down` 5 s gehalten (§9.4).
 - Offenes WLAN `Myboxi-NNNN` (vier Ziffern aus der Seriennummer, damit die Box den Namen mit ihren Ziffern-Ansagen vorlesen kann), Seite unter `http://10.42.0.1/`; alle DNS-Anfragen zeigen dorthin (Captive Portal).
-- Felder: WLAN (Liste oder manuell) und Server-URL (Vorgabe `https://app.myboxi.eu`). Das Feld für den Spotify-Key kommt mit M4.
+- Felder: WLAN (Liste oder manuell), Server-URL (Vorgabe `https://app.myboxi.eu`) und optional der Soloist-API-Key (§8.1).
+  - Der Key ist ein Passwortfeld. Die Seite zeigt ihn nie an, nur „gespeichert“.
+  - Leer lassen: der gespeicherte Key bleibt. Das Häkchen „Key löschen“ entfernt ihn.
+- **Ausnahme (v0.9):** Mit aktiviertem Spotify bietet Soloist (nicht der Agent) Spotify Connect im Heimnetz an: mDNS auf UDP 5353 und einen Zeroconf-Port. Alle anderen Dienste bleiben auf `127.0.0.1`, auch die Soloist-WebSocket-API.
 - Die Box sagt Beginn und Ende des Setup-Modus an und ob die Verbindung geklappt hat.
 
 ### 9.4 Tasten
@@ -566,6 +607,8 @@ Die ersten 60 min nach einer erfolgreichen Kopplung, gemessen ab `paired_at` (Wa
 - TLS für HTTPS und MQTT, keine Ausnahmen.
 - Device-Secrets serverseitig nur als Argon2id-Hash.
 - Soloist-WebSocket ausschließlich auf `127.0.0.1` gebunden.
+- Spotify Connect (Ausnahme nach §9.3): Die Firewall der Box (nftables) nimmt eingehende Verbindungen nur aus privaten, Link-Local- und ULA-Netzen an.
+- Soloist nimmt den API-Key nur als Kommandozeilenargument an. Er ist damit für lokale Prozesse der Box lesbar, nie für das Netz; die Box hat keine weiteren Benutzerkonten mit Login.
 - Soloist-Key und Device-Secret nie in Logs, Crash-Reports oder Sync-Payloads.
 - v1 ohne Mikrofon. Kommt Sprache in v2, bleibt die Verarbeitung vollständig lokal; kein Audio zum Server.
 - Events: nur die Liste in §6.5, 30 Tage Aufbewahrung.
@@ -616,8 +659,9 @@ Der Agent wird in M0 gegen einen **Mock-Server** entwickelt, der die Endpunkte a
 ## 13. Offene Punkte
 
 - [ ] Läuft Pi Zero 2 W (512 MB) stabil mit PipeWire + Soloist + Agent? Vor Festlegung der Referenzhardware messen.
-- [ ] Lassen sich Autoplay/Smart Shuffle in Soloist per CLI oder WebSocket abschalten, oder reicht nur der Wächter aus §8.1?
-- [ ] Resume bei Spotify-Inhalten: `play` mit URI, danach `seek` — zuverlässig?
+- [x] Lassen sich Autoplay/Smart Shuffle in Soloist abschalten? Nein, weder per CLI noch per WebSocket. Es bleibt der Wächter aus §8.1.
+- [ ] Resume bei Spotify-Inhalten: `play` hat keinen Startpunkt; Verfahren mit `skip_next` und `seek` nach §8.1. Auf echter Hardware noch zu prüfen.
+- [ ] Hörbücher: Soloist dokumentiert keine Hörbuch-URIs.
 - [ ] TTS offline für Ansagen: Piper mit deutscher Stimme, Speicherbedarf auf Zero 2 W prüfen.
 - [x] Tech-Stack festgelegt (siehe `CLAUDE.md`).
 - [x] Lizenz: Server AGPL-3.0-or-later, Agent GPL-3.0-or-later, `packages/protocol` Apache-2.0, Spezifikation und Doku CC BY 4.0 (siehe `REUSE.toml`).
@@ -626,6 +670,14 @@ Der Agent wird in M0 gegen einen **Mock-Server** entwickelt, der die Endpunkte a
 ---
 
 ## 14. Änderungen
+
+**v0.9 (2026-09-25)** — Spotify-Provider (M4); Protokollversion bleibt `v1`, alle Änderungen additiv.
+- §3.4: `spotify_allow_explicit`.
+- §6.4: `soloist.state`, `soloist.logged_in`, `soloist.device_name`.
+- §6.5: Codes des Spotify-Providers.
+- §8.1: Installation, Updates, Betrieb, Resume, Wächter, Explicit-Filter, Connect-Sitzungen.
+- §9.3, §10: Spotify Connect im Heimnetz als einzige Ausnahme; Firewall; Key nur als Kommandozeilenargument.
+- §13: Autoplay nicht abschaltbar.
 
 **v0.8 (2026-09-25)** — Podcast-Provider (M3); Protokollversion bleibt `v1`, alle Änderungen additiv.
 - §3.10, §6.5: optionales `item_key` in `resume_position`.

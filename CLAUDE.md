@@ -62,6 +62,7 @@ agent/                  Box-Agent
     adapters/           Hardware & I/O hinter Interfaces: reader, buttons, player, battery, clock, announcer
     store/              SQLite-Schema und Repositories
     providers/          local, podcast, spotify, stream (SPEC §8)
+    soloist/            Soloist laden, prüfen, starten (SPEC §8.1); nie im Repo oder Image
     sync/               HTTPS-Client, MQTT, Outbox
   tests/
 server/                 FastAPI-Server (ab M1)
@@ -122,7 +123,7 @@ Vor jedem Commit: Tests, ruff, pyright und `reuse lint` grün.
 - **Niemals** Soloist-Binaries oder -Archive ins Repo, Image oder in Fixtures. Soloist wird zur Laufzeit von der offiziellen Spotify-Quelle geladen.
 - **Niemals** Soloist-API-Key oder Device-Secret loggen, in Sync-Payloads schreiben oder in Crash-Reports aufnehmen. Logger-Filter dafür ist Teil von M0.
 - **Kein Spotify Web API.** Der Spotify-Provider nutzt ausschließlich die lokale Soloist-WebSocket-API auf `127.0.0.1`.
-- Kein Dienst des Agents lauscht auf `0.0.0.0` außerhalb des Setup-Modus (SPEC §9.3).
+- Kein Dienst des Agents lauscht auf `0.0.0.0` außerhalb des Setup-Modus (SPEC §9.3). Einzige Ausnahme (SPEC v0.9 §9.3, vom Nutzer freigegeben): Bei aktiviertem Spotify bietet Soloist Spotify Connect im Heimnetz an (mDNS und Zeroconf-Port). Die Firewall des Images (`image/files/etc/nftables.conf`) lässt eingehend nur das Heimnetz zu.
 - Kein Mikrofon-Code vor ausdrücklicher Freigabe von v2.
 - Server: uvicorn nur auf Unix-Socket, nie öffentlich. Asset-Dateien nie direkt von nginx ohne vorherige Berechtigungsprüfung (`internal`-Location).
 
@@ -147,4 +148,4 @@ Vor jedem Commit: Tests, ruff, pyright und `reuse lint` grün.
 
 ## Aktueller Stand
 
-Agent: **M0**, Podcasts (**M3**) · Server: **M1** (siehe SPEC §12). Offene Punkte: SPEC §13. Spec-Version: v0.8.
+Agent: **M0**, Podcasts (**M3**), Spotify (**M4**) · Server: **M1** (siehe SPEC §12). Offene Punkte: SPEC §13. Spec-Version: v0.9.

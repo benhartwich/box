@@ -42,18 +42,20 @@ code { font-family: ui-monospace, "SFMono-Regular", monospace; font-size: .92em;
 [hidden] { display: none !important; }
 
 /* --- app bar and navigation ------------------------------------------------------------ */
-.appbar { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--line);
+.appbar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 8px 16px; border-bottom: 1px solid var(--line);
           background: var(--cream); position: sticky; top: 0; z-index: 5; }
 .brand { display: flex; align-items: center; gap: 8px; min-height: 44px; text-decoration: none; color: var(--ink); }
-.brand span { font-family: var(--display); font-size: 22px; font-weight: 600; letter-spacing: -0.3px; }
+.brand span { font-family: var(--display); font-size: clamp(19px, 5.4vw, 22px); font-weight: 600; letter-spacing: -0.3px; }
 .brand:hover { color: var(--ink); }
 .mainnav { display: none; flex: 1; gap: 6px; }
 .mainnav a { padding: 8px 12px; border-radius: 999px; text-decoration: none; color: var(--ink); font-weight: 600; }
 .mainnav a[aria-current="page"] { background: var(--moss-soft); color: var(--moss-dark); }
-.appbar-end { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.appbar-end { margin-left: auto; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 4px 8px; }
 .pill { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 14px; border-radius: 999px;
         border: 1px solid #d8cfbd; background: var(--paper); color: var(--ink); font-weight: 600; font-size: 14px;
         text-decoration: none; }
+/* Narrow phones (or large text): sign out lives on the households page. */
+@media (max-width: 30rem) { .appbar .logout { display: none; } }
 .tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; display: grid; grid-template-columns: repeat(4, 1fr);
           padding: 6px 8px calc(10px + env(safe-area-inset-bottom)); background: var(--paper); border-top: 1px solid var(--line); }
 .tabbar a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 56px;

@@ -29,7 +29,7 @@
     {% endif %}
     <div class="appbar-end">
       <a class="pill" href="/households">Haushalte {{ icon.chevron() }}</a>
-      <form method="post" action="/logout" class="inline">
+      <form method="post" action="/logout" class="inline logout">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <button class="link">Abmelden</button>
       </form>

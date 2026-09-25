@@ -75,8 +75,10 @@ def _cmd_sim(args: argparse.Namespace, settings: Settings) -> int:
     match args.sim_command:
         case "place":
             payload: dict[str, Any] = {"cmd": "place", "uid": args.uid}
-        case "remove" | "finish":
+        case "remove" | "finish" | "nfc-ok":
             payload = {"cmd": args.sim_command}
+        case "nfc-fail":
+            payload = {"cmd": "nfc-fail", "code": args.code}
         case "press":
             payload = {"cmd": "press", "button": args.button}
         case _:
@@ -172,6 +174,10 @@ def build_parser() -> argparse.ArgumentParser:
     ss.add_parser("place", help="place a figure").add_argument("uid")
     ss.add_parser("remove", help="remove the figure")
     ss.add_parser("finish", help="let the playlist reach its end")
+    ss.add_parser("nfc-fail", help="simulate a broken NFC reader (self-test)").add_argument(
+        "--code", default="not_responding", choices=["no_i2c", "not_responding", "read_error"]
+    )
+    ss.add_parser("nfc-ok", help="the simulated NFC reader works again")
     ss.add_parser("press", help="press a button").add_argument(
         "button", choices=["play_pause", "volume_up", "volume_down", "next"]
     )

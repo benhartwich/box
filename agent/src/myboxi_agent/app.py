@@ -276,6 +276,10 @@ class App:
             case "finish":
                 if isinstance(a.player, SimPlayer):
                     a.player.finish()
+            case "nfc-fail":
+                a.reader.fail(str(req.get("code", "not_responding")))
+            case "nfc-ok":
+                a.reader.recover()
             case _:
                 return {"ok": False, "error": f"unknown command {cmd!r}"}
         await asyncio.sleep(0.2)  # let the loops react before reporting

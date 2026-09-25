@@ -220,3 +220,22 @@ def test_doctor_uses_the_running_agents_self_test(
     assert doctor.run_doctor(settings, offline=False, echo=lines.append) == 1
     assert "✗ NFC reader: PN532 not answering (SDA/SCL, 3.3 V, DIP switch set to I2C?)" in lines
     assert "✓ audio: ok (running agent)" in lines
+
+
+async def test_sim_nfc_failure_via_control_socket(tmp_path: Path) -> None:
+    from myboxi_agent.control import request
+
+    app = App(Settings(data_dir=tmp_path, sim=True), sim_adapters())
+    task = asyncio.create_task(app.run())
+    try:
+        for _ in range(100):
+            if app.settings.control_socket.exists():
+                break
+            await asyncio.sleep(0.01)
+        status = await request(app.settings.control_socket, {"cmd": "nfc-fail", "code": "no_i2c"})
+        assert {"check": "nfc", "level": "fail", "code": "no_i2c"} in status["health"]
+        status = await request(app.settings.control_socket, {"cmd": "nfc-ok"})
+        assert {"check": "nfc", "level": "ok", "code": "ok"} in status["health"]
+    finally:
+        app.stop()
+        await task

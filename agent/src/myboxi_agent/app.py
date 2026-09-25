@@ -14,7 +14,12 @@ from myboxi_agent.adapters.bundle import Adapters, sim_adapters
 from myboxi_agent.adapters.mpv import KNOWN_PROMPTS
 from myboxi_agent.adapters.outbox import EventOutbox, read_boot_id
 from myboxi_agent.adapters.sim import SimButtons, SimPlayer, SimReader
-from myboxi_agent.adapters.system_info import detect_hw_model, free_bytes, image_version
+from myboxi_agent.adapters.system_info import (
+    detect_hw_model,
+    free_bytes,
+    image_version,
+    wifi_rssi,
+)
 from myboxi_agent.config import Settings
 from myboxi_agent.control import ControlServer
 from myboxi_agent.core.buttons import ButtonTracker
@@ -193,12 +198,14 @@ class App:
                 "applied_config_rev": st.applied_config_rev,
                 "applied_device_rev": st.applied_device_rev,
                 "storage": {"free_mb": free_bytes(self.settings.data_dir) // (1024 * 1024)},
+                "wifi_rssi": wifi_rssi(),
                 "time_trusted": self.adapters.clock.time_trusted(),
                 "playback": {
                     "status": playback.status,
                     "token_id": playback.token_id,
                     "volume": playback.volume,
                 },
+                "health": self.adapters.health.snapshot(),
             }
         )
 
@@ -219,6 +226,7 @@ class App:
             "volume": playback.volume,
             "pairing_code": self.controller.pairing_code,
             "outbox": self.outbox_repo.count(),
+            "health": self.adapters.health.snapshot(),
             "sim": self.settings.sim,
         }
 

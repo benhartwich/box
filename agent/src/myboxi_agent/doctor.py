@@ -11,16 +11,28 @@ import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal, cast
 
 import httpx
 
-from myboxi_agent.adapters.mpv import KNOWN_PROMPTS
+from myboxi_agent.adapters.audio import parse_sinks
+from myboxi_agent.adapters.mpv import KNOWN_PROMPTS, missing_prompts
 from myboxi_agent.config import Settings
 from myboxi_agent.control import request
 
 Level = Literal["ok", "warn", "fail"]
 MARK = {"ok": "✓", "warn": "!", "fail": "✗"}
+# Self-test codes of the running agent (SPEC v0.6 §6.4).
+HEALTH_NAMES = {"nfc": "NFC reader", "audio": "audio", "buttons": "buttons", "prompts": "prompts"}
+HEALTH_HINTS = {
+    "no_i2c": "I2C bus missing (dtparam=i2c_arm=on?)",
+    "not_responding": "PN532 not answering (SDA/SCL, 3.3 V, DIP switch set to I2C?)",
+    "read_error": "read errors, the reader is being reopened",
+    "player_down": "mpv is not running",
+    "no_output": "no output device (MAX98357A overlay?)",
+    "gpio_error": "GPIO pins cannot be set up",
+    "missing": "prompt files missing",
+}
 
 
 @dataclass(frozen=True)
@@ -40,8 +52,7 @@ def _run(cmd: list[str]) -> str:
 
 
 def check_prompts(settings: Settings) -> Check:
-    dirs = [settings.custom_prompts_dir, settings.prompts_dir]
-    missing = [p for p in KNOWN_PROMPTS if not any((d / f"{p}.opus").is_file() for d in dirs)]
+    missing = missing_prompts([settings.custom_prompts_dir, settings.prompts_dir])
     if missing:
         return Check("prompts", "fail", f"missing: {', '.join(missing[:5])}")
     return Check("prompts", "ok", f"{len(KNOWN_PROMPTS)} prompts in {settings.prompts_dir}")
@@ -98,17 +109,15 @@ def check_nfc(settings: Settings) -> Check:
 
 
 def check_audio() -> Check:
-    out = _run(["wpctl", "status"])
-    if "Sinks:" not in out:
+    names = parse_sinks(_run(["wpctl", "status"]))
+    if names is None:
         return Check("audio", "fail", "PipeWire not running for this user")
-    sinks = out.split("Sinks:", 1)[1].split("Sources:", 1)[0]
-    names = [line.strip(" │*") for line in sinks.splitlines() if "." in line]
     if not names:
         return Check("audio", "fail", "no output device (MAX98357A overlay?)")
     return Check("audio", "ok", names[0][:60])
 
 
-def check_agent(settings: Settings) -> tuple[Check, str | None]:
+def check_agent(settings: Settings) -> tuple[Check, dict[str, Any] | None]:
     try:
         status = asyncio.run(request(settings.control_socket, {"cmd": "status"}, limit_s=5))
     except (OSError, TimeoutError, ValueError):
@@ -116,7 +125,20 @@ def check_agent(settings: Settings) -> tuple[Check, str | None]:
     detail = f"paired={status.get('paired')}, playback={status.get('playback')}"
     if status.get("last_error"):
         detail += f", last error: {status['last_error']}"
-    return Check("agent", "ok", detail), status.get("server_url")
+    return Check("agent", "ok", detail), status
+
+
+def health_checks(health: list[dict[str, str]]) -> list[Check]:
+    """The running agent's self-test; opening the PN532 a second time would disturb it."""
+    levels: dict[str, Level] = {"ok": "ok", "warn": "warn", "fail": "fail"}
+    checks: list[Check] = []
+    for h in health:
+        level = levels.get(h.get("level", ""), "warn")
+        code = h.get("code", "")
+        detail = "ok (running agent)" if level == "ok" else HEALTH_HINTS.get(code, code)
+        name = h.get("check", "?")
+        checks.append(Check(HEALTH_NAMES.get(name, name), level, detail))
+    return checks
 
 
 def check_server(url: str | None) -> Check:
@@ -152,8 +174,14 @@ def run_doctor(settings: Settings, *, offline: bool, echo: Callable[[str], None]
                 )
             )
     else:
-        checks += [check_hw_libs(), check_nfc(settings), check_audio(), check_network()]
-        agent, url = check_agent(settings)
+        checks += [check_hw_libs(), check_network()]
+        agent, status = check_agent(settings)
+        health = status.get("health") if status else None
+        if isinstance(health, list):
+            checks += health_checks(cast(list[dict[str, str]], health))
+        else:
+            checks += [check_nfc(settings), check_audio()]
+        url = status.get("server_url") if status else None
         checks += [agent, check_server(url or settings.default_server_url)]
     for c in checks:
         echo(f"{MARK[c.level]} {c.name}: {c.detail}")

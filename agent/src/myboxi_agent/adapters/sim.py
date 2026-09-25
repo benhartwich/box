@@ -9,6 +9,7 @@ import time
 from collections.abc import AsyncIterator, Callable, Sequence
 
 from myboxi_agent.adapters.base import ButtonEvent, Placed, ReaderEvent, Removed
+from myboxi_agent.adapters.health import Health
 from myboxi_agent.core.model import ResumePoint
 from myboxi_protocol.state import RepeatMode
 
@@ -16,9 +17,18 @@ log = logging.getLogger("myboxi_agent.sim")
 
 
 class SimReader:
-    def __init__(self) -> None:
+    def __init__(self, health: Health | None = None) -> None:
         self._queue: asyncio.Queue[ReaderEvent] = asyncio.Queue()
         self.current: str | None = None
+        self.health = health or Health()
+        self.health.ok("nfc")
+
+    def fail(self, code: str = "not_responding") -> None:
+        """Simulates a broken reader for the self-test (SPEC v0.6 §6.4)."""
+        self.health.set("nfc", "fail", code)
+
+    def recover(self) -> None:
+        self.health.ok("nfc")
 
     def place(self, uid: str) -> None:
         self.current = uid

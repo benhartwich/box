@@ -11,15 +11,18 @@ import importlib
 import logging
 import subprocess
 from collections.abc import AsyncIterator, Callable
+from pathlib import Path
 from typing import Any, Protocol
 
 from myboxi_agent.adapters.base import ButtonEvent, Placed, ReaderEvent, Removed
 from myboxi_agent.adapters.bundle import Adapters, Background, VolumeSource
+from myboxi_agent.adapters.health import Health
 from myboxi_agent.config import Settings
 
 log = logging.getLogger(__name__)
 
 REMOVED_AFTER_MISSES = 3  # ~0.6 s at 200 ms polls: debounce short read gaps
+I2C_BUS = Path("/dev/i2c-1")
 
 
 class Pn532(Protocol):
@@ -37,11 +40,26 @@ def open_pn532(address: int) -> Pn532:  # pragma: no cover - needs the hardware
 
 
 class Pn532Reader:
-    """Polls for a passive target; placing and removing become events (SPEC §9.1)."""
+    """Polls for a passive target; placing and removing become events (SPEC §9.1).
 
-    def __init__(self, opener: Callable[[], Pn532], poll_s: float) -> None:
+    Self-test ``nfc`` (SPEC v0.6 §6.4): ``no_i2c``, ``not_responding``, ``read_error``.
+    """
+
+    def __init__(
+        self,
+        opener: Callable[[], Pn532],
+        poll_s: float,
+        health: Health | None = None,
+        bus: Path | None = None,
+    ) -> None:
         self.opener = opener
         self.poll_s = poll_s
+        self.health = health or Health()
+        self.bus = bus
+
+    def _open_failed(self) -> None:
+        missing_bus = self.bus is not None and not self.bus.exists()
+        self.health.set("nfc", "fail", "no_i2c" if missing_bus else "not_responding")
 
     async def events(self) -> AsyncIterator[ReaderEvent]:
         current: str | None = None
@@ -54,8 +72,10 @@ class Pn532Reader:
                     device = await asyncio.to_thread(self.opener)
                     backoff = 1.0
                     log.info("NFC reader ready")
+                    self.health.ok("nfc")
                 except Exception:
                     log.exception("NFC reader not available")
+                    self._open_failed()
                     await asyncio.sleep(backoff)
                     backoff = min(backoff * 2, 30)
                     continue
@@ -63,6 +83,7 @@ class Pn532Reader:
                 uid = await asyncio.to_thread(device.read_passive_target, 0.1)
             except Exception:
                 log.exception("NFC read failed")
+                self.health.set("nfc", "warn", "read_error")
                 device = None
                 continue
             if uid:
@@ -80,13 +101,23 @@ class Pn532Reader:
 
 
 class GpioButtons:
-    """gpiozero buttons to GND with internal pull-ups; callbacks run in gpiozero's thread."""
+    """gpiozero buttons to GND with internal pull-ups; callbacks run in gpiozero's thread.
+
+    Self-test ``buttons``: ``gpio_error`` when the pins cannot be set up; the agent keeps
+    running (figures still play) and retries.
+    """
 
     def __init__(
-        self, pins: dict[str, int], button_factory: Callable[[int], Any] | None = None
+        self,
+        pins: dict[str, int],
+        button_factory: Callable[[int], Any] | None = None,
+        health: Health | None = None,
+        retry_s: float = 1.0,
     ) -> None:
         self.pins = pins
         self.button_factory = button_factory
+        self.health = health or Health()
+        self.retry_s = retry_s
         self._buttons: list[Any] = []
 
     def _factory(self) -> Callable[[int], Any]:
@@ -95,9 +126,7 @@ class GpioButtons:
         gpiozero: Any = importlib.import_module("gpiozero")
         return lambda pin: gpiozero.Button(pin, pull_up=True, bounce_time=0.03)
 
-    async def events(self) -> AsyncIterator[ButtonEvent]:
-        loop = asyncio.get_running_loop()
-        queue: asyncio.Queue[ButtonEvent] = asyncio.Queue()
+    def _open(self, loop: asyncio.AbstractEventLoop, queue: asyncio.Queue[ButtonEvent]) -> None:
         factory = self._factory()
         for name, pin in self.pins.items():
             button = factory(pin)
@@ -108,6 +137,29 @@ class GpioButtons:
                 queue.put_nowait, ButtonEvent(n, pressed=False)
             )
             self._buttons.append(button)
+
+    def _close(self) -> None:
+        for button in self._buttons:
+            close = getattr(button, "close", None)
+            if callable(close):
+                close()
+        self._buttons.clear()
+
+    async def events(self) -> AsyncIterator[ButtonEvent]:
+        loop = asyncio.get_running_loop()
+        queue: asyncio.Queue[ButtonEvent] = asyncio.Queue()
+        backoff = self.retry_s
+        while True:
+            try:
+                self._open(loop, queue)
+                break
+            except Exception:
+                log.exception("buttons not available")
+                self._close()
+                self.health.set("buttons", "fail", "gpio_error")
+                await asyncio.sleep(backoff)
+                backoff = min(backoff * 2, 60)
+        self.health.ok("buttons")
         while True:
             yield await queue.get()
 
@@ -138,14 +190,23 @@ class SystemdSystem:
 
 
 def hardware_adapters(settings: Settings) -> Adapters:  # pragma: no cover - wiring for the Pi
+    from myboxi_agent.adapters.audio import AudioMonitor
     from myboxi_agent.adapters.clock import SystemClock
     from myboxi_agent.adapters.mpv import (
         MpvAnnouncer,
         MpvClient,
         MpvPlayer,
         MpvProcess,
+        missing_prompts,
         mpv_args,
     )
+
+    health = Health()
+    prompt_dirs = [settings.custom_prompts_dir, settings.prompts_dir]
+    if missing_prompts(prompt_dirs):
+        health.set("prompts", "warn", "missing")
+    else:
+        health.ok("prompts")
 
     run_dir = settings.data_dir / "run"
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -166,20 +227,23 @@ def hardware_adapters(settings: Settings) -> Adapters:  # pragma: no cover - wir
     ]
 
     def announcer(volume: VolumeSource) -> MpvAnnouncer:
-        a = MpvAnnouncer(
-            lambda on_event: MpvClient(prompt_ipc, on_event),
-            [settings.custom_prompts_dir, settings.prompts_dir],
-            volume,
-        )
+        a = MpvAnnouncer(lambda on_event: MpvClient(prompt_ipc, on_event), prompt_dirs, volume)
         background.append(a.client.run)
+        background.append(AudioMonitor(health, [player.client, a.client]).run)
         return a
 
     return Adapters(
         clock=SystemClock(),
-        reader=Pn532Reader(lambda: open_pn532(settings.pn532_i2c_address), settings.reader_poll_s),
-        buttons=GpioButtons({str(name): pin for name, pin in settings.pins.items()}),
+        reader=Pn532Reader(
+            lambda: open_pn532(settings.pn532_i2c_address),
+            settings.reader_poll_s,
+            health=health,
+            bus=I2C_BUS,
+        ),
+        buttons=GpioButtons({str(name): pin for name, pin in settings.pins.items()}, health=health),
         player=player,
         system=SystemdSystem(),
         announcer_factory=announcer,
         background=background,
+        health=health,
     )

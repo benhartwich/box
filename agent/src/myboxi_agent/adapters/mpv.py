@@ -239,3 +239,8 @@ class MpvAnnouncer:
 
 
 KNOWN_PROMPTS = [p.value for p in Prompt] + [f"digit_{d}" for d in "0123456789"]
+
+
+def missing_prompts(prompt_dirs: Sequence[Path]) -> list[str]:
+    """Prompts without a file in any directory (own recordings first, SPEC v0.5 §4)."""
+    return [p for p in KNOWN_PROMPTS if not any((d / f"{p}.opus").is_file() for d in prompt_dirs)]

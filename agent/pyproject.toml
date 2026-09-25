@@ -1,7 +1,7 @@
 [project]
 name = "myboxi-agent"
-version = "0.4.0"
-description = "Myboxi box agent: figures, buttons, playback, sync, podcasts (SPEC v0.8)"
+version = "0.5.0"
+description = "Myboxi box agent: figures, buttons, playback, sync, podcasts, Spotify (SPEC v0.9)"
 license = "GPL-3.0-or-later"
 requires-python = ">=3.13,<3.14"
 dependencies = [
@@ -9,6 +9,8 @@ dependencies = [
   "httpx>=0.28",
   "pydantic>=2.11",
   "pydantic-settings>=2.10",
+  # Soloist's local WebSocket API on 127.0.0.1 (SPEC v0.9 §8.1; approved in CLAUDE.md).
+  "websockets>=15",
 ]
 
 [project.optional-dependencies]

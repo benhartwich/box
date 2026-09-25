@@ -10,7 +10,7 @@ import datetime as dt
 import json
 import sqlite3
 import uuid
-from collections.abc import Generator, Sequence
+from collections.abc import Callable, Generator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -30,7 +30,7 @@ from myboxi_agent.core.model import (
 )
 from myboxi_agent.ids import uuid7
 from myboxi_agent.store.podcasts import PodcastRepo
-from myboxi_protocol.state import DeviceConfig, PodcastSource, StateResponse
+from myboxi_protocol.state import DeviceConfig, PodcastSource, SpotifySource, StateResponse
 
 Origin = Literal["server", "local"]
 
@@ -129,6 +129,25 @@ class StateRepo:
         ).fetchone()
         return row["value"] if row else None
 
+    # SPEC v0.9 §8.1: the Soloist key stays on the box, also after unpairing; never logged.
+
+    def soloist_key(self) -> str | None:
+        row = self.db.conn.execute(
+            "SELECT value FROM secret WHERE name = 'soloist_api_key'"
+        ).fetchone()
+        return row["value"] if row else None
+
+    def set_soloist_key(self, key: str | None) -> None:
+        with self.db.tx() as c:
+            if key is None:
+                c.execute("DELETE FROM secret WHERE name = 'soloist_api_key'")
+            else:
+                c.execute(
+                    "INSERT INTO secret (name, value) VALUES ('soloist_api_key', ?)"
+                    " ON CONFLICT (name) DO UPDATE SET value = excluded.value",
+                    (key,),
+                )
+
     def clear_tenant(self) -> None:
         """Unpair (SPEC §7.3): drop credentials and the server's slice; keep local library."""
         with self.db.tx() as c:
@@ -187,6 +206,8 @@ class LibraryRepo:
     def __init__(self, db: Database) -> None:
         self.db = db
         self.podcasts = PodcastRepo(db)
+        # SPEC v0.9 §8.1: why Spotify cannot play now (set by the app), None when ready.
+        self.spotify_unavailable: Callable[[], str | None] = lambda: "not_configured"
 
     def resolve(self, uid: str) -> Resolution:
         c = self.db.conn
@@ -209,8 +230,10 @@ class LibraryRepo:
         token_id, content_id = uuid.UUID(row["token_id"]), uuid.UUID(row["content_id"])
         if row["kind"] == "podcast":
             return self._podcast(row, token_id, content_id)
+        if row["kind"] == "spotify":
+            return self._spotify(row, token_id, content_id)
         if row["kind"] != "collection":
-            # Spotify (M4) and streams are not available on the box yet.
+            # Streams are not available on the box yet.
             return Unavailable(
                 token_id, content_id, provider=_provider(row["kind"]), code="not_available"
             )
@@ -260,6 +283,27 @@ class LibraryRepo:
                 return Loading(token_id)
             case code:
                 return Unavailable(token_id, content_id, provider="podcast", code=code)
+
+    def _spotify(self, row: sqlite3.Row, token_id: uuid.UUID, content_id: uuid.UUID) -> Resolution:
+        """SPEC v0.9 §8.1: the context URI, played and walked by Soloist."""
+        if "spotify" not in StateRepo(self.db).device_config().providers_enabled:
+            return Unavailable(token_id, content_id, provider="spotify", code="disabled")
+        try:
+            source = SpotifySource.model_validate_json(row["source"])
+        except ValidationError:
+            return Unavailable(token_id, content_id, provider="spotify", code="not_available")
+        if code := self.spotify_unavailable():
+            return Unavailable(token_id, content_id, provider="spotify", code=code)
+        return Playable(
+            token_id=token_id,
+            content_id=content_id,
+            items=(PlanItem(source.uri, source.uri, 0),),
+            resume=bool(row["resume"]),
+            shuffle=bool(row["shuffle"]),
+            repeat=row["repeat"],
+            provider="spotify",
+            context=True,
+        )
 
     def _staged_token(self, uid: str) -> uuid.UUID | None:
         for row in self.db.conn.execute("SELECT snapshot FROM staged_change"):

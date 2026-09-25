@@ -94,3 +94,44 @@ def test_updater_units_keys_and_permissions() -> None:
         assert "PRIVATE" not in text
     apt = FILES / "etc" / "apt" / "apt.conf.d" / "52myboxi-unattended-upgrades"
     assert 'Automatic-Reboot "false"' in apt.read_text()
+
+
+def test_unit_commands_exist() -> None:
+    """Every ``myboxi-agent`` command a unit runs is known to the CLI."""
+    from myboxi_agent.cli import build_parser
+
+    parser = build_parser()
+    for unit in UNITS:
+        for line in unit.read_text().splitlines():
+            key, _, command = line.partition("=")
+            if key in ("ExecStart", "ExecStopPost") and "/bin/myboxi-agent " in command:
+                args = command.split("/bin/myboxi-agent ", 1)[1].split()
+                parser.parse_args(args)  # raises SystemExit if unknown
+
+
+def test_no_soloist_binary_in_the_image() -> None:
+    """CLAUDE.md: Soloist is never shipped, the box downloads it (SPEC v0.9 §8.1)."""
+    for path in FILES.rglob("*"):
+        if path.is_file():
+            assert not path.name.startswith("soloist_release"), path
+            assert path.read_bytes()[:4] != b"\x7fELF", path
+
+
+def test_firewall_only_lets_the_home_network_in() -> None:
+    """SPEC v0.9 §10: Spotify Connect is the only LAN exception; nothing from the internet."""
+    rules = (FILES / "etc" / "nftables.conf").read_text()
+    assert "policy drop;" in rules
+    assert "192.168.0.0/16" in rules
+    assert "fc00::/7" in rules
+    if shutil.which("nft"):
+        subprocess.run(["nft", "-c", "-f", str(FILES / "etc" / "nftables.conf")], check=True)
+
+
+def test_soloist_websocket_default_port_is_loopback_only() -> None:
+    from myboxi_agent.soloist.install import SoloistPaths
+    from myboxi_agent.soloist.runner import soloist_argv
+
+    argv = soloist_argv(
+        SoloistPaths(Path("/x")), key="k" * 16, name="n", port=Settings().soloist_ws_port
+    )
+    assert argv[argv.index("--ws") + 1].startswith("127.0.0.1:")

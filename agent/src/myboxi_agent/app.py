@@ -15,7 +15,16 @@ from myboxi_agent.adapters.bundle import Adapters, sim_adapters
 from myboxi_agent.adapters.loudness import MpvLoudness
 from myboxi_agent.adapters.mpv import KNOWN_PROMPTS
 from myboxi_agent.adapters.outbox import EventOutbox, read_boot_id
-from myboxi_agent.adapters.sim import SimButtons, SimPlayer, SimReader
+from myboxi_agent.adapters.routing import RoutingPlayer
+from myboxi_agent.adapters.sim import (
+    SimButtons,
+    SimPlayer,
+    SimReader,
+    SimSpotify,
+    SimSpotifyService,
+)
+from myboxi_agent.adapters.soloist import SoloistPlayer
+from myboxi_agent.adapters.soloist_service import SoloistService
 from myboxi_agent.adapters.system_info import (
     detect_hw_model,
     free_bytes,
@@ -30,8 +39,10 @@ from myboxi_agent.core.model import Action, Loading, Prompt, Unknown
 from myboxi_agent.core.setup_phase import SetupPhase
 from myboxi_agent.providers.netguard import feed_client
 from myboxi_agent.providers.podcast import PodcastRefresher
-from myboxi_agent.setup.nm import NetworkManager
+from myboxi_agent.setup.nm import NetworkManager, network_name, read_serial
 from myboxi_agent.setup.watch import NetworkWatch
+from myboxi_agent.soloist.install import SoloistPaths
+from myboxi_agent.soloist.runner import device_name
 from myboxi_agent.store.db import connect
 from myboxi_agent.store.repos import (
     AssetRepo,
@@ -119,8 +130,11 @@ class App:
             disk_free=lambda: free_bytes(settings.data_dir),
             interval_s=settings.sync_interval_s,
             setup_phase=self.setup_phase,
-            on_synced=self.podcasts.trigger,
+            on_synced=self._synced,
         )
+        self.spotify = self._spotify_service()
+        if self.spotify is not None:
+            self.library.spotify_unavailable = self.spotify.unavailable
         system: Any = self.adapters.system
         if hasattr(system, "on_repair"):
             system.on_repair = self.sync.request_repair
@@ -128,6 +142,10 @@ class App:
         if hasattr(player, "on_playlist_finished"):
             player.on_playlist_finished = self.controller.playlist_finished
             player.on_error = self.controller.player_error
+        if isinstance(player, RoutingPlayer):  # SPEC v0.9 §8.1: the Spotify app
+            player.on_remote_playing = self.controller.remote_playing
+            player.on_external_started = self.controller.external_started
+            player.on_external_volume = self.controller.external_volume
         self.control = ControlServer(settings.control_socket, self.handle_control)
         self._stopping = asyncio.Event()
 
@@ -147,6 +165,8 @@ class App:
                 tg.create_task(self.control.serve())
                 tg.create_task(self.sync.run())
                 tg.create_task(self.podcasts.run())
+                if self.spotify is not None:
+                    tg.create_task(self.spotify.run())
                 if not self.settings.sim:
                     watch = NetworkWatch(
                         NetworkManager(),
@@ -165,6 +185,32 @@ class App:
 
     def stop(self) -> None:
         self._stopping.set()
+
+    def _spotify_service(self) -> SoloistService | SimSpotifyService | None:
+        spotify = self.adapters.spotify
+
+        def enabled() -> bool:
+            return "spotify" in self.state.device_config().providers_enabled
+
+        if isinstance(spotify, SimSpotify):
+            return SimSpotifyService(spotify, enabled)
+        if isinstance(spotify, SoloistPlayer):
+            spotify.allow_explicit = lambda: self.state.device_config().spotify_allow_explicit
+            return SoloistService(
+                paths=SoloistPaths(self.settings.soloist_dir),
+                player=spotify,
+                clock=self.adapters.clock,
+                enabled=enabled,
+                key_set=lambda: self.state.soloist_key() is not None,
+                device_name=device_name(network_name(read_serial())),
+            )
+        return None
+
+    def _synced(self) -> None:
+        """New podcasts read their feeds; Spotify follows ``providers_enabled``."""
+        self.podcasts.trigger()
+        if self.spotify is not None:
+            self.spotify.trigger()
 
     def _online_again(self) -> None:
         """Sync (SPEC §5.2) and look for a software update (SPEC v0.7 §11.1)."""
@@ -244,6 +290,7 @@ class App:
                     {"seen": sorted(self.setup_phase.seen)} if self.setup_phase.active() else None
                 ),
                 "update": self.update_status(),
+                "soloist": self.spotify.status() if self.spotify is not None else None,
             }
         )
 
@@ -282,6 +329,8 @@ class App:
             "outbox": self.outbox_repo.count(),
             "health": self.adapters.health.snapshot(),
             "setup_phase": self.setup_phase.active(),
+            "soloist_key_set": self.state.soloist_key() is not None,
+            "soloist": self.spotify.status() if self.spotify is not None else None,
             "sim": self.settings.sim,
         }
 
@@ -305,6 +354,8 @@ class App:
             self.state.set_server_url(str(req["url"]) or None)
             self.sync.trigger()
             return self.status()
+        if cmd in ("set_soloist_key", "clear_soloist_key"):
+            return self._set_soloist_key(req.get("key") if cmd == "set_soloist_key" else None)
         a = self.adapters
         if not isinstance(a.reader, SimReader) or not isinstance(a.buttons, SimButtons):
             return {"ok": False, "error": "simulation commands need --sim"}
@@ -318,8 +369,13 @@ class App:
             case "hold":
                 await a.buttons.hold([str(b) for b in req["buttons"]], float(req["seconds"]))
             case "finish":
-                if isinstance(a.player, SimPlayer):
-                    a.player.finish()
+                local: Any = a.player.local if isinstance(a.player, RoutingPlayer) else a.player
+                if isinstance(local, SimPlayer):
+                    local.finish()
+            case "spotify":
+                if not isinstance(a.spotify, SimSpotify):
+                    return {"ok": False, "error": "no simulated Spotify"}
+                a.spotify.app(str(req["action"]), int(req.get("value", 0)))
             case "nfc-fail":
                 a.reader.fail(str(req.get("code", "not_responding")))
             case "nfc-ok":
@@ -328,6 +384,22 @@ class App:
                 return {"ok": False, "error": f"unknown command {cmd!r}"}
         await asyncio.sleep(0.2)  # let the loops react before reporting
         return self.status()
+
+    def _set_soloist_key(self, key: object) -> dict[str, Any]:
+        """SPEC v0.9 §9.3: from the setup portal (via setupd) or the CLI. The key is never
+        echoed, logged or part of an error message (CLAUDE.md)."""
+        if key is not None and not valid_soloist_key(key):
+            return {"ok": False, "error": "invalid key"}
+        self.state.set_soloist_key(key if isinstance(key, str) else None)
+        if self.spotify is not None:
+            self.spotify.key_changed()
+        log.info("soloist key changed", extra={"stored": key is not None})
+        return {"ok": True, "soloist_key_set": key is not None}
+
+
+def valid_soloist_key(key: object) -> bool:
+    """Spotify documents no format: 8 to 512 visible ASCII characters without spaces."""
+    return isinstance(key, str) and 8 <= len(key) <= 512 and all(33 <= ord(c) <= 126 for c in key)
 
 
 class _Stop(Exception):

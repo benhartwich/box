@@ -82,6 +82,9 @@ class Controller:
     session: Session | None = None
     current_uid: str | None = None
     pairing_code: str | None = None
+    # SPEC v0.9 §8.1: playback started in the Spotify app, without a figure.
+    external_playing: bool = False
+    external_since: float = 0.0
     _applied_volume: int | None = None
     _last_code_announce: float = 0.0
 
@@ -154,13 +157,67 @@ class Controller:
 
     def player_error(self, code: str = "player_error") -> None:
         s = self.session
-        self.announcer.announce(Prompt.TONE_ERROR)
+        if s is not None and s.plan.provider == "spotify":
+            # SPEC §4.1: no cache, typically offline: "Das geht gerade leider nicht" + tone.
+            self.announcer.announce(Prompt.UNAVAILABLE, Prompt.TONE_ERROR)
+        else:
+            self.announcer.announce(Prompt.TONE_ERROR)
         if s is not None:
             self.outbox.emit(
                 "playback_error",
                 PlaybackErrorData(token_id=s.plan.token_id, provider=s.plan.provider, code=code),
             )
             s.playing = False
+
+    # --- Spotify Connect (SPEC v0.9 §8.1) ---------------------------------------------------
+
+    def external_started(self) -> None:
+        """Someone started playback in the Spotify app. The latest action wins: a figure
+        session ends with its position saved, then the same limits apply as for figures."""
+        s = self.session
+        if s is not None and not s.finished:
+            self._save(emit=True)
+            if s.playing and not s.plan.context:
+                self.player.pause()  # a local file; a Spotify context was replaced already
+            s.playing = False
+            s.finished = True
+        self.external_playing = True
+        self.external_since = self.clock.monotonic()
+        self._apply_volume(force=True)
+        if volume.limits(self.config(), self.clock.now(), self.clock.time_trusted()).locked:
+            self._stop_external()
+            self.announcer.announce(Prompt.QUIET_TIME)
+
+    def remote_playing(self, playing: bool) -> None:
+        """Pause or play pressed in the Spotify app for what already plays on the box."""
+        s = self.session
+        if self.external_playing or (s is None or s.finished or not s.plan.context):
+            if playing and not self.external_playing:
+                self.external_started()
+                return
+            self.external_playing = playing
+            return
+        if playing and not s.playing:
+            if volume.limits(self.config(), self.clock.now(), self.clock.time_trusted()).locked:
+                self._pause(s)
+                self.announcer.announce(Prompt.QUIET_TIME)
+                return
+            s.play_started = self.clock.monotonic()
+        elif not playing and s.playing:
+            self._save(emit=True)
+        s.playing = playing
+
+    def external_volume(self, value: int) -> None:
+        """The volume was changed outside the box (Spotify app): it goes through the one
+        volume policy (SPEC §9.2, CLAUDE.md rule 4) and is set back if above the limit."""
+        lim = volume.limits(self.config(), self.clock.now(), self.clock.time_trusted())
+        self.requested_volume = max(0, min(value, lim.ceiling, 100))
+        self._apply_volume(force=True)
+
+    def _stop_external(self) -> None:
+        if self.external_playing:
+            self.player.pause()
+            self.external_playing = False
 
     def tick(self) -> None:
         now = self.clock.monotonic()
@@ -175,6 +232,12 @@ class Controller:
                 self._pause(s)
             elif now - s.last_saved >= RESUME_SAVE_EVERY_S:
                 self._save(emit=False)
+        if self.external_playing:
+            if lim.locked:
+                self._stop_external()
+                self.announcer.announce(Prompt.QUIET_TIME)
+            elif cfg.sleep_timer_min and now - self.external_since >= cfg.sleep_timer_min * 60:
+                self._stop_external()
         self._apply_volume()
         if self.pairing_code and now - self._last_code_announce >= PAIRING_REPEAT_S:
             self._announce_code()
@@ -199,7 +262,7 @@ class Controller:
     def status(self) -> Status:
         s = self.session
         if s is None or s.finished:
-            state: PlaybackStatus = "stopped"
+            state: PlaybackStatus = "playing" if self.external_playing else "stopped"
         else:
             state = "playing" if s.playing else "paused"
         return Status(
@@ -220,9 +283,9 @@ class Controller:
             self.requested_volume, self.config(), self.clock.now(), self.clock.time_trusted()
         )
 
-    def _apply_volume(self) -> None:
+    def _apply_volume(self, *, force: bool = False) -> None:
         eff = self._effective()
-        if eff != self._applied_volume:
+        if force or eff != self._applied_volume:
             self.player.set_volume(eff)
             self._applied_volume = eff
 
@@ -239,6 +302,10 @@ class Controller:
             return
         if self.session is not None and not self.session.finished:
             self._save(emit=True)
+        self.external_playing = False  # a figure replaces a Connect session (SPEC v0.9 §8.1)
+        if plan.context:
+            self._start_context(plan, cfg)
+            return
         n = len(plan.items)
         start = ResumePoint(0, 0)
         if plan.resume:
@@ -263,11 +330,30 @@ class Controller:
             "token_played", TokenPlayedData(token_id=plan.token_id, content_id=plan.content_id)
         )
 
+    def _start_context(self, plan: Playable, cfg: DeviceConfig) -> None:
+        """SPEC v0.9 §8.1: the provider walks the tracks; resume by track index and URI,
+        not with shuffle."""
+        start = ResumePoint(0, 0)
+        if plan.resume and not plan.shuffle:
+            start = self.resume_store.get(plan.token_id) or start
+        now = self.clock.monotonic()
+        self.session = Session(plan=plan, order=[0], play_started=now, last_saved=now)
+        self.requested_volume = cfg.start_volume
+        self._apply_volume(force=True)
+        self.announcer.announce(Prompt.TONE_START)
+        self.player.play_context(plan.items[0].source, start, plan.shuffle, plan.repeat)
+        self.outbox.emit(
+            "token_played", TokenPlayedData(token_id=plan.token_id, content_id=plan.content_id)
+        )
+
     def _play_pause(self) -> None:
         if self.pairing_code:
             self._announce_code()
             return
         s = self.session
+        if self.external_playing and (s is None or s.finished):
+            self._stop_external()
+            return
         if s is not None and not s.finished:
             if s.playing:
                 self._pause(s)
@@ -291,8 +377,15 @@ class Controller:
 
     def _next(self) -> None:
         s = self.session
+        if self.external_playing and (s is None or s.finished):
+            self.player.skip()
+            return
         if s is None or s.finished:
             self.announcer.announce(Prompt.TONE_ERROR)
+            return
+        if s.plan.context:
+            self.player.skip()
+            s.playing = True
             return
         pos = self.player.position()
         current = pos.item_index if pos else 0
@@ -324,9 +417,12 @@ class Controller:
         pos = self.player.position()
         if pos is None:
             return
-        playlist_index = min(max(pos.item_index, 0), len(s.order) - 1)
-        item_index = s.order[playlist_index]
-        point = ResumePoint(item_index, pos.position_ms, s.plan.items[item_index].key)
+        if s.plan.context:
+            point = pos  # track index and URI within the context (SPEC v0.9 §8.1)
+        else:
+            playlist_index = min(max(pos.item_index, 0), len(s.order) - 1)
+            item_index = s.order[playlist_index]
+            point = ResumePoint(item_index, pos.position_ms, s.plan.items[item_index].key)
         s.last_saved = self.clock.monotonic()
         if s.plan.resume:
             self.resume_store.save(s.plan.token_id, point)

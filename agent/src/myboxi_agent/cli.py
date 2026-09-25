@@ -81,6 +81,8 @@ def _cmd_sim(args: argparse.Namespace, settings: Settings) -> int:
             payload = {"cmd": "nfc-fail", "code": args.code}
         case "press":
             payload = {"cmd": "press", "button": args.button}
+        case "spotify":
+            payload = {"cmd": "spotify", "action": args.action, "value": args.value}
         case _:
             payload = {"cmd": "hold", "buttons": args.buttons, "seconds": args.seconds}
     return _control(settings, payload)
@@ -120,22 +122,23 @@ def _cmd_setupd(args: argparse.Namespace, settings: Settings) -> int:
     from myboxi_agent.setup.daemon import SocketAgentLink, run_setup
     from myboxi_agent.setup.nm import NetworkManager, network_name, read_serial
 
-    async def current_server_url() -> str:
+    async def agent_status() -> dict[str, Any]:
         try:
-            status = await request(settings.control_socket, {"cmd": "status"}, limit_s=5)
-            url = status.get("server_url")
+            return await request(settings.control_socket, {"cmd": "status"}, limit_s=5)
         except (OSError, TimeoutError, ValueError):
-            url = None
-        return str(url or settings.default_server_url or "https://app.myboxi.eu")
+            return {}
 
     async def main() -> bool:
+        status = await agent_status()
+        url = status.get("server_url") or settings.default_server_url or "https://app.myboxi.eu"
         return await run_setup(
             NetworkManager(),
             SocketAgentLink(settings.control_socket),
             ssid=network_name(read_serial()),
-            default_server_url=await current_server_url(),
+            default_server_url=str(url),
             host=args.host,
             port=args.port,
+            soloist_key_set=bool(status.get("soloist_key_set")),
         )
 
     return 0 if asyncio.run(main()) else 1
@@ -183,6 +186,62 @@ def _cmd_update(args: argparse.Namespace, settings: Settings) -> int:
     return 0
 
 
+def _cmd_soloist(args: argparse.Namespace, settings: Settings) -> int:
+    """Spotify (SPEC v0.9 §8.1): user units myboxi-soloist(-update).service run these."""
+    from myboxi_agent.soloist.install import SoloistPaths
+
+    paths = SoloistPaths(settings.soloist_dir)
+    match args.soloist_command:
+        case "update":
+            from myboxi_agent.soloist.runner import spotify_wanted
+
+            if not args.force and not spotify_wanted(settings.db_path):
+                print("spotify off")  # the daily timer never downloads Soloist unasked
+                return 0
+            return _soloist_update(paths, force=args.force)
+        case "exec":
+            from myboxi_agent.setup.nm import network_name, read_serial
+            from myboxi_agent.soloist.runner import device_name, exec_soloist, read_key
+
+            return exec_soloist(
+                paths,
+                key=read_key(settings.db_path),
+                name=device_name(network_name(read_serial())),
+                port=settings.soloist_ws_port,
+            )
+        case "stopped":
+            import os
+
+            from myboxi_agent.soloist.runner import stopped
+
+            return stopped(
+                paths, os.environ.get("EXIT_STATUS"), update_unit="myboxi-soloist-update.service"
+            )
+        case "key":
+            if args.clear:
+                return _control(settings, {"cmd": "clear_soloist_key"})
+            # From stdin, never from the command line (it would show up in the process list).
+            key = sys.stdin.readline().strip()
+            return _control(settings, {"cmd": "set_soloist_key", "key": key})
+        case _:
+            return 2
+
+
+def _soloist_update(paths: Any, *, force: bool) -> int:
+    import datetime as dt
+
+    from myboxi_agent.soloist.install import Installer, soloist_client
+
+    async def main() -> str:
+        async with soloist_client() as http:
+            installer = Installer(paths, http, now=lambda: dt.datetime.now(dt.UTC))
+            return (await installer.update(force=force)).code
+
+    code = asyncio.run(main())
+    print(code)
+    return 1 if code == "failed" else 0
+
+
 def _cmd_doctor(args: argparse.Namespace, settings: Settings) -> int:
     from myboxi_agent.doctor import run_doctor
 
@@ -223,6 +282,9 @@ def build_parser() -> argparse.ArgumentParser:
     ss.add_parser("press", help="press a button").add_argument(
         "button", choices=["play_pause", "volume_up", "volume_down", "next"]
     )
+    app = ss.add_parser("spotify", help="act like the Spotify app (SPEC v0.9 §8.1)")
+    app.add_argument("action", choices=["play", "pause", "volume"])
+    app.add_argument("value", type=int, nargs="?", default=0)
     hold = ss.add_parser("hold", help="hold buttons, e.g. volume_up volume_down --seconds 5")
     hold.add_argument("buttons", nargs="+")
     hold.add_argument("--seconds", type=float, default=5.5)
@@ -240,6 +302,18 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("update", help="install a software update (root, systemd)").set_defaults(
         func=_cmd_update
     )
+
+    p = sub.add_parser("soloist", help="Spotify Soloist (systemd user units)")
+    so = p.add_subparsers(dest="soloist_command", required=True)
+    so.add_parser("update", help="install or update Soloist").add_argument(
+        "--force", action="store_true", help="install the current build now"
+    )
+    so.add_parser("exec", help="replace this process with Soloist (unit ExecStart)")
+    so.add_parser("stopped", help="after Soloist ended (unit ExecStopPost)")
+    so.add_parser("key", help="store the API key, read from stdin").add_argument(
+        "--clear", action="store_true", help="remove the stored key"
+    )
+    p.set_defaults(func=_cmd_soloist)
 
     p = sub.add_parser("library", help="local library without server")
     ls = p.add_subparsers(dest="library_command", required=True)

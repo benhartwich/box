@@ -34,6 +34,8 @@ class AgentLink(Protocol):
 
     async def set_server_url(self, url: str) -> None: ...
 
+    async def set_soloist_key(self, key: str | None) -> None: ...
+
 
 class SocketAgentLink:
     """Talks to the running agent through its control socket (root may open it)."""
@@ -53,6 +55,13 @@ class SocketAgentLink:
     async def set_server_url(self, url: str) -> None:
         await self._send({"cmd": "set_server_url", "url": url})
 
+    async def set_soloist_key(self, key: str | None) -> None:
+        """SPEC v0.9 §9.3: the key goes straight to the agent's ``secret`` table."""
+        if key is None:
+            await self._send({"cmd": "clear_soloist_key"})
+        else:
+            await self._send({"cmd": "set_soloist_key", "key": key})
+
 
 def spoken_name(ssid: str) -> list[str]:
     return [digit_prompt(d) for d in ssid if d.isdigit()]
@@ -67,6 +76,7 @@ async def run_setup(
     host: str = HOTSPOT_ADDRESS,
     port: int = 80,
     inactivity_s: float = INACTIVITY_S,
+    soloist_key_set: bool = False,
 ) -> bool:
     networks = await asyncio.to_thread(nm.scan)  # before the radio becomes an access point
     error: str | None = None
@@ -76,7 +86,7 @@ async def run_setup(
             await agent.announce(Prompt.SETUP_FAILED)
             return False
         await agent.announce(Prompt.SETUP_START, *spoken_name(ssid))
-        portal = Portal(networks, server_url, error)
+        portal = Portal(networks, server_url, error, soloist_key_set)
         server = await portal.serve(host, port)
         try:
             submission = await _wait(portal, inactivity_s)
@@ -87,6 +97,9 @@ async def run_setup(
         if submission is None:
             await agent.announce(Prompt.SETUP_END)
             return False
+        if submission.soloist_clear or submission.soloist_key is not None:
+            await agent.set_soloist_key(submission.soloist_key)
+            soloist_key_set = submission.soloist_key is not None
         if await asyncio.to_thread(nm.connect_wifi, submission.ssid, submission.password):
             await agent.set_server_url(submission.server_url)
             await agent.announce(Prompt.SETUP_CONNECTED)

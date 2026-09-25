@@ -135,7 +135,11 @@ certbot certonly --nginx --non-interactive --agree-tos -m "$MYBOXI_ADMIN_EMAIL" 
 
 ## 11. nginx
 
+Die Zugriffsprotokolle (mit IP-Adressen) liegen in `/var/log/nginx/myboxi/` und werden nach 14 Tagen gelöscht (`deploy/logrotate/myboxi-nginx`).
+
 ```bash
+install -d -m 0750 -o root -g adm /var/log/nginx/myboxi
+install -D -m 0644 /opt/myboxi-server/deploy/logrotate/myboxi-nginx /etc/logrotate.d/myboxi-nginx
 sed "s/myboxi.example.org/${MYBOXI_DOMAIN}/g" /opt/myboxi-server/deploy/nginx/myboxi-server.conf \
   > /etc/nginx/sites-available/myboxi-server.conf
 ln -sf /etc/nginx/sites-available/myboxi-server.conf /etc/nginx/sites-enabled/myboxi-server.conf

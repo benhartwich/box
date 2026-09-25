@@ -40,6 +40,7 @@
     {% if error %}<p class="msg error" role="alert">{{ error }}</p>{% endif %}
     {% if notice %}<p class="msg ok" role="status">{{ notice }}</p>{% endif %}
     {% block content %}{% endblock %}
+    <footer class="app-foot"><a href="https://myboxi.eu/impressum">Impressum</a> · <a href="https://myboxi.eu/datenschutz">Datenschutz</a></footer>
   </main>
   {% if user and tid %}
   <nav class="tabbar" aria-label="Bereiche">

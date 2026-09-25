@@ -1,0 +1,17 @@
+# nginx logs of Myboxi (app and landing page): kept 14 days (today + 13), as the privacy
+# notice says. A separate directory, so the host's /var/log/nginx/*.log rule does not apply.
+/var/log/nginx/myboxi/*.log {
+        daily
+        rotate 13
+        missingok
+        notifempty
+        compress
+        delaycompress
+        create 0640 root adm
+        sharedscripts
+        postrotate
+                if [ -f /run/nginx.pid ]; then
+                        kill -USR1 "$(cat /run/nginx.pid)"
+                fi
+        endscript
+}

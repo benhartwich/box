@@ -247,3 +247,5 @@ select.auto { width: auto; }
 input.copy { font-family: ui-monospace, monospace; font-size: .85em; }
 .dropzone h2 { display: flex; align-items: center; gap: 8px; }
 .bear { display: block; }
+.app-foot { margin-top: 12px; text-align: center; font-size: 14px; color: var(--ink-2); }
+.app-foot a { color: var(--ink-2); }

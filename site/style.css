@@ -145,3 +145,4 @@ h3 { font-size: 22px; }
 .legal h1 { font-size: 48px; letter-spacing: -1px; }
 .legal h2 { font-size: 26px; letter-spacing: 0; margin-top: 12px; }
 .stack-l { display: grid; gap: 22px; }
+.legal ul { margin: 0; padding-left: 1.2rem; display: grid; gap: 6px; }

@@ -55,7 +55,7 @@ docker exec "$NAME" systemctl is-active myboxi-server-api.socket myboxi-server-a
 docker exec "$NAME" bash -c 'journalctl -u myboxi-server-api -u myboxi-server-worker --no-pager -o cat | grep -c "\"level\": \"ERROR\"" || true' \
   | sed 's/^/   Fehler im Journal: /'
 echo "== Keine Secrets in Logs"
-leaks=$(docker exec "$NAME" bash -c "journalctl --no-pager -o cat; cat /var/log/nginx/*.log" \
+leaks=$(docker exec "$NAME" bash -c "journalctl --no-pager -o cat; cat /var/log/nginx/*.log /var/log/nginx/myboxi/*.log 2>/dev/null" \
   | grep -cE "${PASSWORD}|poll_token=[A-Za-z0-9_-]{16}|token=[A-Za-z0-9_-]{30}|\\\$argon2id\\\$v" || true)
 [[ "$leaks" == 0 ]] || { echo "   $leaks verdächtige Zeilen im Journal/nginx-Log"; exit 1; }
 echo "   Journal und nginx-Log ohne Passwort, Poll-Token und Hashes"

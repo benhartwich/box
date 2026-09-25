@@ -7,16 +7,18 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse, Response
+from sqlalchemy import func, select
 
 from myboxi_server.api.web.deps import CurrentSession, DbSession, SettingsDep, csrf_protect, require
 from myboxi_server.api.web.render import render
 from myboxi_server.api.web.routes_setup import unfinished
 from myboxi_server.auth.mail import invitation_mail, log_mail
-from myboxi_server.domain import devices, members
+from myboxi_server.domain import devices, members, tokens
 from myboxi_server.domain.authz import Perm, TenantContext
 from myboxi_server.domain.errors import DomainError, NotFoundError
+from myboxi_server.domain.setup import reported_data
 from myboxi_server.jobs.mail import send_invitation_mail
-from myboxi_server.models import Tenant
+from myboxi_server.models import Content, Tenant, Token
 from myboxi_server.models.enums import Role
 
 router = APIRouter(prefix="/t/{tid}", dependencies=[Depends(csrf_protect)])
@@ -31,12 +33,36 @@ async def tenant_home(
     request: Request, db: DbSession, session: CurrentSession, ctx: ReadCtx
 ) -> Response:
     tenant = await db.get(Tenant, ctx.tenant_id)
+    boxes = await devices.list_devices(db, ctx)
+    reports = {d.id: reported_data(d) for d in boxes}
+    playing_ids = {
+        r.playback.token_id for r in reports.values() if r and r.playback.token_id is not None
+    }
+    labels: dict[uuid.UUID, str] = {}
+    if playing_ids:
+        rows = await db.execute(
+            select(Token.id, Token.label).where(
+                Token.tenant_id == ctx.tenant_id, Token.id.in_(playing_ids)
+            )
+        )
+        labels = dict(rows.tuples().all())
+    counts = {
+        "figures": await db.scalar(
+            select(func.count()).select_from(Token).where(Token.tenant_id == ctx.tenant_id)
+        ),
+        "contents": await db.scalar(
+            select(func.count()).select_from(Content).where(Content.tenant_id == ctx.tenant_id)
+        ),
+    }
     return render(
         request,
         "home.html",
         {
             "tenant": tenant,
-            "has_boxes": bool(await devices.list_devices(db, ctx)),
+            "boxes": [(d, reports[d.id]) for d in boxes],
+            "labels": labels,
+            "counts": counts,
+            "unknown": await tokens.unknown_tokens(db, ctx),
             "unfinished": await unfinished(db, ctx),
         },
         session=session,

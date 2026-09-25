@@ -1,26 +1,59 @@
 {% extends "base.html" %}
+{% import "_icons.html" as icon %}
 {% block title %}{{ tenant.name }} · Myboxi{% endblock %}
 {% block content %}
-<h1>{{ tenant.name }}</h1>
-{% if not has_boxes %}
+<div class="page-head">
+  <h1>{{ tenant.name }}</h1>
+  <p class="muted">{{ boxes | length }} {{ "Box" if boxes | length == 1 else "Boxen" }} · {{ counts.figures }} Figuren · {{ counts.contents }} Inhalte</p>
+</div>
+
+{% if not boxes %}
 <section class="card highlight">
   <h2>Erste Box einrichten</h2>
-  <p>Der Assistent führt dich vom Image auf der SD-Karte bis zur ersten Figur, die spielt.</p>
-  <a class="button" href="/t/{{ tid }}/setup">Los geht's</a>
+  <p class="muted">Der Assistent führt dich vom Image auf der SD-Karte bis zur ersten Figur, die spielt.</p>
+  <p><a class="button" href="/t/{{ tid }}/setup">Los geht's</a></p>
 </section>
 {% endif %}
 {% for p in unfinished %}
 <section class="card highlight">
-  <h2>Einrichtung fortsetzen: {{ p.device.name or "Box" }}</h2>
-  <p class="muted">{{ p.completed }} von {{ p.steps | length }} Schritten erledigt</p>
-  <a class="button" href="/t/{{ tid }}/boxes/{{ p.device.id }}/setup">Weiter</a>
+  <div class="card-head"><h2>Einrichtung fortsetzen: {{ p.device.name or "Box" }}</h2><span class="muted">{{ p.completed }} von {{ p.steps | length }}</span></div>
+  <progress value="{{ p.completed }}" max="{{ p.steps | length }}">{{ p.completed }} von {{ p.steps | length }}</progress>
+  <p><a class="button small" href="/t/{{ tid }}/boxes/{{ p.device.id }}/setup">Weiter</a></p>
 </section>
 {% endfor %}
-<ul class="tiles">
-  <li><a href="/t/{{ tid }}/boxes">Boxen</a></li>
-  <li><a href="/t/{{ tid }}/figures">Figuren</a></li>
-  <li><a href="/t/{{ tid }}/contents">Inhalte</a></li>
-  <li><a href="/t/{{ tid }}/members">Mitglieder</a></li>
+
+{% if unknown %}
+<section class="card attention">
+  <h2>Neue Figur erkannt</h2>
+  <p class="muted">Eine Box kennt {{ "eine Figur" if unknown | length == 1 else unknown | length ~ " Figuren" }} noch nicht. Gib {{ "ihr" if unknown | length == 1 else "ihnen" }} einen Namen und einen Inhalt.</p>
+  <p><a class="button small secondary" href="/t/{{ tid }}/figures">Figuren übernehmen</a></p>
+</section>
+{% endif %}
+
+{% if boxes %}
+<section class="stack" aria-labelledby="boxen">
+  <h2 id="boxen">Boxen</h2>
+  {% for d, r in boxes %}
+  {% if r and r.playback.status == 'playing' %}
+  <a class="card dark" href="/t/{{ tid }}/boxes/{{ d.id }}">
+    <div class="card-head"><h3 class="display-s">{{ d.name or "Box" }}</h3><span class="live"><span class="dot"></span>spielt</span></div>
+    <p>{{ labels.get(r.playback.token_id, "eine Figur") }}</p>
+    <p class="muted">Lautstärke {{ r.playback.volume }}</p>
+  </a>
+  {% else %}
+  <a class="card" href="/t/{{ tid }}/boxes/{{ d.id }}">
+    <div class="card-head"><h3 class="display-s">{{ d.name or "Box" }}</h3>{{ icon.next() }}</div>
+    <p class="muted">{% if r %}{{ {"paused": "pausiert", "stopped": "bereit"}.get(r.playback.status, "bereit") }} · zuletzt gemeldet {{ d.reported_at | localtime }}{% else %}noch keine Meldung{% endif %}</p>
+  </a>
+  {% endif %}
+  {% endfor %}
+</section>
+{% endif %}
+
+<ul class="tiles" aria-label="Bereiche">
+  <li><a href="/t/{{ tid }}/figures">{{ icon.figure(26) }}Figuren</a></li>
+  <li><a href="/t/{{ tid }}/contents">{{ icon.upload(26) }}Inhalte</a></li>
+  <li><a href="/t/{{ tid }}/boxes">{{ icon.box(26) }}Boxen</a></li>
+  <li><a href="/t/{{ tid }}/members">{{ icon.people(26) }}Mitglieder</a></li>
 </ul>
-<p class="muted"><a href="/households">Haushalte wechseln oder neu anlegen</a></p>
 {% endblock %}

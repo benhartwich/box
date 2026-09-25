@@ -1,30 +1,32 @@
 {% extends "base.html" %}
+{% import "_icons.html" as icon %}
 {% block title %}Inhalte · Myboxi{% endblock %}
 {% block content %}
 <h1>Inhalte</h1>
 {% if contents %}
-<ul class="list">
+<ul class="list card">
   {% for c in contents %}
   <li>
-    <div class="row">
-      {% if c.cover_asset_id %}<img class="thumb" src="/t/{{ tid }}/covers/{{ c.cover_asset_id }}" alt="" width="48" height="48">{% endif %}
-      <div>
-        <a href="/t/{{ tid }}/contents/{{ c.id }}"><strong>{{ c.title }}</strong></a>
-        <div class="muted">{{ kind_labels[c.kind] }}</div>
-      </div>
-    </div>
+    <a class="row plain" href="/t/{{ tid }}/contents/{{ c.id }}">
+      {% if c.cover_asset_id %}<img class="thumb" src="/t/{{ tid }}/covers/{{ c.cover_asset_id }}" alt="" width="48" height="48">
+      {% else %}<span class="thumb-ph" aria-hidden="true">{{ icon.music(22) }}</span>{% endif %}
+      <span class="stack-0"><strong>{{ c.title }}</strong><span class="muted">{{ kind_labels[c.kind] }}</span></span>
+    </a>
   </li>
   {% endfor %}
 </ul>
 {% else %}
-<p class="muted">Noch keine Inhalte.</p>
+<p class="muted">Noch keine Inhalte. Leg einen an und lade Hörspiele, Musik oder eigene Aufnahmen hoch.</p>
 {% endif %}
 {% if ctx.can(Perm.CONTENT_WRITE) %}
-<h2>Neuer Inhalt</h2>
-<div class="row">
-  {% for kind, label in kind_labels.items() %}
-  <a class="button secondary" href="/t/{{ tid }}/contents/new?kind={{ kind.value }}">{{ label }}</a>
-  {% endfor %}
-</div>
+<section class="card">
+  <h2>Neuer Inhalt</h2>
+  <div class="actions">
+    {% for kind, label in kind_labels.items() %}
+    <a class="button {% if not loop.first %}secondary {% endif %}small" href="/t/{{ tid }}/contents/new?kind={{ kind.value }}">{{ label }}</a>
+    {% endfor %}
+  </div>
+  <p class="muted">Podcasts, Spotify und Streams kann die Box noch nicht abspielen.</p>
+</section>
 {% endif %}
 {% endblock %}

@@ -1,32 +1,35 @@
 {% extends "base.html" %}
+{% import "_icons.html" as icon %}
 {% block title %}{{ content.title }} · Myboxi{% endblock %}
 {% block content %}
-<p><a href="/t/{{ tid }}/contents">← Inhalte</a></p>
+<a class="back" href="/t/{{ tid }}/contents">{{ icon.back() }}Inhalte</a>
 <div class="row">
-  {% if content.cover_asset_id %}<img class="cover" src="/t/{{ tid }}/covers/{{ content.cover_asset_id }}" alt="Cover" width="96" height="96">{% endif %}
-  <div>
+  {% if content.cover_asset_id %}<img class="cover" src="/t/{{ tid }}/covers/{{ content.cover_asset_id }}" alt="Cover" width="96" height="96">
+  {% else %}<span class="cover-ph" aria-hidden="true">{{ icon.music(40) }}</span>{% endif %}
+  <div class="stack-0">
     <h1>{{ content.title }}</h1>
     <p class="muted">{{ kind_labels[content.kind] }}</p>
   </div>
 </div>
 
 {% if content.kind == 'collection' %}
-  {% include "_tracks.html" %}
   {% if ctx.can(Perm.UPLOAD) %}
-  <section class="card">
-    <h2>Dateien hinzufügen</h2>
+  <section class="dropzone">
+    <h2>{{ icon.upload(22) }} Titel hinzufügen</h2>
     <form method="post" action="/t/{{ tid }}/contents/{{ content.id }}/uploads" enctype="multipart/form-data" class="stack">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <label>Audiodateien (mp3, m4a, wav, ogg, flac)
+      <label>Audiodateien (MP3, M4A, WAV, OGG, FLAC)
         <input type="file" name="files" accept=".mp3,.m4a,.wav,.ogg,.oga,.opus,.flac,audio/*" multiple required>
       </label>
       <label>Art
         <select name="profile">{% for value, label in profiles %}<option value="{{ value.value }}">{{ label }}</option>{% endfor %}</select>
       </label>
       <button type="submit">Hochladen</button>
+      <p class="muted">Die Lautstärke aller Titel wird angeglichen.</p>
     </form>
   </section>
   {% endif %}
+  {% include "_tracks.html" %}
 {% endif %}
 
 {% if ctx.can(Perm.CONTENT_WRITE) %}
@@ -44,6 +47,9 @@
     <label>Cover (JPEG, PNG, WebP) <input type="file" name="file" accept="image/jpeg,image/png,image/webp" required></label>
     <button class="secondary" type="submit">Cover hochladen</button>
   </form>
+</section>
+<section class="card danger-zone">
+  <h2>Inhalt löschen</h2>
   <form method="post" action="/t/{{ tid }}/contents/{{ content.id }}/delete">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <button class="danger">Inhalt löschen</button>

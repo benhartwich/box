@@ -1,29 +1,39 @@
+{% import "_icons.html" as icon %}
+{%- set path = request.url.path -%}
+{%- set section = path.split('/')[3] if tid and path.startswith('/t/') and path.split('/') | length > 3 else '' -%}
 <!doctype html>
 <html lang="de">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f6f1e7">
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <title>{% block title %}Myboxi{% endblock %}</title>
   <meta name="htmx-config" content='{"includeIndicatorStyles": false, "allowEval": false}'>
+  <link rel="preload" href="/static/fonts/figtree-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/static/app.css">
   <script src="/static/htmx.min.js" defer></script>
 </head>
-<body {% if csrf_token %}hx-headers='{"X-CSRF-Token": "{{ csrf_token }}"}'{% endif %}>
-  <header class="topbar">
-    <a class="brand" href="{% if tid %}/t/{{ tid }}/{% else %}/{% endif %}">Myboxi</a>
+<body class="{% if user and tid %}has-tabs{% endif %}" {% if csrf_token %}hx-headers='{"X-CSRF-Token": "{{ csrf_token }}"}'{% endif %}>
+  <header class="appbar">
+    <a class="brand" href="{% if tid %}/t/{{ tid }}/{% else %}/{% endif %}">{{ icon.logo(28) }}<span>myboxi</span></a>
     {% if user %}
-    <nav class="mainnav">
-      {% if tid %}
-      <a href="/t/{{ tid }}/boxes">Boxen</a>
-      <a href="/t/{{ tid }}/figures">Figuren</a>
-      <a href="/t/{{ tid }}/contents">Inhalte</a>
-      <a href="/t/{{ tid }}/members">Mitglieder</a>
-      {% endif %}
+    {% if tid %}
+    <nav class="mainnav" aria-label="Bereiche">
+      <a href="/t/{{ tid }}/" {% if section == '' %}aria-current="page"{% endif %}>Start</a>
+      <a href="/t/{{ tid }}/figures" {% if section == 'figures' %}aria-current="page"{% endif %}>Figuren</a>
+      <a href="/t/{{ tid }}/contents" {% if section == 'contents' %}aria-current="page"{% endif %}>Inhalte</a>
+      <a href="/t/{{ tid }}/boxes" {% if section in ('boxes', 'setup') %}aria-current="page"{% endif %}>Boxen</a>
+      <a href="/t/{{ tid }}/members" {% if section == 'members' %}aria-current="page"{% endif %}>Mitglieder</a>
     </nav>
-    <form method="post" action="/logout" class="inline">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <button class="link">Abmelden</button>
-    </form>
+    {% endif %}
+    <div class="appbar-end">
+      <a class="pill" href="/households">Haushalte {{ icon.chevron() }}</a>
+      <form method="post" action="/logout" class="inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="link">Abmelden</button>
+      </form>
+    </div>
     {% endif %}
   </header>
   <main>
@@ -31,5 +41,13 @@
     {% if notice %}<p class="msg ok" role="status">{{ notice }}</p>{% endif %}
     {% block content %}{% endblock %}
   </main>
+  {% if user and tid %}
+  <nav class="tabbar" aria-label="Bereiche">
+    <a href="/t/{{ tid }}/" {% if section == '' %}aria-current="page"{% endif %}>{{ icon.home() }}Start</a>
+    <a href="/t/{{ tid }}/figures" {% if section == 'figures' %}aria-current="page"{% endif %}>{{ icon.figure() }}Figuren</a>
+    <a href="/t/{{ tid }}/contents" {% if section == 'contents' %}aria-current="page"{% endif %}>{{ icon.music() }}Inhalte</a>
+    <a href="/t/{{ tid }}/boxes" {% if section in ('boxes', 'setup') %}aria-current="page"{% endif %}>{{ icon.box() }}Boxen</a>
+  </nav>
+  {% endif %}
 </body>
 </html>

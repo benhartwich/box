@@ -1,7 +1,11 @@
 {% extends "base.html" %}
 {% block title %}Fehler · Myboxi{% endblock %}
 {% block content %}
-<h1>{{ status }}</h1>
-<p>{{ message }}</p>
-<p><a href="/">Zur Startseite</a></p>
+<div class="auth">
+  <div class="auth-head">
+    <p class="eyebrow">Fehler {{ status }}</p>
+    <h1>{{ message }}</h1>
+  </div>
+  <p><a class="button" href="/">Zur Startseite</a></p>
+</div>
 {% endblock %}

@@ -3,20 +3,22 @@
 {% block content %}
 <h1>Haushalte</h1>
 {% if memberships %}
-<ul class="list">
+<ul class="list card">
   {% for m in memberships %}
-  <li><a href="/t/{{ m.tenant.id }}/">{{ m.tenant.name }}</a> <span class="muted">{{ ROLE_LABELS[m.role] }}</span></li>
+  <li><a href="/t/{{ m.tenant.id }}/"><strong>{{ m.tenant.name }}</strong></a> <span class="badge">{{ ROLE_LABELS[m.role] }}</span></li>
   {% endfor %}
 </ul>
 {% else %}
 <p>Du gehörst noch zu keinem Haushalt. Leg einen an oder lass dich von jemandem einladen.</p>
 {% endif %}
 
-<h2>Neuen Haushalt anlegen</h2>
-<p class="muted">Du wirst Besitzer des Haushalts. Danach führt dich der Assistent durch die Einrichtung der ersten Box.</p>
-<form method="post" action="/households" class="stack">
-  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-  <label>Name <input name="name" maxlength="100" placeholder="Familie Muster" value="{{ name or '' }}" required></label>
-  <button type="submit">Haushalt anlegen</button>
-</form>
+<section class="card highlight">
+  <h2>Neuen Haushalt anlegen</h2>
+  <p class="muted">Du wirst Besitzer des Haushalts. Danach führt dich der Assistent durch die Einrichtung der ersten Box.</p>
+  <form method="post" action="/households" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>Name <input name="name" maxlength="100" placeholder="Familie Muster" value="{{ name or '' }}" required></label>
+    <button type="submit">Haushalt anlegen</button>
+  </form>
+</section>
 {% endblock %}

@@ -86,7 +86,7 @@ export DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8
 apt-get update
 apt-get install -y --no-install-recommends \
     mpv pipewire wireplumber pipewire-alsa python3 python3-lgpio python3-rpi-lgpio \
-    i2c-tools dnsmasq-base polkitd openssl unattended-upgrades \
+    i2c-tools dnsmasq-base polkitd openssl unattended-upgrades nftables \
     build-essential python3-dev
 
 # Service user: GPIO, I2C and audio; its user session (linger) runs PipeWire and the agent.
@@ -113,12 +113,21 @@ apt-get clean
 rm -rf /var/lib/apt/lists/*
 
 systemctl enable myboxi-firstboot.service myboxi-updater.timer
+# Firewall: inbound only from the home network (SPEC v0.9 §10, /etc/nftables.conf).
+systemctl enable nftables.service
+# Spotify Connect announces itself over mDNS on UDP 5353; avahi would hold that port and the
+# box would silently not show up in the Spotify app. The box needs no .local name.
+systemctl mask avahi-daemon.service avahi-daemon.socket
 install -d -m 0700 /var/lib/myboxi-updater
 systemctl --global enable pipewire.socket wireplumber.service
 # The agent only in the session of "myboxi" (the unit also has ConditionUser=myboxi).
-install -d /var/lib/myboxi/.config/systemd/user/default.target.wants
+install -d /var/lib/myboxi/.config/systemd/user/default.target.wants \
+    /var/lib/myboxi/.config/systemd/user/timers.target.wants
 ln -sf /usr/lib/systemd/user/myboxi-agent.service \
     /var/lib/myboxi/.config/systemd/user/default.target.wants/myboxi-agent.service
+# Spotify (SPEC v0.9 §8.1): the daily Soloist update check; it does nothing while Spotify is off.
+ln -sf /usr/lib/systemd/user/myboxi-soloist-update.timer \
+    /var/lib/myboxi/.config/systemd/user/timers.target.wants/myboxi-soloist-update.timer
 chown -R myboxi:myboxi /var/lib/myboxi
 
 # Nothing may belong to a user that does not exist on the box (e.g. the build user).

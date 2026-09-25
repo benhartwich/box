@@ -29,6 +29,7 @@ _SECRET_KEYS = (
     "csrf_token",
     "smtp_password",
     "soloist_key",
+    "soloist_api_key",
     "api_key",
 )
 _KEY_ALT = "|".join(re.escape(k) for k in sorted(_SECRET_KEYS, key=len, reverse=True))
@@ -40,6 +41,8 @@ _PATTERNS = (
     re.compile(rf"('(?:{_KEY_ALT})'\s*:\s*)'[^']*'", re.IGNORECASE),
     re.compile(rf"(\b(?:{_KEY_ALT})\s*[=:]\s*)(?!\[REDACTED\])[^\s&,;'\"}}]+", re.IGNORECASE),
     re.compile(r"(\bBearer\s+)[A-Za-z0-9._~+/=-]+", re.IGNORECASE),
+    # Soloist's command line (SPEC v0.9 §10): --api-key KEY, -k KEY
+    re.compile(r"((?:--api-key|(?<!\w)-k)[=\s]+)(?!\[REDACTED\])\S+"),
     re.compile(r"(\$argon2id?\$)[^\s'\"]+"),
 )
 

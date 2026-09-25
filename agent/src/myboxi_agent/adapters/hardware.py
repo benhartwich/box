@@ -206,6 +206,8 @@ def hardware_adapters(settings: Settings) -> Adapters:  # pragma: no cover - wir
         missing_prompts,
         mpv_args,
     )
+    from myboxi_agent.adapters.routing import RoutingPlayer
+    from myboxi_agent.adapters.soloist import SoloistClient, SoloistPlayer
 
     health = Health()
     prompt_dirs = [settings.custom_prompts_dir, settings.prompts_dir]
@@ -218,6 +220,15 @@ def hardware_adapters(settings: Settings) -> Adapters:  # pragma: no cover - wir
     run_dir.mkdir(parents=True, exist_ok=True)
     player_ipc, prompt_ipc = run_dir / "mpv-player.sock", run_dir / "mpv-prompts.sock"
     player = MpvPlayer(lambda on_event: MpvClient(player_ipc, on_event))
+    clock = SystemClock()
+    # SPEC v0.9 §8.1; the app sets the explicit filter from the device configuration.
+    spotify = SoloistPlayer(
+        lambda on_event, on_connection: SoloistClient(
+            settings.soloist_ws_port, on_event, on_connection
+        ),
+        clock,
+        allow_explicit=lambda: False,
+    )
     background: list[Background] = [
         MpvProcess(
             mpv_args(settings.mpv_path, player_ipc, settings.audio_output, "myboxi"),
@@ -225,6 +236,7 @@ def hardware_adapters(settings: Settings) -> Adapters:  # pragma: no cover - wir
             player.restarted,
         ).run,
         player.client.run,
+        spotify.client.run,
         MpvProcess(
             mpv_args(settings.mpv_path, prompt_ipc, settings.audio_output, "myboxi-prompts"),
             prompt_ipc,
@@ -239,7 +251,7 @@ def hardware_adapters(settings: Settings) -> Adapters:  # pragma: no cover - wir
         return a
 
     return Adapters(
-        clock=SystemClock(),
+        clock=clock,
         reader=Pn532Reader(
             lambda: open_pn532(settings.pn532_i2c_address),
             settings.reader_poll_s,
@@ -247,7 +259,8 @@ def hardware_adapters(settings: Settings) -> Adapters:  # pragma: no cover - wir
             bus=I2C_BUS,
         ),
         buttons=GpioButtons({str(name): pin for name, pin in settings.pins.items()}, health=health),
-        player=player,
+        player=RoutingPlayer(player, spotify),
+        spotify=spotify,
         system=SystemdSystem(),
         announcer_factory=announcer,
         background=background,

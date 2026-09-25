@@ -385,3 +385,126 @@ def test_player_error_reports_the_real_provider(box: Box) -> None:
     assert box.outbox.of("playback_error") == [
         PlaybackErrorData(token_id=token, provider="podcast", code="decode_error")
     ]
+
+
+# --- SPEC v0.9 §8.1: Spotify ---------------------------------------------------------------
+
+ALBUM = "spotify:album:4aawyAB9vmqN3uQ7FjRGTy"
+TRACK_3 = "spotify:track:2JRo0gjbX4GrCqBYdRohoo"
+
+
+def spotify(token: uuid.UUID | None = None, *, shuffle: bool = False) -> Playable:
+    return Playable(
+        token or uuid.uuid4(), uuid.uuid4(), (PlanItem(ALBUM, "Album", 0),), True, shuffle,
+        "off", "spotify", context=True,
+    )  # fmt: skip
+
+
+def test_spotify_figure_resumes_by_track_index_and_uri(box: Box) -> None:
+    plan = spotify()
+    box.resume.points[plan.token_id] = ResumePoint(3, 42_000, TRACK_3)
+    box.library.by_uid[UID] = plan
+    box.ctl.token_placed(UID)
+    assert box.player.calls == [f"context:{ALBUM}#3@42000"]
+    assert box.player.track_key == TRACK_3
+    box.player.position_ms = 50_000
+    box.ctl.token_removed()
+    assert box.resume.points[plan.token_id] == ResumePoint(3, 50_000, TRACK_3)
+    assert box.outbox.of("resume_position")[-1] == ResumePositionData(
+        token_id=plan.token_id, item_index=3, position_ms=50_000, item_key=TRACK_3
+    )
+
+
+def test_spotify_shuffle_starts_at_the_beginning(box: Box) -> None:
+    plan = spotify(shuffle=True)
+    box.resume.points[plan.token_id] = ResumePoint(3, 42_000, TRACK_3)
+    box.library.by_uid[UID] = plan
+    box.ctl.token_placed(UID)
+    assert box.player.calls == [f"context:{ALBUM}#0@0"]
+
+
+def test_next_skips_within_the_context(box: Box) -> None:
+    box.library.by_uid[UID] = spotify()
+    box.ctl.token_placed(UID)
+    box.ctl.button(Action.NEXT)
+    assert box.player.calls[-1] == "skip"
+    assert box.ctl.status().status == "playing"
+
+
+def test_end_of_context_resets_the_position(box: Box) -> None:
+    """The guard (autoplay) ends the content like the end of a playlist (SPEC §9.1)."""
+    plan = spotify()
+    box.library.by_uid[UID] = plan
+    box.ctl.token_placed(UID)
+    box.ctl.playlist_finished()
+    assert box.player.calls[-1] == "stop"
+    assert box.resume.points[plan.token_id] == ResumePoint(0, 0)
+    assert box.ctl.status().status == "stopped"
+
+
+def test_connect_session_pauses_a_playing_figure_and_saves_it(box: Box) -> None:
+    plan = playable()
+    box.library.by_uid[UID] = plan
+    box.ctl.token_placed(UID)
+    box.player.index, box.player.position_ms = 1, 7000
+    box.ctl.remote_playing(True)  # someone plays something from the Spotify app
+    assert box.player.calls[-1] == "pause"
+    assert box.resume.points[plan.token_id] == ResumePoint(1, 7000)
+    assert box.ctl.status() == box.ctl.status().__class__("playing", None, 35)
+    box.ctl.token_placed(UID)  # the latest action wins: the figure again
+    assert box.ctl.external_playing is False
+    assert box.player.calls[-1] == "play:1@7000"
+
+
+def test_connect_session_follows_volume_limit_and_quiet_hours(box: Box) -> None:
+    box.ctl.remote_playing(True)
+    box.ctl.external_volume(90)  # slider in the Spotify app
+    assert box.player.volume == 55  # set back to max_volume (SPEC §9.2)
+    box.set_config(quiet_hours={"start": "11:00", "end": "13:00", "lock": True})
+    box.ctl.tick()  # 12:00 Vienna: locked
+    assert box.player.calls[-1] == "pause"
+    assert Prompt.QUIET_TIME in box.announcer.flat
+    assert box.ctl.status().status == "stopped"
+    box.ctl.remote_playing(True)  # started again in the app during the lock
+    assert box.player.calls[-1] == "pause"
+
+
+def test_connect_session_sleep_timer(box: Box) -> None:
+    box.set_config(sleep_timer_min=20)
+    box.ctl.remote_playing(True)
+    box.clock.advance(19 * 60)
+    box.ctl.tick()
+    assert "pause" not in box.player.calls
+    box.clock.advance(61)
+    box.ctl.tick()
+    assert box.player.calls[-1] == "pause"
+
+
+def test_play_pause_button_stops_a_connect_session(box: Box) -> None:
+    box.ctl.remote_playing(True)
+    box.ctl.button(Action.PLAY_PAUSE)
+    assert box.player.calls == ["pause"]
+    assert box.ctl.status().status == "stopped"
+
+
+def test_pause_in_the_app_pauses_the_spotify_figure(box: Box) -> None:
+    plan = spotify()
+    box.library.by_uid[UID] = plan
+    box.ctl.token_placed(UID)
+    box.ctl.remote_playing(False)
+    assert box.ctl.status().status == "paused"
+    assert box.outbox.of("resume_position")  # position saved on the pause
+    box.ctl.remote_playing(True)
+    assert box.ctl.status().status == "playing"
+
+
+def test_spotify_failure_says_it_does_not_work_now(box: Box) -> None:
+    """SPEC §4.1: Spotify has no cache; offline means announcement plus error tone."""
+    plan = spotify()
+    box.library.by_uid[UID] = plan
+    box.ctl.token_placed(UID)
+    box.ctl.player_error("soloist_error")
+    assert box.announcer.said[-1] == (Prompt.UNAVAILABLE, Prompt.TONE_ERROR)
+    assert box.outbox.of("playback_error")[-1] == PlaybackErrorData(
+        token_id=plan.token_id, provider="spotify", code="soloist_error"
+    )

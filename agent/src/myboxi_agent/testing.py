@@ -27,7 +27,9 @@ class FakePlayer:
     repeat: RepeatMode = "off"
     state: str = "stopped"
     volume: int | None = None
+    track_key: str | None = None
     calls: list[str] = field(default_factory=list[str])
+    volumes: list[int] = field(default_factory=list[int])
 
     @property
     def sources(self) -> list[str]:
@@ -45,6 +47,18 @@ class FakePlayer:
         self.state = "playing"
         self.calls.append(f"play:{index}@{position_ms}")
 
+    def play_context(self, uri: str, start: ResumePoint, shuffle: bool, repeat: RepeatMode) -> None:
+        self.items = [PlanItem(uri, uri, 0)]
+        self.index, self.position_ms, self.repeat = start.item_index, start.position_ms, repeat
+        self.track_key = start.item_key
+        self.state = "playing"
+        self.calls.append(f"context:{uri}#{start.item_index}@{start.position_ms}")
+
+    def skip(self) -> None:
+        self.index += 1
+        self.position_ms = 0
+        self.calls.append("skip")
+
     def pause(self) -> None:
         self.state = "paused"
         self.calls.append("pause")
@@ -59,11 +73,12 @@ class FakePlayer:
 
     def set_volume(self, volume: int) -> None:
         self.volume = volume
+        self.volumes.append(volume)
 
     def position(self) -> ResumePoint | None:
         if not self.items:
             return None
-        return ResumePoint(self.index, self.position_ms)
+        return ResumePoint(self.index, self.position_ms, self.track_key)
 
 
 @dataclass

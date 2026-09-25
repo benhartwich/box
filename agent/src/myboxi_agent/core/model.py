@@ -37,6 +37,9 @@ class Playable:
     shuffle: bool
     repeat: RepeatMode
     provider: ProviderName = "local"
+    # SPEC v0.9 §8.1: the provider walks the tracks itself (a Spotify context); ``items`` holds
+    # the context URI only and resume points carry the track index and URI.
+    context: bool = False
 
     def start_index(self, point: ResumePoint) -> int | None:
         """Item to resume: by key when the saved point has one (the list may have shifted),

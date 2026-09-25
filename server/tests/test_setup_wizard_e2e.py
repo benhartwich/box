@@ -86,7 +86,8 @@ async def test_wizard_follows_a_real_box(
         AgentSettings(data_dir=tmp_path / "box", sim=True, default_server_url=live_server),
         sim_adapters(),
     )
-    reader, buttons, player = agent.adapters.reader, agent.adapters.buttons, agent.adapters.player
+    reader, buttons = agent.adapters.reader, agent.adapters.buttons
+    player = _local(agent.adapters.player)
     assert isinstance(reader, SimReader)
     assert isinstance(buttons, SimButtons)
     assert isinstance(player, SimPlayer)
@@ -164,3 +165,10 @@ async def _has(client: httpx.AsyncClient, url: str, text: str) -> bool:
 
 async def _playing(player: SimPlayer) -> bool:
     return player.state == "playing"
+
+
+def _local(player: object) -> object:
+    """The file player behind the routing player (SPEC v0.9: mpv and Spotify)."""
+    from myboxi_agent.adapters.routing import RoutingPlayer
+
+    return player.local if isinstance(player, RoutingPlayer) else player

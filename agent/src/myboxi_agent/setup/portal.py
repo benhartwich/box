@@ -32,6 +32,12 @@ class Submission:
     ssid: str
     password: str
     server_url: str
+    # SPEC v0.9 §9.3: None keeps the stored key; never shown again, never logged.
+    soloist_key: str | None = None
+    soloist_clear: bool = False
+
+    def __repr__(self) -> str:  # no password or key in any log line
+        return f"Submission(ssid={self.ssid!r}, server_url={self.server_url!r})"
 
 
 class InvalidInput(ValueError):
@@ -49,7 +55,14 @@ def validate(form: dict[str, str]) -> Submission:
     parts = urlsplit(url)
     if parts.scheme not in ("https", "http") or not parts.netloc or len(url) > 200:
         raise InvalidInput("Bitte eine Server-Adresse wie https://app.myboxi.eu angeben.")
-    return Submission(ssid, password, url.rstrip("/"))
+    key = form.get("soloist_key", "").strip() or None
+    if key is not None and not (8 <= len(key) <= 512 and all(33 <= ord(c) <= 126 for c in key)):
+        raise InvalidInput(
+            "Der Spotify-Schlüssel sieht nicht richtig aus. Bitte aus dem Spotify-Entwicklerportal "
+            "kopieren."
+        )
+    clear = form.get("soloist_clear") == "1"
+    return Submission(ssid, password, url.rstrip("/"), None if clear else key, clear)
 
 
 STYLE = (
@@ -59,6 +72,8 @@ STYLE = (
     "padding:.6rem;border:1px solid #ccc;border-radius:10px}button{margin-top:1.2rem;"
     "background:#2f6f5e;color:#fff;border:0}.err{background:#fbe9e7;padding:.6rem;"
     "border-radius:10px}.muted{color:#6a737d;font-size:.9em}"
+    ".check{display:flex;gap:.5rem;align-items:center;font-weight:400}.check input{width:auto}"
+    "details{margin-top:1rem}summary{font-weight:600}"
 )
 
 
@@ -71,7 +86,32 @@ def page(body: str, title: str = "Myboxi einrichten") -> bytes:
     ).encode()
 
 
-def form_page(networks: Sequence[Network], server_url: str, error: str | None) -> bytes:
+def spotify_fields(key_set: bool) -> str:
+    """SPEC v0.9 §9.3: optional Soloist key; the page never shows a stored key."""
+    state = (
+        "Ein Schlüssel ist gespeichert. Leer lassen, um ihn zu behalten."
+        if key_set
+        else "Nur für Spotify nötig: Spotify Premium und ein eigener Schlüssel aus dem Spotify-"
+        "Entwicklerportal (Spotify Soloist API Key)."
+    )
+    clear = (
+        '<label class="check"><input type="checkbox" name="soloist_clear" value="1">'
+        "Schlüssel löschen</label>"
+        if key_set
+        else ""
+    )
+    return (
+        f"<details{' open' if key_set else ''}><summary>Spotify (optional)</summary>"
+        '<label for="soloist_key">Spotify-Schlüssel</label>'
+        '<input id="soloist_key" name="soloist_key" type="password" maxlength="512" '
+        'autocomplete="off" spellcheck="false">'
+        f'<p class="muted">{html.escape(state)}</p>{clear}</details>'
+    )
+
+
+def form_page(
+    networks: Sequence[Network], server_url: str, error: str | None, key_set: bool = False
+) -> bytes:
     options = "".join(
         f'<option value="{html.escape(n.ssid, quote=True)}">'
         f"{html.escape(n.ssid)}{' 🔒' if n.secured else ''}</option>"
@@ -89,6 +129,7 @@ def form_page(networks: Sequence[Network], server_url: str, error: str | None) -
         '<label for="server_url">Server</label>'
         f'<input id="server_url" name="server_url" value="{html.escape(server_url, quote=True)}">'
         '<p class="muted">Nur ändern, wenn du einen eigenen Myboxi-Server betreibst.</p>'
+        f"{spotify_fields(key_set)}"
         "<button type=submit>Verbinden</button></form>"
     )
 
@@ -103,11 +144,16 @@ def connecting_page(ssid: str) -> bytes:
 
 class Portal:
     def __init__(
-        self, networks: Sequence[Network], default_server_url: str, error: str | None = None
+        self,
+        networks: Sequence[Network],
+        default_server_url: str,
+        error: str | None = None,
+        key_set: bool = False,
     ) -> None:
         self.networks = list(networks)
         self.default_server_url = default_server_url
         self.error = error
+        self.key_set = key_set
         self.last_activity = time.monotonic()
         self.submission: asyncio.Future[Submission] | None = None
 
@@ -160,11 +206,15 @@ class Portal:
                 return (
                     200,
                     html_type,
-                    form_page(self.networks, form.get("server_url", ""), str(exc)),
+                    form_page(self.networks, form.get("server_url", ""), str(exc), self.key_set),
                 )
             if self.submission is not None and not self.submission.done():
                 self.submission.set_result(submission)
             return 200, html_type, connecting_page(submission.ssid)
         if method == "GET" and (path in ("/", "/index.html") or path in PAGE_PROBES):
-            return 200, html_type, form_page(self.networks, self.default_server_url, self.error)
+            return (
+                200,
+                html_type,
+                form_page(self.networks, self.default_server_url, self.error, self.key_set),
+            )
         return 302, {"Location": PORTAL}, b""

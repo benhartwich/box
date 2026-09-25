@@ -88,6 +88,7 @@ class DeviceConfig(Timestamps, Base):
         ARRAY(Text), server_default=text("ARRAY['local','podcast']::text[]")
     )
     auto_update: Mapped[bool] = mapped_column(server_default=text("true"))  # SPEC v0.7 §3.4
+    spotify_allow_explicit: Mapped[bool] = mapped_column(server_default=text("false"))  # v0.9
 
 
 class Pairing(UuidPk, Timestamps, Base):

@@ -57,6 +57,18 @@ PROBLEM_TEXTS = {
     ("local", "asset_missing"): "Eine Datei fehlt auf der Box. Sie wird beim nächsten Abgleich "
     "neu geladen.",
     ("local", "empty"): "Der Inhalt hat keine Titel.",
+    # SPEC v0.9 §8.1
+    ("spotify", "not_configured"): "Auf der Box fehlt der Spotify-Schlüssel. Er wird im "
+    "Einrichtungsmodus der Box eingetragen.",
+    ("spotify", "not_running"): "Spotify startet auf der Box noch oder wird gerade geladen. "
+    "Bitte gleich noch einmal versuchen.",
+    ("spotify", "expired"): "Die Spotify-Version auf der Box ist abgelaufen. Sie lädt eine neue, "
+    "sobald sie online ist.",
+    ("spotify", "not_logged_in"): "Noch kein Spotify-Konto verbunden. In der Spotify-App im "
+    "selben WLAN die Box als Gerät auswählen.",
+    ("spotify", "explicit"): "Dort spielen nur Titel mit Explicit-Kennzeichnung, und die sind "
+    "für diese Box nicht erlaubt.",
+    ("spotify", "soloist_error"): "Spotify meldet einen Fehler, oft fehlt die Internetverbindung.",
 }
 CODE_TEXTS = {
     "disabled": "{provider} ist für diese Box ausgeschaltet (Einstellungen unten).",
@@ -154,12 +166,47 @@ def _reported_view(
         )
     return {
         "data": data,
+        "spotify": spotify_view(data, soloist_warning),
         "software": software_view(data, latest),
         "health": health_hints(data),
         "config_in_sync": data.applied_config_rev >= config_rev,
         "device_in_sync": data.applied_device_rev >= device.device_rev,
         "soloist_warning": soloist_warning,
     }
+
+
+def spotify_view(data: ReportedData, expiring: bool) -> dict[str, str] | None:
+    """SPEC v0.9 §6.4: what the family has to do for Spotify, if anything."""
+    s = data.soloist
+    if s is None:
+        return None
+    name = s.device_name or "Myboxi"
+    expires = s.build_expires_at.strftime("%d.%m.%Y") if s.build_expires_at else ""
+    match s.state:
+        case "no_key":
+            return {"level": "warn", "text": "Der Spotify-Schlüssel fehlt. Im Einrichtungsmodus "
+                    "der Box (lauter und leiser 5 Sekunden halten) eintragen."}  # fmt: skip
+        case "installing":
+            return {"level": "", "text": "Spotify wird auf der Box eingerichtet …"}
+        case "starting":
+            return {"level": "", "text": "Spotify startet …"}
+        case "failed":
+            return {"level": "fail", "text": "Spotify ließ sich nicht laden. Die Box versucht "
+                    "es später erneut."}  # fmt: skip
+        case "expired":
+            return {"level": "fail", "text": "Die Spotify-Version ist abgelaufen. Die Box lädt "
+                    "eine neue, sobald sie online ist."}  # fmt: skip
+        case "ready" if s.logged_in is False:
+            return {"level": "warn", "text": f"Noch kein Spotify-Konto verbunden: In der "
+                    f"Spotify-App im selben WLAN das Gerät „{name}“ auswählen."}  # fmt: skip
+        case _ if expiring:
+            return {"level": "warn", "text": f"Update nötig, läuft ab am {expires}"}
+        case "ready":
+            return {"level": "ok", "text": f"bereit als „{name}“"}
+        case _ if s.installed:
+            return {"level": "ok", "text": "eingerichtet"}
+        case _:
+            return None
 
 
 async def _box_page(
@@ -246,6 +293,7 @@ async def update_config(
     quiet_mode: Annotated[str, Form()] = "limit",
     quiet_max_volume: Annotated[int, Form()] = 25,
     auto_update: Annotated[bool, Form()] = False,
+    spotify_allow_explicit: Annotated[bool, Form()] = False,
 ) -> Response:
     quiet: dict[str, Any] | None = None
     if quiet_enabled:
@@ -266,6 +314,7 @@ async def update_config(
                 "timezone": timezone,
                 "providers_enabled": providers or [],
                 "auto_update": auto_update,
+                "spotify_allow_explicit": spotify_allow_explicit,
             }
         )
     except (ValidationError, ValueError):

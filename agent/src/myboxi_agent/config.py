@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     # a feed on the local network or on this machine.
     podcast_allow_private: bool = False
 
+    # Spotify (SPEC v0.9 §8.1): Soloist's WebSocket, only on 127.0.0.1.
+    soloist_ws_port: int = Field(default=24879, ge=1024, le=65535)
+
     # Software updates (SPEC v0.7 §11.1); used by the root service myboxi-updater.
     update_manifest_url: str = (
         "https://github.com/benhartwich/myboxi/releases/download/channel-stable/manifest.json"
@@ -65,6 +68,11 @@ class Settings(BaseSettings):
     def custom_prompts_dir(self) -> Path:
         """Own recordings override the generated prompts (SPEC §4)."""
         return self.data_dir / "prompts"
+
+    @property
+    def soloist_dir(self) -> Path:
+        """Soloist releases, its data (login) and cache; never in the image (CLAUDE.md)."""
+        return self.data_dir / "soloist"
 
     @property
     def control_socket(self) -> Path:

@@ -1,3 +1,3 @@
-"""Myboxi box agent (SPEC v0.8)."""
+"""Myboxi box agent (SPEC v0.9)."""
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"

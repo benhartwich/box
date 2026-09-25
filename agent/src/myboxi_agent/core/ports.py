@@ -34,6 +34,15 @@ class Player(Protocol):
         Each item's ``gain_db`` (SPEC v0.8 §8.2) applies to that item only."""
         ...
 
+    def play_context(self, uri: str, start: ResumePoint, shuffle: bool, repeat: RepeatMode) -> None:
+        """SPEC v0.9 §8.1: play a context the provider walks itself (Spotify), from the track
+        ``start.item_index`` whose URI should be ``start.item_key``."""
+        ...
+
+    def skip(self) -> None:
+        """Next track within a context."""
+        ...
+
     def pause(self) -> None: ...
 
     def resume(self) -> None: ...
@@ -43,7 +52,8 @@ class Player(Protocol):
     def set_volume(self, volume: int) -> None: ...
 
     def position(self) -> ResumePoint | None:
-        """Last known (item index within the playlist given to ``play``, position)."""
+        """Last known (item index within the playlist given to ``play``, position); for a
+        context the track index and URI."""
         ...
 
 

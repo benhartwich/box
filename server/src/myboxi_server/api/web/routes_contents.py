@@ -71,7 +71,8 @@ KIND_CHOICES = (
     ),
     KindChoice(
         ContentKind.SPOTIFY, "disc", "Spotify",
-        "Album, Playlist oder Hörbuch. Braucht Spotify Premium und Internet.", ready=False,
+        "Album oder Playlist. Braucht Spotify Premium, einen Spotify-Schlüssel auf der Box und "
+        "Internet.", ready=True,
     ),
     KindChoice(
         ContentKind.STREAM, "radio", "Radio",

@@ -8,6 +8,7 @@ from typing import Any
 
 from myboxi_agent.adapters.base import Buttons, Reader
 from myboxi_agent.adapters.health import Health
+from myboxi_agent.adapters.routing import ContextBackend
 from myboxi_agent.core.clock import Clock
 from myboxi_agent.core.ports import Announcer, Player, System
 
@@ -27,15 +28,18 @@ class Adapters:
     announcer_factory: Callable[[VolumeSource], Announcer]
     background: list[Background] = field(default_factory=list[Background])
     health: Health = field(default_factory=Health)  # SPEC v0.6 §6.4 self-test
+    spotify: ContextBackend | None = None  # SPEC v0.9 §8.1, part of ``player``
 
 
 def sim_adapters() -> Adapters:
     from myboxi_agent.adapters.clock import SystemClock
+    from myboxi_agent.adapters.routing import RoutingPlayer
     from myboxi_agent.adapters.sim import (
         SimAnnouncer,
         SimButtons,
         SimPlayer,
         SimReader,
+        SimSpotify,
         SimSystem,
     )
 
@@ -47,8 +51,9 @@ def sim_adapters() -> Adapters:
         clock=SystemClock(assume_trusted=True),
         reader=SimReader(health),
         buttons=SimButtons(),
-        player=SimPlayer(),
+        player=RoutingPlayer(SimPlayer(), spotify := SimSpotify()),
         system=SimSystem(),
         announcer_factory=lambda _volume: SimAnnouncer(),
         health=health,
+        spotify=spotify,
     )

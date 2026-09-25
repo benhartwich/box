@@ -135,7 +135,13 @@ def test_reported_6_4() -> None:
                 "wifi_rssi": -61,
                 "time_trusted": True,
                 "playback": {"status": "playing", "token_id": TOKEN, "volume": 35},
-                "soloist": {"installed": True, "build_expires_at": "2026-12-01"},
+                "soloist": {
+                    "installed": True,
+                    "build_expires_at": "2026-12-01",
+                    "state": "ready",
+                    "logged_in": True,
+                    "device_name": "Myboxi 4711",
+                },
                 "health": [
                     {"check": "nfc", "level": "ok", "code": "ok"},
                     {"check": "audio", "level": "fail", "code": "no_output"},
@@ -497,3 +503,17 @@ def test_resume_position_item_key_is_optional_and_omitted_v0_8() -> None:
         ResumePositionData.model_validate(
             {"token_id": TOKEN, "item_index": 0, "position_ms": 0, "item_key": "a b"}
         )
+
+
+def test_device_config_spotify_explicit_defaults_off_v0_9() -> None:
+    """SPEC v0.9 §3.4: children's box, explicit Spotify titles only on request."""
+    assert DeviceConfig().spotify_allow_explicit is False
+    assert DeviceConfig.model_validate({}).model_dump()["spotify_allow_explicit"] is False
+
+
+def test_soloist_state_is_a_machine_code_v0_9() -> None:
+    from myboxi_protocol.reported import Soloist
+
+    assert Soloist.model_validate({"installed": True, "state": "some_new_state"}).state
+    with pytest.raises(ValidationError):
+        Soloist.model_validate({"installed": True, "state": "Läuft"})

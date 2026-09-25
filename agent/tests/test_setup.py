@@ -26,6 +26,7 @@ from myboxi_agent.setup.portal import Portal, Submission
 from myboxi_agent.setup.watch import OFFLINE_GRACE_S, RETRIGGER_AFTER_S, NetworkWatch
 
 SECRET = "sehr-geheimes-passwort"
+SOLOIST_KEY = "sk-test-0123456789abcdef"
 
 
 # --- nmcli ------------------------------------------------------------------------------------
@@ -167,6 +168,38 @@ async def test_invalid_submission_shows_an_error(
     assert not p.submission.done()
 
 
+async def test_spotify_key_is_never_shown(portal: tuple[Portal, str]) -> None:
+    """SPEC v0.9 §9.3: a password field; after an error the key is not sent back."""
+    p, url = portal
+    p.key_set = True
+    form = {"ssid": "", "password": SECRET, "server_url": "https://app.myboxi.eu",
+            "soloist_key": SOLOIST_KEY}  # fmt: skip
+    async with httpx.AsyncClient() as c:
+        page = await c.get(url + "/")
+        r = await c.post(url + "/connect", data=form)
+    assert 'name="soloist_key" type="password"' in page.text
+    assert "Ein Schlüssel ist gespeichert" in page.text
+    assert 'class="err"' in r.text
+    assert SOLOIST_KEY not in r.text
+
+
+async def test_invalid_spotify_key(portal: tuple[Portal, str]) -> None:
+    p, url = portal
+    form = {"ssid": "Heim", "password": SECRET, "server_url": "https://app.myboxi.eu",
+            "soloist_key": "zu kurz"}  # fmt: skip
+    async with httpx.AsyncClient() as c:
+        r = await c.post(url + "/connect", data=form)
+    assert "Spotify-Schlüssel" in r.text
+    assert p.submission is not None
+    assert not p.submission.done()
+
+
+def test_submission_repr_hides_secrets() -> None:
+    text = repr(Submission("Heim", SECRET, "https://x.test", SOLOIST_KEY))
+    assert SECRET not in text
+    assert SOLOIST_KEY not in text
+
+
 async def test_manual_ssid_wins_and_open_network_is_allowed(portal: tuple[Portal, str]) -> None:
     p, url = portal
     form = {
@@ -220,12 +253,16 @@ class FakeNM:
 class FakeAgent:
     said: list[tuple[str, ...]] = field(default_factory=list[tuple[str, ...]])
     urls: list[str] = field(default_factory=list[str])
+    keys: list[str | None] = field(default_factory=list[str | None])
 
     async def announce(self, *prompts: str) -> None:
         self.said.append(tuple(str(p) for p in prompts))
 
     async def set_server_url(self, url: str) -> None:
         self.urls.append(url)
+
+    async def set_soloist_key(self, key: str | None) -> None:
+        self.keys.append(key)
 
 
 async def _submit_when_ready(form: dict[str, str], attempts: int = 1) -> None:
@@ -289,6 +326,30 @@ async def test_failed_connection_reopens_the_portal() -> None:
     assert ok
     assert (Prompt.SETUP_FAILED,) in agent.said
     assert nm.hotspots == 2
+
+
+async def test_setup_hands_over_the_spotify_key() -> None:
+    """SPEC v0.9 §9.3: the key goes to the agent; an empty field keeps the stored one."""
+    nm, agent = FakeNM(connect_results=[True]), FakeAgent()
+    form = {"ssid": "Heim", "password": SECRET, "server_url": "https://app.myboxi.eu",
+            "soloist_key": SOLOIST_KEY}  # fmt: skip
+    phone = asyncio.create_task(_submit_when_ready(form))
+    await run_setup(nm, agent, ssid="Myboxi-0042", default_server_url="https://x.test",
+                    host="127.0.0.1")  # fmt: skip
+    await phone
+    assert agent.keys == [SOLOIST_KEY]
+
+
+async def test_setup_without_key_keeps_it_and_clear_removes_it() -> None:
+    for form_extra, expected in (({}, []), ({"soloist_clear": "1"}, [None])):
+        nm, agent = FakeNM(connect_results=[True]), FakeAgent()
+        form = {"ssid": "Heim", "password": SECRET, "server_url": "https://x.test"} | form_extra
+        _PORTS.clear()
+        phone = asyncio.create_task(_submit_when_ready(form))
+        await run_setup(nm, agent, ssid="Myboxi-0042", default_server_url="https://x.test",
+                        host="127.0.0.1", soloist_key_set=True)  # fmt: skip
+        await phone
+        assert agent.keys == expected
 
 
 async def test_setup_ends_after_inactivity() -> None:

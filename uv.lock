@@ -530,13 +530,14 @@ wheels = [
 
 [[package]]
 name = "myboxi-agent"
-version = "0.4.0"
+version = "0.5.0"
 source = { editable = "agent" }
 dependencies = [
     { name = "httpx" },
     { name = "myboxi-protocol" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
+    { name = "websockets" },
 ]
 
 [package.optional-dependencies]
@@ -555,6 +556,7 @@ requires-dist = [
     { name = "myboxi-protocol", editable = "packages/protocol" },
     { name = "pydantic", specifier = ">=2.11" },
     { name = "pydantic-settings", specifier = ">=2.10" },
+    { name = "websockets", specifier = ">=15" },
 ]
 provides-extras = ["hw"]
 

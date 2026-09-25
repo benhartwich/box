@@ -17,6 +17,8 @@ from myboxi_server.models import Invitation, Membership, Tenant, User
 from myboxi_server.models.enums import Role
 
 INVITATION_TTL = dt.timedelta(days=7)
+MAX_OWNED_TENANTS = 10  # SPEC v0.6 §3.2
+MAX_TENANT_NAME = 100
 MIN_PASSWORD_LENGTH = 10
 MAX_PASSWORD_LENGTH = 1024
 
@@ -65,6 +67,26 @@ async def create_tenant_with_owner(
     db.add(Membership(tenant_id=tenant.id, user_id=user.id, role=Role.OWNER))
     await db.flush()
     return tenant, user
+
+
+async def create_tenant(db: AsyncSession, user_id: uuid.UUID, name: str) -> Tenant:
+    """SPEC v0.6 §3.2: a signed-in user creates a household and owns it. The caller commits."""
+    name = name.strip()
+    if not 1 <= len(name) <= MAX_TENANT_NAME:
+        raise InvalidInputError("Bitte gib dem Haushalt einen Namen (höchstens 100 Zeichen).")
+    owned = await db.scalar(
+        select(func.count())
+        .select_from(Membership)
+        .where(Membership.user_id == user_id, Membership.role == Role.OWNER)
+    )
+    if (owned or 0) >= MAX_OWNED_TENANTS:
+        raise ConflictError(f"Du kannst höchstens {MAX_OWNED_TENANTS} Haushalte anlegen.")
+    tenant = Tenant(name=name)
+    db.add(tenant)
+    await db.flush()
+    db.add(Membership(tenant_id=tenant.id, user_id=user_id, role=Role.OWNER))
+    await db.flush()
+    return tenant
 
 
 async def authenticate(db: AsyncSession, email: str, password: str) -> User | None:

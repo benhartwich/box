@@ -1,6 +1,6 @@
 [project]
 name = "myboxi-protocol"
-version = "0.4.0"
+version = "0.5.0"
 description = "Myboxi device protocol v1 message models (SPEC v0.4), shared by agent and server"
 license = "Apache-2.0"
 requires-python = ">=3.13,<3.14"

@@ -104,7 +104,7 @@ Mail: Ohne SMTP (`MYBOXI_SERVER_MAIL_BACKEND=log`) zeigt die Web-UI den Einladun
 myboxi-server migrate
 ```
 
-Der erste Owner wird auf der Kommandozeile angelegt. Das Passwort wird abgefragt und muss mindestens 10 Zeichen haben. Weitere Personen lädt der Owner dann in der Web-UI ein.
+Der erste Owner wird auf der Kommandozeile angelegt. Das Passwort wird abgefragt und muss mindestens 10 Zeichen haben. Weitere Personen lädt der Owner dann in der Web-UI ein; angemeldete Nutzer legen weitere Haushalte selbst an (höchstens 10 je Nutzer).
 
 <!-- check: replace=admin -->
 ```bash
@@ -178,6 +178,8 @@ rsync -a /var/lib/myboxi-server/assets/ backup-host:/backups/myboxi-server/asset
 ```
 
 **Aufräumen:** Der Worker löscht täglich um 03:17 Events älter als 30 Tage (SPEC §3.11), abgelaufene Sessions, Einladungen und Kopplungscodes sowie Audiodateien, auf die kein Inhalt mehr verweist.
+
+**Links im Einrichtungs-Assistenten:** `MYBOXI_SERVER_IMAGE_URL` (Download der Box-Images, Vorgabe: GitHub-Releases) und `MYBOXI_SERVER_DOCS_URL` (Hardware-Anleitung). Für eigene Builds oder Forks anpassen.
 
 **Upload-Größe:** `MYBOXI_SERVER_MAX_UPLOAD_MB` gilt pro Datei. `client_max_body_size` in der nginx-Site begrenzt die gesamte Anfrage und muss dazu passen.
 

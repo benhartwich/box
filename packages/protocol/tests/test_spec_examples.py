@@ -24,7 +24,7 @@ from myboxi_protocol.pairing import (
     PairingStartRequest,
     PairingStartResponse,
 )
-from myboxi_protocol.reported import ReportedMessage
+from myboxi_protocol.reported import ReportedData, ReportedMessage
 from myboxi_protocol.state import DeviceConfig, QuietHours, StateResponse
 
 DEV = "0192f3a4-5b6c-7d8e-9f01-23456789abcd"
@@ -129,11 +129,40 @@ def test_reported_6_4() -> None:
                 "time_trusted": True,
                 "playback": {"status": "playing", "token_id": TOKEN, "volume": 35},
                 "soloist": {"installed": True, "build_expires_at": "2026-12-01"},
+                "health": [
+                    {"check": "nfc", "level": "ok", "code": "ok"},
+                    {"check": "audio", "level": "fail", "code": "no_output"},
+                ],
+                "button_test": {"seen": ["play_pause", "volume_up"]},
             },
         },
     )
     assert msg.data.soloist is not None
     assert msg.data.soloist.build_expires_at is not None
+    assert msg.data.health is not None
+    assert [h.code for h in msg.data.health] == ["ok", "no_output"]
+
+
+def test_reported_without_v06_fields_and_with_unknown_checks() -> None:
+    """SPEC v0.6 fields are optional; unknown check names and codes are accepted."""
+    base = {
+        "agent_version": "0.1.0",
+        "hw_model": "rpi4",
+        "applied_config_rev": 0,
+        "applied_device_rev": 0,
+        "storage": {"free_mb": 1},
+        "time_trusted": False,
+        "playback": {"status": "stopped", "volume": 30},
+    }
+    assert ReportedData.model_validate(base).health is None
+    data = ReportedData.model_validate(
+        {**base, "health": [{"check": "battery_gauge", "level": "warn", "code": "future_code"}]}
+    )
+    assert data.health is not None
+    with pytest.raises(ValidationError):
+        ReportedData.model_validate(
+            {**base, "health": [{"check": "nfc", "level": "ok", "code": "PN532 at /dev/i2c-1"}]}
+        )
 
 
 @pytest.mark.parametrize(

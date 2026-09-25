@@ -7,6 +7,7 @@ from pathlib import Path
 
 MODEL_FILE = Path("/proc/device-tree/model")
 IMAGE_VERSION_FILE = Path("/etc/myboxi-image-version")
+WIRELESS_FILE = Path("/proc/net/wireless")
 
 
 def detect_hw_model(model_file: Path = MODEL_FILE) -> str:
@@ -33,6 +34,26 @@ def image_version(path: Path = IMAGE_VERSION_FILE) -> str | None:
         return path.read_text("utf-8").strip()[:32] or None
     except OSError:
         return None
+
+
+def wifi_rssi(path: Path = WIRELESS_FILE) -> int | None:
+    """Signal level of the first wireless interface in dBm (SPEC §6.4 ``wifi_rssi``)."""
+    try:
+        lines = path.read_text("ascii", errors="replace").splitlines()[2:]
+    except OSError:
+        return None
+    for line in lines:
+        fields = line.split()
+        if len(fields) < 4:
+            continue
+        try:
+            level = int(float(fields[3].rstrip(".")))
+        except ValueError:
+            continue
+        if level > 0:  # some drivers report 8-bit unsigned values
+            level -= 256
+        return level if -120 <= level <= 0 else None
+    return None
 
 
 def free_bytes(path: Path) -> int:

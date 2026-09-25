@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block title %}Einrichtung {{ device.name or "Box" }} · Myboxi{% endblock %}
+{% block content %}
+<p><a href="/t/{{ tid }}/boxes/{{ device.id }}">← {{ device.name or "Box" }}</a></p>
+<h1>Einrichtung: {{ device.name or "Box" }}</h1>
+{% include "_setup_steps.html" %}
+<p class="muted">Hilfe bei Problemen: <a href="{{ docs_url }}/box-inbetriebnahme.md#fehlersuche" rel="noopener">Fehlersuche</a></p>
+{% endblock %}

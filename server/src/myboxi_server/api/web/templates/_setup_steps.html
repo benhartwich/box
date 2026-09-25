@@ -1,0 +1,54 @@
+{% set p = progress %}
+{% set back = "/t/" ~ tid ~ "/boxes/" ~ device.id ~ "/setup" %}
+<section id="setup-steps"{% if not p.done %} hx-get="{{ back }}/status" hx-trigger="every 3s" hx-swap="outerHTML" hx-vals='{"v": "{{ p.key }}"}'{% endif %}>
+  <p class="muted">{{ p.completed }} von {{ p.steps | length }} Schritten erledigt{% if not p.done %} · die Seite aktualisiert sich von selbst{% endif %}</p>
+  <ol class="checklist">
+    {% for s in p.steps %}
+    <li class="step step-{{ s.status }}">
+      <span class="step-mark" aria-hidden="true">{% if s.status == "done" %}✓{% elif s.status == "problem" %}!{% elif s.status == "skipped" %}–{% else %}{{ loop.index }}{% endif %}</span>
+      <div class="step-body">
+        <strong>{{ s.title }}</strong>
+        {% if s.status == "active" %}<span class="badge">jetzt</span>{% elif s.status == "problem" %}<span class="badge status-failed">Problem</span>{% elif s.status == "skipped" %}<span class="muted">übersprungen</span>{% endif %}
+        {% if s.text %}<p>{{ s.text }}</p>{% endif %}
+        {% if s.hints %}
+        <ul class="hints">{% for h in s.hints %}<li class="hint-{{ h.level }}">{{ h.text }}</li>{% endfor %}</ul>
+        {% endif %}
+        {% if s.key == "buttons" and p.buttons %}
+        <ul class="chips">{% for name, label, seen in p.buttons %}<li class="chip{% if seen %} chip-on{% endif %}">{% if seen %}✓ {% endif %}{{ label }}</li>{% endfor %}</ul>
+        {% endif %}
+        {% if s.key == "figure" and s.status != "done" and p.unknown_uid and ctx.can(Perm.TOKEN_WRITE) %}
+        <form method="post" action="/t/{{ tid }}/figures/adopt" class="row">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="hidden" name="uid" value="{{ p.unknown_uid }}">
+          <input type="hidden" name="next" value="{{ back }}">
+          <input name="label" maxlength="200" placeholder="z. B. Bibi Blocksberg" aria-label="Name der Figur" required>
+          <button type="submit">Übernehmen</button>
+        </form>
+        {% endif %}
+        {% if s.key == "content" and s.status != "done" and p.token and ctx.can(Perm.BINDING_WRITE) %}
+        {% if p.contents %}
+        <form method="post" action="/t/{{ tid }}/figures/{{ p.token.id }}/binding" class="row">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="hidden" name="next" value="{{ back }}">
+          <input type="hidden" name="resume" value="true">
+          <select name="content_id" required aria-label="Inhalt">
+            <option value="">– bitte wählen –</option>
+            {% for c in p.contents %}<option value="{{ c.id }}">{{ c.title }}</option>{% endfor %}
+          </select>
+          <button type="submit">Zuordnen</button>
+        </form>
+        {% endif %}
+        <p><a href="/t/{{ tid }}/contents">Inhalte anlegen oder hochladen</a> <span class="muted">(danach über die Startseite hierher zurück)</span></p>
+        {% endif %}
+      </div>
+    </li>
+    {% endfor %}
+  </ol>
+  {% if p.done %}
+  <section class="card highlight">
+    <h2>Fertig!</h2>
+    <p>Die Box ist eingerichtet. Stell jetzt noch die höchste Lautstärke und die Ruhezeiten ein.</p>
+    <p class="row"><a class="button" href="/t/{{ tid }}/boxes/{{ device.id }}">Box-Einstellungen</a> <a href="/t/{{ tid }}/figures">Weitere Figuren</a></p>
+  </section>
+  {% endif %}
+</section>

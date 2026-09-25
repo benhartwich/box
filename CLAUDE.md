@@ -92,6 +92,7 @@ uv run myboxi-agent --sim                   # Agent mit simulierter Hardware am 
 uv run myboxi-agent sim place 04A2B3C4D5E680
 uv run myboxi-agent sim remove
 uv run myboxi-agent sim press volume_up
+uv run myboxi-agent sim nfc-fail           # Selbsttest: NFC-Leser defekt simulieren
 uv run pytest server                     # braucht lokales PostgreSQL, siehe server/README.md
 uv run alembic -c server/alembic.ini upgrade head
 uv run myboxi-server dev                    # Dev-Server ohne nginx
@@ -143,4 +144,4 @@ Vor jedem Commit: Tests, ruff, pyright und `reuse lint` grün.
 
 ## Aktueller Stand
 
-Agent: **M0** · Server: **M1** (siehe SPEC §12). Offene Punkte: SPEC §13. Spec-Version: v0.5.
+Agent: **M0** · Server: **M1** (siehe SPEC §12). Offene Punkte: SPEC §13. Spec-Version: v0.6.

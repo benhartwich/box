@@ -18,15 +18,6 @@
 {% endif %}
 
 {% if ctx.can(Perm.DEVICE_CLAIM) %}
-<h2>Box hinzufügen</h2>
-<p class="muted">Die Box sagt im Kopplungsmodus einen sechsstelligen Code an.</p>
-<form method="post" action="/t/{{ tid }}/boxes/add" class="stack">
-  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-  <label>Kopplungscode
-    <input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9 ]{6,11}" maxlength="11" required>
-  </label>
-  <label>Name <input name="name" maxlength="64" placeholder="Kinderzimmer" required></label>
-  <button type="submit">Koppeln</button>
-</form>
+<p><a class="button" href="/t/{{ tid }}/setup">Box hinzufügen</a></p>
 {% endif %}
 {% endblock %}

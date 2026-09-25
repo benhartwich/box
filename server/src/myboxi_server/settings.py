@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     env: Literal["dev", "prod"] = "prod"
     database_url: str = Field(description="postgresql://user:pass@host:port/db")
     base_url: str = "http://localhost:8000"
+    # Links in the setup wizard: box images and the hardware guide.
+    image_url: str = "https://github.com/benhartwich/myboxi/releases"
+    docs_url: str = "https://github.com/benhartwich/myboxi/blob/main/docs"
 
     # SPEC §7.2: HS256 key for device JWTs; at least 32 bytes.
     device_jwt_key: SecretStr

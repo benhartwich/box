@@ -71,3 +71,28 @@ code { font-family: ui-monospace, monospace; font-size: .9em; }
 .quiet { display: grid; gap: .6rem; padding-left: 1.6rem; }
 .quiet .row input[type=number] { width: 6rem; }
 .quiet .row label { flex: 1; }
+/* Setup wizard */
+ol.guide { list-style: none; padding: 0; }
+ol.guide ol { padding-left: 1.2rem; }
+ol.checklist { list-style: none; padding: 0; margin: 0; display: grid; gap: .5rem; }
+.step { display: flex; gap: .75rem; padding: .75rem; border: 1px solid var(--line); border-radius: var(--radius); }
+.step p { margin: .35rem 0 0; }
+.step-body { flex: 1; min-width: 0; }
+.step-mark { flex: none; width: 2rem; height: 2rem; border-radius: 50%; display: grid; place-items: center;
+             border: 1px solid var(--line); font-weight: 700; }
+.step-done .step-mark { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+.step-active { border-color: var(--accent); }
+.step-active .step-mark { border-color: var(--accent); color: var(--accent); }
+.step-problem { border-color: var(--danger); }
+.step-problem .step-mark { background: var(--danger); color: var(--bg); border-color: var(--danger); }
+.step-waiting, .step-skipped { color: var(--muted); }
+.step form { margin-top: .5rem; }
+.step form input:not([type=hidden]), .step form select { flex: 1; min-width: 12rem; width: auto; }
+ul.hints { list-style: none; padding: 0; margin: .4rem 0 0; display: grid; gap: .2rem; font-size: .95em; }
+.hint-ok::before { content: "✓ "; color: var(--accent); }
+.hint-warn::before { content: "! "; color: var(--danger); font-weight: 700; }
+.hint-fail { color: var(--danger); }
+.hint-fail::before { content: "✗ "; font-weight: 700; }
+ul.chips { list-style: none; padding: 0; margin: .5rem 0 0; display: flex; flex-wrap: wrap; gap: .4rem; }
+.chip { padding: .3rem .7rem; border: 1px solid var(--line); border-radius: 999px; }
+.chip-on { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }

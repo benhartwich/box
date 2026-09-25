@@ -23,13 +23,16 @@ from myboxi_server.api.web.deps import (
     ReadCtx,
     RemoveCtx,
     RenameCtx,
+    SettingsDep,
     csrf_protect,
 )
 from myboxi_server.api.web.render import render
+from myboxi_server.api.web.routes_setup import render_start
 from myboxi_server.auth.sessions import SessionInfo
 from myboxi_server.domain import devices
 from myboxi_server.domain.authz import TenantContext
 from myboxi_server.domain.errors import DomainError, NotFoundError
+from myboxi_server.domain.setup import health_hints
 from myboxi_server.models import Device, Tenant
 
 router = APIRouter(prefix="/t/{tid}/boxes", dependencies=[Depends(csrf_protect)])
@@ -74,40 +77,27 @@ async def add_box(
     db: DbSession,
     session: CurrentSession,
     ctx: ClaimCtx,
+    settings: SettingsDep,
     code: Annotated[str, Form()],
     name: Annotated[str, Form(max_length=64)],
 ) -> Response:
+    """Claim by code (SPEC §7.1); then the wizard follows the box through its setup."""
     code = "".join(ch for ch in code if ch.isdigit())
     name = name.strip()
+    form = {"code": code, "name": name}
     if len(code) != 6 or not name:
-        return await _boxes_error(
-            request, db, session, ctx, "Bitte den 6-stelligen Code und einen Namen angeben."
-        )
+        return await render_start(
+            request, db, session, ctx, settings, form=form, status_code=400,
+            error="Bitte den 6-stelligen Code und einen Namen angeben.",
+        )  # fmt: skip
     try:
         claimed = await claim_with_limits(request, db, ctx, code, name)
     except ApiError as exc:
-        return await _boxes_error(
-            request, db, session, ctx, _CLAIM_MESSAGES.get(exc.code, exc.message), exc.status_code
-        )
-    return RedirectResponse(f"/t/{ctx.tenant_id}/boxes/{claimed.device_id}", status_code=303)
-
-
-async def _boxes_error(
-    request: Request,
-    db: DbSession,
-    session: SessionInfo,
-    ctx: TenantContext,
-    message: str,
-    status_code: int = 400,
-) -> Response:
-    return render(
-        request,
-        "boxes.html",
-        {"devices": await devices.list_devices(db, ctx), "error": message},
-        session=session,
-        ctx=ctx,
-        status_code=status_code,
-    )
+        return await render_start(
+            request, db, session, ctx, settings, form=form, status_code=exc.status_code,
+            error=_CLAIM_MESSAGES.get(exc.code, exc.message),
+        )  # fmt: skip
+    return RedirectResponse(f"/t/{ctx.tenant_id}/boxes/{claimed.device_id}/setup", status_code=303)
 
 
 def _reported_view(device: Device, config_rev: int) -> dict[str, Any] | None:
@@ -125,6 +115,7 @@ def _reported_view(device: Device, config_rev: int) -> dict[str, Any] | None:
         )
     return {
         "data": data,
+        "health": health_hints(data),
         "config_in_sync": data.applied_config_rev >= config_rev,
         "device_in_sync": data.applied_device_rev >= device.device_rev,
         "soloist_warning": soloist_warning,

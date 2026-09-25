@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from typing import Annotated
-from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse, Response
@@ -16,6 +15,7 @@ from myboxi_server.api.web.deps import (
     client_ip,
     csrf_protect,
 )
+from myboxi_server.api.web.redirects import local_path
 from myboxi_server.api.web.render import render
 from myboxi_server.auth import ratelimit
 from myboxi_server.auth.sessions import ABSOLUTE_LIFETIME, create_session, delete_session
@@ -28,10 +28,7 @@ router = APIRouter(dependencies=[Depends(csrf_protect)])
 
 def _safe_next(target: str | None) -> str:
     """Only allow local redirects."""
-    if not target or not target.startswith("/") or target.startswith("//"):
-        return "/"
-    parts = urlsplit(target)
-    return "/" if parts.scheme or parts.netloc else target
+    return local_path(target) or "/"
 
 
 def _set_session_cookie(response: Response, settings: Settings, token: str) -> None:
@@ -113,6 +110,44 @@ async def index(request: Request, db: DbSession, session: CurrentSession) -> Res
     if len(memberships) == 1:
         return RedirectResponse(f"/t/{memberships[0].tenant.id}/", status_code=303)
     return render(request, "tenants.html", {"memberships": memberships}, session=session)
+
+
+@router.get("/households")
+async def households(request: Request, db: DbSession, session: CurrentSession) -> Response:
+    memberships = await members.memberships_for_user(db, session.user.id)
+    return render(request, "tenants.html", {"memberships": memberships}, session=session)
+
+
+@router.post("/households")
+async def create_household(
+    request: Request,
+    db: DbSession,
+    session: CurrentSession,
+    name: Annotated[str, Form(max_length=200)],
+) -> Response:
+    """SPEC v0.6 §3.2; then straight into the setup wizard."""
+    try:
+        await ratelimit.hit(
+            request.app.state.engine,
+            f"tenant-create:{session.user.id}",
+            ratelimit.TENANT_CREATE_PER_USER,
+        )
+        tenant = await members.create_tenant(db, session.user.id, name)
+    except ratelimit.RateLimitedError:
+        error, status = "Zu viele neue Haushalte. Bitte später noch einmal versuchen.", 429
+    except DomainError as exc:
+        error, status = exc.message, 400
+    else:
+        await db.commit()
+        return RedirectResponse(f"/t/{tenant.id}/setup", status_code=303)
+    memberships = await members.memberships_for_user(db, session.user.id)
+    return render(
+        request,
+        "tenants.html",
+        {"memberships": memberships, "error": error, "name": name},
+        session=session,
+        status_code=status,
+    )
 
 
 # Invitation token travels in the query string: never logged (app and nginx log paths only).

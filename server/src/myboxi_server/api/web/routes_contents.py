@@ -67,7 +67,7 @@ KIND_CHOICES = (
     ),
     KindChoice(
         ContentKind.PODCAST, "rss", "Podcast",
-        "Neue Folgen kommen von selbst auf die Box.", ready=False,
+        "Neue Folgen kommen von selbst auf die Box und spielen auch ohne Internet.", ready=True,
     ),
     KindChoice(
         ContentKind.SPOTIFY, "disc", "Spotify",

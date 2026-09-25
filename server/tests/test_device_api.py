@@ -193,6 +193,27 @@ async def test_resume_position_last_writer_wins(app: FastAPI, client: httpx.Asyn
         assert pos.updated_at == dt.datetime(2026, 9, 24, 18, tzinfo=dt.UTC)
 
 
+async def test_resume_position_keeps_the_item_key(app: FastAPI, client: httpx.AsyncClient) -> None:
+    """SPEC v0.8 §3.10: the episode key; a later point without key clears it."""
+    t = await make_tenant(app)
+    lib = await seed_library(app, t.tenant_id)
+    dev = await pair_device(app, client, t.tenant_id)
+    key = "3f2a9c0d4b1e8f7a6c5d4e3f2a1b0c9d"
+    data = {"token_id": str(lib.token_id), "item_index": 1, "position_ms": 5000}
+    first = event("resume_position", data | {"item_key": key}, ts="2026-09-24T18:00:00Z")
+    await client.post("/api/v1/device/events", json={"events": [first]}, headers=dev.auth)
+    async with sessionmaker_of(app)() as db:
+        pos = await db.get(ResumePosition, (t.tenant_id, lib.token_id))
+        assert pos is not None
+        assert pos.item_key == key
+    later = event("resume_position", data, ts="2026-09-24T19:00:00Z")
+    await client.post("/api/v1/device/events", json={"events": [later]}, headers=dev.auth)
+    async with sessionmaker_of(app)() as db:
+        pos = await db.get(ResumePosition, (t.tenant_id, lib.token_id))
+        assert pos is not None
+        assert pos.item_key is None
+
+
 async def test_reported_is_stored(app: FastAPI, client: httpx.AsyncClient) -> None:
     t = await make_tenant(app)
     dev = await pair_device(app, client, t.tenant_id)

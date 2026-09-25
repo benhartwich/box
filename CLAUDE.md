@@ -147,4 +147,4 @@ Vor jedem Commit: Tests, ruff, pyright und `reuse lint` grün.
 
 ## Aktueller Stand
 
-Agent: **M0** · Server: **M1** (siehe SPEC §12). Offene Punkte: SPEC §13. Spec-Version: v0.7.
+Agent: **M0**, Podcasts (**M3**) · Server: **M1** (siehe SPEC §12). Offene Punkte: SPEC §13. Spec-Version: v0.8.

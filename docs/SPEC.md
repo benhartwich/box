@@ -1,4 +1,4 @@
-# Myboxi — Spezifikation v0.7: Datenmodell & Geräteprotokoll
+# Myboxi — Spezifikation v0.8: Datenmodell & Geräteprotokoll
 
 Status: Entwurf · Stand: 2026-09-25 · Änderungen: §14
 Scope: Der Vertrag zwischen **Box-Agent** (Raspberry Pi) und **Server**.
@@ -150,7 +150,8 @@ Speicherung im Dateisystem unter einem konfigurierbaren Wurzelverzeichnis. Ausli
 | repeat | enum | `off` \| `all` \| `one` |
 
 ### 3.10 `resume_position`
-tenant_id, token_id, item_index, position_ms, updated_at (von der Box gemeldet), device_id.
+tenant_id, token_id, item_index, position_ms, item_key (optional), updated_at (von der Box gemeldet), device_id.
+`item_key` ist ein stabiler Schlüssel des Titels, wo der Index allein nicht reicht: bei Podcasts der Folgenschlüssel (§8.2), damit eine neue Folge die Position nicht verschiebt.
 Zweck: Backup und Box-übergreifendes Weiterhören. Konfliktregel §5.5.
 
 ### 3.11 `event`
@@ -172,14 +173,18 @@ Tabellen spiegeln den für die Box relevanten Ausschnitt: `token`, `content`, `c
 | `staged_change` | Empfangene, noch nicht aktivierte Änderungen (wartet auf Assets) |
 | `outbox` | Ausstehende Events, bis vom Server bestätigt |
 | `secret` | device_secret; Soloist-API-Key (**nie** synchronisiert, nie geloggt) |
+| `podcast_feed` | Je Podcast-Inhalt: Feed-URL, ETag, Last-Modified, letzte Abfrage, Fehlercode (§8.2) |
+| `podcast_episode` | Abspielbare Folgen eines Podcasts (§8.2): `episode_key`, Titel, Enclosure-URL, Datum, Rang (0 = neueste), `selected` (gehört zu den neuesten `keep_latest`), sha256, `gain_db` |
 
-Pfade auf der Box: Daten unter `/var/lib/myboxi` (Datenbank `myboxi.db`, Assets content-adressiert unter `assets/ab/cd/<sha256>.opus`, eigene Ansagen unter `prompts/`), Konfiguration unter `/etc/myboxi-agent/myboxi-agent.env`.
+`resume_position` trägt zusätzlich `item_key` (§3.10).
+
+Pfade auf der Box: Daten unter `/var/lib/myboxi` (Datenbank `myboxi.db`, Assets content-adressiert unter `assets/ab/cd/<sha256>.opus`, eigene Ansagen unter `prompts/`), Konfiguration unter `/etc/myboxi-agent/myboxi-agent.env`. Podcast-Folgen liegen im selben Asset-Store, im Originalformat: `assets/ab/cd/<sha256>.<mp3|m4a|aac|ogg|opus>`.
 
 **Lokale Bibliothek (M0, ohne Server):** Inhalte lassen sich direkt auf der Box anlegen (`myboxi-agent library add <UID> <Ordner>`). Sie tragen `origin = local` und gelten nur für Figuren, für die der Server kein Binding liefert. Ein Snapshot vom Server (§5.4) ersetzt ausschließlich Einträge mit `origin = server`.
 
 ### 4.1 Cache-Regeln
 - Alle Assets, die von einem aktiven Binding erreichbar sind, werden **vollständig vorab** geladen. Die Box spielt gebundene lokale Inhalte nie per Streaming.
-- Podcasts: die Box lädt die neuesten `keep_latest` Episoden direkt aus dem Feed (Enclosure-URL), nicht über den Server.
+- Podcasts: die Box lädt die neuesten `keep_latest` Episoden direkt aus dem Feed (Enclosure-URL), nicht über den Server. Aktualisierung, Auswahl, Grenzen und Lautheit: §8.2. Ausgewählte Folgen gebundener Podcasts gelten als gebunden; Folgen, die aus den neuesten `keep_latest` herausfallen, werden nach LRU verdrängt.
 - Spotify und Streams: kein Cache. Offline → Ansage "Das geht gerade leider nicht" + Fehlerton.
 - Speicher knapp: nicht mehr gebundene Assets nach `last_played_at` (LRU) löschen. Gebundene Assets werden nie verdrängt; reicht der Platz nicht, meldet die Box `storage_full` (§6.5).
 - Jedes Asset wird nach dem Download gegen `sha256` geprüft. Fehlschlag → verwerfen, erneut laden mit Backoff.
@@ -354,10 +359,21 @@ Die Box schreibt Events zuerst in die `outbox` und löscht sie erst nach PUBACK.
 | `playback_error` | `token_id`, `provider`, `code` |
 | `storage_full` | `needed_mb`, `free_mb` |
 | `sync_error` | `stage`, `code` |
-| `resume_position` | `token_id`, `item_index`, `position_ms` |
+| `resume_position` | `token_id`, `item_index`, `position_ms`, optional `item_key` (§3.10) |
 
 Mehr wird nicht gemeldet. Kein Protokoll über Hördauer oder Tageszeiten jenseits dieser Events.
 Der Envelope-`type` ist der Event-Typ aus der Tabelle. `resume_position` aktualisiert serverseitig §3.10 nach Last-Writer-Wins über `ts`.
+
+`playback_error.code` ist ein Maschinencode; unbekannte Codes zeigt der Server neutral an. Bekannte Codes:
+
+| `provider` | `code` | Bedeutung |
+|---|---|---|
+| `local` | `empty`, `asset_missing` | Inhalt ohne Titel bzw. Datei fehlt |
+| alle | `disabled` | Provider in `providers_enabled` ausgeschaltet |
+| alle | `not_available` | Provider auf dieser Box (noch) nicht verfügbar |
+| alle | `decode_error`, `player_restart` | Datei nicht abspielbar bzw. Player abgestürzt |
+| `podcast` | `feed_error` | Feed nicht abrufbar oder nicht lesbar, keine Folge auf der Box (§8.2) |
+| `podcast` | `no_episodes` | Feed gelesen, aber keine passende Folge (§8.2) |
 
 ### 6.6 `online` — Last Will, retained
 Box setzt beim Verbinden `"1"`, Broker setzt bei Verbindungsabbruch `"0"`.
@@ -455,6 +471,47 @@ resolve(content) -> PlaybackPlan | Unavailable(reason)
 - Der Soloist-API-Key wird ausschließlich über die lokale Setup-Seite der Box eingegeben (§9) und liegt nur in `secret`.
 - Update-Job (systemd-Timer, täglich): neuen Build prüfen und installieren, sobald weniger als 30 Tage Restlaufzeit.
 - **Wächter gegen Katalog-Drift:** Meldet Soloist ein `context_changed` auf einen Kontext, der nicht der gebundenen URI entspricht (z. B. durch Autoplay), pausiert der Agent sofort.
+
+### 8.2 Podcast-Provider
+**Aktualisierung**
+- Neue oder geänderte Feeds fragt die Box direkt nach der Synchronisierung ab, bekannte alle 6 h (mit bis zu 30 min Zufall). Nach einem Fehler erneut nach 15 min, danach mit doppeltem Abstand bis höchstens 6 h.
+- Bedingte Abfrage mit `If-None-Match` und `If-Modified-Since`.
+- Ohne Netz keine Abfrage und keine Fehlermeldung; gecachte Folgen spielen weiter.
+- Die Aktualisierung blockiert nie die Wiedergabe. Es läuft höchstens ein Download zur Zeit.
+
+**Feed**
+- RSS 2.0 (`<enclosure>`) und Atom (`<link rel="enclosure">`).
+- XML ohne Entity-Deklarationen (sonst ungültig), höchstens 20 MB und 5000 Einträge.
+- Ausgewertet werden nur: `guid`/`id`, `title`, Enclosure (URL, Typ, Länge), `pubDate`/`published`, `itunes:duration`, `itunes:explicit` (Folge, sonst Kanal).
+
+**Auswahl**
+- Nur Folgen mit Audio-Enclosure (`audio/*`, `application/ogg` oder ohne Typangabe).
+- Als explizit markierte Folgen werden übersprungen.
+- Die neuesten `keep_latest` Folgen (nach Datum; ohne Datum in Feed-Reihenfolge) bilden den Inhalt. `order` bestimmt, in welcher Reihenfolge sie spielen.
+- Folgenschlüssel `episode_key`: die ersten 32 Hex-Zeichen von SHA-256 über die `guid`, ohne `guid` über die Enclosure-URL. Er ist das `item_key` in `resume_position` (§3.10). Fehlt die gespeicherte Folge, beginnt die Wiedergabe bei der ersten Folge.
+
+**Download**
+- Fortsetzbar per Range-Request, höchstens 500 MB je Folge. SHA-256 wird nach dem Laden berechnet.
+- Speicherregeln wie §4.1 (LRU, `storage_full`).
+
+**Adressen**
+- Nur `http` und `https`, höchstens 5 Weiterleitungen.
+- Verbindungen nur zu öffentlichen Adressen, geprüft nach der DNS-Auflösung bei jedem Verbindungsaufbau: keine Loopback-, privaten, Link-Local-, Multicast- oder reservierten Adressen. Ein präparierter Feed erreicht so weder das Heimnetz noch lokale Dienste der Box (§9.3).
+
+**Lautheit**
+- Nach dem Download misst die Box die integrierte Lautheit (EBU R128), bevorzugt wenn nichts spielt.
+- Wiedergabe mit `gain_db` = −16 LUFS − Messwert, begrenzt auf ±12 dB. Positive Verstärkung läuft durch einen Limiter (−1 dBFS).
+- Ungemessene Folgen spielen unverändert. Die Lautstärke-Policy (§9.2) bleibt die einzige Begrenzung der Lautstärke.
+
+**Figur auflegen**
+
+| Lage | Verhalten |
+|---|---|
+| Mindestens eine ausgewählte Folge liegt auf der Box | Wiedergabe, Resume über `item_key` |
+| Noch keine Folge geladen; Feed noch nicht abgefragt oder in Ordnung | „Wird noch geladen“ (§5.3) |
+| Keine Folge auf der Box; Feed nicht abrufbar (HTTP-Fehler, gesperrte Adresse) oder nicht lesbar | Ansage + Fehlerton, `playback_error` `feed_error` |
+| Feed gelesen, aber keine passende Folge | Ansage + Fehlerton, `playback_error` `no_episodes` |
+| `podcast` nicht in `providers_enabled` | Ansage + Fehlerton, `playback_error` `disabled` |
 
 ---
 
@@ -569,6 +626,13 @@ Der Agent wird in M0 gegen einen **Mock-Server** entwickelt, der die Endpunkte a
 ---
 
 ## 14. Änderungen
+
+**v0.8 (2026-09-25)** — Podcast-Provider (M3); Protokollversion bleibt `v1`, alle Änderungen additiv.
+- §3.10, §6.5: optionales `item_key` in `resume_position`.
+- §4: Tabellen `podcast_feed` und `podcast_episode`; Podcast-Folgen im Originalformat im Asset-Store.
+- §4.1: ausgewählte Folgen gelten als gebunden, ältere werden nach LRU verdrängt.
+- §6.5: bekannte Codes von `playback_error`, neu `feed_error`, `no_episodes`, `disabled`.
+- §8.2: Aktualisierung, Feed-Format, Auswahl, Download, Adressregeln, Lautheit, Verhalten beim Auflegen.
 
 **v0.7 (2026-09-25)** — Software-Updates der Box; Protokollversion bleibt `v1`, alle Änderungen additiv.
 - §3.4: `auto_update`.

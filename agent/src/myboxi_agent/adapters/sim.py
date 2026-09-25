@@ -10,7 +10,7 @@ from collections.abc import AsyncIterator, Callable, Sequence
 
 from myboxi_agent.adapters.base import ButtonEvent, Placed, ReaderEvent, Removed
 from myboxi_agent.adapters.health import Health
-from myboxi_agent.core.model import ResumePoint
+from myboxi_agent.core.model import PlanItem, ResumePoint
 from myboxi_protocol.state import RepeatMode
 
 log = logging.getLogger("myboxi_agent.sim")
@@ -79,12 +79,18 @@ class SimPlayer:
         return self._base_ms + int((time.monotonic() - self._since) * 1000)
 
     def play(
-        self, sources: Sequence[str], index: int, position_ms: int, repeat: RepeatMode
+        self, items: Sequence[PlanItem], index: int, position_ms: int, repeat: RepeatMode
     ) -> None:
-        self.sources, self.index, self.repeat = list(sources), index, repeat
+        self.sources, self.index, self.repeat = [i.source for i in items], index, repeat
         self._base_ms, self._since, self.state = position_ms, time.monotonic(), "playing"
+        item = items[index] if items else None
         log.info(
-            "play", extra={"item": self.sources[index] if sources else None, "at_ms": position_ms}
+            "play",
+            extra={
+                "item": item.source if item else None,
+                "at_ms": position_ms,
+                "gain_db": item.gain_db if item else None,
+            },
         )
 
     def pause(self) -> None:

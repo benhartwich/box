@@ -6,6 +6,7 @@ import uuid
 from dataclasses import dataclass
 from enum import StrEnum
 
+from myboxi_protocol.common import ProviderName
 from myboxi_protocol.state import RepeatMode
 
 
@@ -14,12 +15,17 @@ class PlanItem:
     source: str
     title: str
     duration_ms: int
+    # SPEC v0.8 §3.10: stable key where the index is not enough (podcast episode, §8.2).
+    key: str | None = None
+    # SPEC v0.8 §8.2: loudness correction in dB; None plays the file unchanged.
+    gain_db: float | None = None
 
 
 @dataclass(frozen=True)
 class ResumePoint:
     item_index: int
     position_ms: int
+    item_key: str | None = None
 
 
 @dataclass(frozen=True)
@@ -30,6 +36,17 @@ class Playable:
     resume: bool
     shuffle: bool
     repeat: RepeatMode
+    provider: ProviderName = "local"
+
+    def start_index(self, point: ResumePoint) -> int | None:
+        """Item to resume: by key when the saved point has one (the list may have shifted),
+        otherwise by index. None when the saved item is gone."""
+        if point.item_key is not None:
+            for i, item in enumerate(self.items):
+                if item.key == point.item_key:
+                    return i
+            return None
+        return point.item_index if 0 <= point.item_index < len(self.items) else None
 
 
 @dataclass(frozen=True)

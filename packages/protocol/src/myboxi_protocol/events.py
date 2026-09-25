@@ -40,10 +40,16 @@ class SyncErrorData(ProtocolModel):
     code: Code
 
 
+# SPEC v0.8 §3.10: stable key of the item, e.g. a podcast episode (§8.2) or a Spotify track URI.
+ItemKey = Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9:_-]{1,64}$")]
+
+
 class ResumePositionData(ProtocolModel):
     token_id: UUID
     item_index: NonNegativeInt
     position_ms: NonNegativeInt
+    # Omitted (not null) when the item has no key, as before v0.8.
+    item_key: ItemKey | None = Field(default=None, exclude_if=lambda v: v is None)
 
 
 class _EventBase(EnvelopeCore):

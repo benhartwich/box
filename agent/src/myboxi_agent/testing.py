@@ -21,7 +21,7 @@ from myboxi_protocol.state import RepeatMode
 
 @dataclass
 class FakePlayer:
-    sources: list[str] = field(default_factory=list[str])
+    items: list[PlanItem] = field(default_factory=list[PlanItem])
     index: int = 0
     position_ms: int = 0
     repeat: RepeatMode = "off"
@@ -29,11 +29,15 @@ class FakePlayer:
     volume: int | None = None
     calls: list[str] = field(default_factory=list[str])
 
+    @property
+    def sources(self) -> list[str]:
+        return [item.source for item in self.items]
+
     def play(
-        self, sources: Sequence[str], index: int, position_ms: int, repeat: RepeatMode
+        self, items: Sequence[PlanItem], index: int, position_ms: int, repeat: RepeatMode
     ) -> None:
-        self.sources, self.index, self.position_ms, self.repeat = (
-            list(sources),
+        self.items, self.index, self.position_ms, self.repeat = (
+            list(items),
             index,
             position_ms,
             repeat,
@@ -57,7 +61,7 @@ class FakePlayer:
         self.volume = volume
 
     def position(self) -> ResumePoint | None:
-        if not self.sources:
+        if not self.items:
             return None
         return ResumePoint(self.index, self.position_ms)
 

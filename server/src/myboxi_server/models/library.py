@@ -187,6 +187,7 @@ class ResumePosition(Base):
     token_id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
     item_index: Mapped[int] = mapped_column(Integer)
     position_ms: Mapped[int] = mapped_column(BigInteger)
+    item_key: Mapped[str | None] = mapped_column(Text)  # SPEC v0.8 §3.10
     updated_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True))
     device_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("device.id", ondelete="SET NULL")

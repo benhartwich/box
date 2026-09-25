@@ -6,6 +6,7 @@ import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import httpx
 import pytest
@@ -479,6 +480,46 @@ async def test_reported_state_is_shown(ui: Ui) -> None:
     assert "ausstehend" in page.text  # applied revisions are behind
     assert "Update nötig" in page.text  # Soloist expires in < 14 days (SPEC §6.4)
     assert "unsicher" in page.text
+
+
+def event(type_: str, data: dict[str, Any]) -> dict[str, Any]:
+    event_id = "01J8Z3M5W6XK2C4B7N9P" + uuid.uuid4().hex[:6].upper().translate(
+        str.maketrans("ILOU", "JKMN")
+    )
+    return {
+        "v": 1, "id": event_id, "ts": "2026-09-24T18:02:11Z", "type": type_,
+        "boot_id": str(uuid.uuid4()), "mono_ms": 1000, "data": data,
+    }  # fmt: skip
+
+
+async def test_box_page_lists_playback_problems(ui: Ui) -> None:
+    """SPEC v0.8 §6.5: e.g. a podcast feed the box cannot read, grouped per figure."""
+    dev = await pair_device(ui.app, ui.client, ui.tid)
+    async with sessionmaker_of(ui.app)() as db:
+        token = Token(tenant_id=ui.tid, uid="04A2B3C4D5E680", label="Hase")
+        db.add(token)
+        await db.flush()
+        token_id = token.id
+        await db.commit()
+    feed = {"token_id": str(token_id), "provider": "podcast", "code": "feed_error"}
+    batch = [
+        event("playback_error", feed),
+        event("playback_error", feed),
+        event("playback_error", {**feed, "provider": "spotify", "code": "brand_new_code"}),
+    ]
+    await ui.client.post("/api/v1/device/events", json={"events": batch}, headers=dev.auth)
+    page = await ui.client.get(ui.url(f"/boxes/{dev.device_id}"))
+    assert "Probleme bei der Wiedergabe" in page.text
+    assert "Podcast-Feed lässt sich nicht laden" in page.text
+    assert "Hase" in page.text
+    assert "2-mal" in page.text
+    assert "Spotify: brand_new_code" in page.text  # unknown codes stay neutral
+
+
+async def test_podcasts_are_ready(ui: Ui) -> None:
+    page = await ui.client.get(ui.url("/contents"))
+    podcast = page.text.split("Podcast</strong>")[1].split("</li>")[0]
+    assert "bald auf der Box" not in podcast
 
 
 async def test_contributor_sees_no_box_controls(app: FastAPI, client: httpx.AsyncClient) -> None:

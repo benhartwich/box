@@ -5,12 +5,14 @@ from __future__ import annotations
 import asyncio
 import logging
 import random
+import shutil
 from collections.abc import Callable
 from typing import Any, get_args
 
 from myboxi_agent import __version__
 from myboxi_agent.adapters.base import Placed
 from myboxi_agent.adapters.bundle import Adapters, sim_adapters
+from myboxi_agent.adapters.loudness import MpvLoudness
 from myboxi_agent.adapters.mpv import KNOWN_PROMPTS
 from myboxi_agent.adapters.outbox import EventOutbox, read_boot_id
 from myboxi_agent.adapters.sim import SimButtons, SimPlayer, SimReader
@@ -26,6 +28,8 @@ from myboxi_agent.core.buttons import ButtonTracker
 from myboxi_agent.core.controller import Controller
 from myboxi_agent.core.model import Action, Loading, Prompt, Unknown
 from myboxi_agent.core.setup_phase import SetupPhase
+from myboxi_agent.providers.netguard import feed_client
+from myboxi_agent.providers.podcast import PodcastRefresher
 from myboxi_agent.setup.nm import NetworkManager
 from myboxi_agent.setup.watch import NetworkWatch
 from myboxi_agent.store.db import connect
@@ -89,6 +93,17 @@ class App:
         )
         self.tracker = ButtonTracker(clock)
         self.hw_model = detect_hw_model()
+        self.podcasts = PodcastRefresher(
+            repo=self.library.podcasts,
+            assets=self.assets,
+            clock=clock,
+            http_factory=lambda: feed_client(allow_private=settings.podcast_allow_private),
+            outbox=self.outbox,
+            disk_free=lambda: free_bytes(settings.data_dir),
+            enabled=lambda: "podcast" in self.state.device_config().providers_enabled,
+            busy=lambda: self.controller.status().status == "playing",
+            loudness=_loudness(settings),
+        )
         self.sync = SyncEngine(
             state=self.state,
             library=self.library,
@@ -104,6 +119,7 @@ class App:
             disk_free=lambda: free_bytes(settings.data_dir),
             interval_s=settings.sync_interval_s,
             setup_phase=self.setup_phase,
+            on_synced=self.podcasts.trigger,
         )
         system: Any = self.adapters.system
         if hasattr(system, "on_repair"):
@@ -130,6 +146,7 @@ class App:
                 tg.create_task(self._tick_loop())
                 tg.create_task(self.control.serve())
                 tg.create_task(self.sync.run())
+                tg.create_task(self.podcasts.run())
                 if not self.settings.sim:
                     watch = NetworkWatch(
                         NetworkManager(),
@@ -170,6 +187,7 @@ class App:
             if isinstance(event, Placed):
                 if isinstance(self.library.resolve(event.uid), Unknown | Loading):
                     self.sync.fast_poll()
+                    self.podcasts.trigger()
                 self.controller.token_placed(event.uid)
                 session = self.controller.session
                 if session is not None and session.playing:
@@ -314,3 +332,8 @@ class App:
 
 class _Stop(Exception):
     pass
+
+
+def _loudness(settings: Settings) -> MpvLoudness | None:
+    """SPEC v0.8 §8.2; without mpv (e.g. a laptop in --sim) episodes play unchanged."""
+    return MpvLoudness(settings.mpv_path) if shutil.which(settings.mpv_path) else None

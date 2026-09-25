@@ -4,7 +4,8 @@
 #
 #   sudo PROMPTS_DIR=build/prompts image/build.sh
 #
-# Output: build/myboxi-<version>.img.xz and .sha256
+# Output: build/myboxi-<version>.img.xz and .sha256, and the agent update bundle
+#         build/myboxi-agent-<agent version>-arm64.tar.xz (SPEC v0.7 §11.1)
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -12,6 +13,7 @@ OUT=${OUT:-$ROOT/build}
 PROMPTS_DIR=${PROMPTS_DIR:-$OUT/prompts}
 VERSION=${MYBOXI_IMAGE_VERSION:-$(date -u +%Y.%m.%d)-$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo dev)}
 EXTRA_MB=${EXTRA_MB:-1536}
+AGENT_VERSION=$(sed -n 's/^version = "\(.*\)"$/\1/p' "$ROOT/agent/pyproject.toml" | head -n 1)
 
 # Pinned base image (update URL and checksum together).
 BASE_URL=https://downloads.raspberrypi.com/raspios_lite_arm64/images/raspios_lite_arm64-2026-09-15/2026-09-15-raspios-trixie-arm64-lite.img.xz
@@ -60,15 +62,15 @@ cp -L /etc/resolv.conf "$MNT/etc/resolv.conf"
 printf '#!/bin/sh\nexit 101\n' > "$MNT/usr/sbin/policy-rc.d"
 chmod +x "$MNT/usr/sbin/policy-rc.d"
 
-echo "== agent source, uv, prompts, system files"
+echo "== agent $AGENT_VERSION: source (build only), uv, prompts, system files"
 # Everything copied into the image belongs to root, never to the build user (tar keeps owners).
 TAR_ROOT=(--owner=0 --group=0 --numeric-owner)
-install -d "$MNT/opt/myboxi-agent"
+RELEASE="/opt/myboxi-agent/releases/$AGENT_VERSION"
+install -d "$MNT/tmp/myboxi-src" "$MNT$RELEASE/prompts"
 tar -C "$ROOT" "${TAR_ROOT[@]}" -cf - pyproject.toml uv.lock .python-version packages/protocol agent \
-    server/pyproject.toml | tar -C "$MNT/opt/myboxi-agent" -xf -
+    server/pyproject.toml | tar -C "$MNT/tmp/myboxi-src" -xf -
 install -m 0755 "$UV_BIN" "$MNT/usr/local/bin/uv"
-install -d "$MNT/opt/myboxi-agent/prompts"
-install -m 0644 "$PROMPTS_DIR"/*.opus "$PROMPTS_DIR/NOTICE.txt" "$MNT/opt/myboxi-agent/prompts/"
+install -m 0644 "$PROMPTS_DIR"/*.opus "$PROMPTS_DIR/NOTICE.txt" "$MNT$RELEASE/prompts/"
 # --no-overwrite-dir: /, /etc, /usr … keep owner and mode of the base image.
 tar -C "$ROOT/image/files" "${TAR_ROOT[@]}" -cf - . | tar -C "$MNT" --no-overwrite-dir -xf -
 [ -f "$MNT/etc/myboxi-agent/myboxi-agent.env" ] || { echo "myboxi-agent.env missing"; exit 1; }
@@ -78,12 +80,13 @@ sed -i 's/^dtoverlay=vc4-kms-v3d$/dtoverlay=vc4-kms-v3d,noaudio/' "$MNT/boot/fir
 echo "$VERSION" > "$MNT/etc/myboxi-image-version"
 
 echo "== chroot"
-chroot "$MNT" /bin/bash -euxo pipefail <<'CHROOT'
+chroot "$MNT" /usr/bin/env RELEASE="$RELEASE" AGENT_VERSION="$AGENT_VERSION" \
+    /bin/bash -euxo pipefail <<'CHROOT'
 export DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8
 apt-get update
 apt-get install -y --no-install-recommends \
     mpv pipewire wireplumber pipewire-alsa python3 python3-lgpio python3-rpi-lgpio \
-    i2c-tools dnsmasq-base polkitd \
+    i2c-tools dnsmasq-base polkitd openssl unattended-upgrades \
     build-essential python3-dev
 
 # Service user: GPIO, I2C and audio; its user session (linger) runs PipeWire and the agent.
@@ -93,19 +96,24 @@ install -d -m 0755 /var/lib/systemd/linger
 touch /var/lib/systemd/linger/myboxi
 install -d -o myboxi -g myboxi -m 0700 /var/lib/myboxi/prompts
 
-# Agent venv from the pinned lock; system site packages for lgpio / RPi.GPIO (Debian).
-cd /opt/myboxi-agent
-export UV_PYTHON_DOWNLOADS=never UV_CACHE_DIR=/tmp/uv-cache
-uv venv --system-site-packages --python /usr/bin/python3 .venv
-uv sync --frozen --no-dev --package myboxi-agent --extra hw
-rm -rf /tmp/uv-cache
+# Agent venv from the pinned lock, not editable: the release directory is self-contained, so
+# the updater can replace it as a whole (SPEC v0.7 §11.1). System site packages: lgpio, RPi.GPIO.
+cd /tmp/myboxi-src
+export UV_PYTHON_DOWNLOADS=never UV_CACHE_DIR=/tmp/uv-cache UV_PROJECT_ENVIRONMENT="$RELEASE/.venv"
+uv venv --system-site-packages --python /usr/bin/python3 "$RELEASE/.venv"
+uv sync --frozen --no-dev --no-editable --package myboxi-agent --extra hw
+ln -sfn "releases/$AGENT_VERSION" /opt/myboxi-agent/current
+cd /
+rm -rf /tmp/uv-cache /tmp/myboxi-src /usr/local/bin/uv
+[ "$(/opt/myboxi-agent/current/.venv/bin/myboxi-agent version)" = "myboxi-agent $AGENT_VERSION" ]
 
 apt-get purge -y build-essential python3-dev
 apt-get autoremove -y
 apt-get clean
 rm -rf /var/lib/apt/lists/*
 
-systemctl enable myboxi-firstboot.service
+systemctl enable myboxi-firstboot.service myboxi-updater.timer
+install -d -m 0700 /var/lib/myboxi-updater
 systemctl --global enable pipewire.socket wireplumber.service
 # The agent only in the session of "myboxi" (the unit also has ConditionUser=myboxi).
 install -d /var/lib/myboxi/.config/systemd/user/default.target.wants
@@ -118,10 +126,17 @@ orphans=$(find / -xdev \( -nouser -o -nogroup \) -print)
 [ -z "$orphans" ] || { echo "files without owner on the box:"; echo "$orphans"; exit 1; }
 
 # Self-test without hardware or network.
-runuser -u myboxi -- env MYBOXI_AGENT_PROMPTS_DIR=/opt/myboxi-agent/prompts \
-    /opt/myboxi-agent/.venv/bin/myboxi-agent --data-dir /tmp/doctor doctor --offline
+runuser -u myboxi -- env MYBOXI_AGENT_PROMPTS_DIR=/opt/myboxi-agent/current/prompts \
+    /opt/myboxi-agent/current/.venv/bin/myboxi-agent --data-dir /tmp/doctor doctor --offline
 rm -rf /tmp/doctor
+openssl version
 CHROOT
+
+echo "== update bundle"
+BUNDLE="$OUT/myboxi-agent-$AGENT_VERSION-arm64.tar.xz"
+tar -C "$MNT/opt/myboxi-agent/releases" "${TAR_ROOT[@]}" -cf - "$AGENT_VERSION" | xz -T0 -6 > "$BUNDLE"
+(cd "$OUT" && sha256sum "$(basename "$BUNDLE")" > "$(basename "$BUNDLE").sha256")
+ls -la "$BUNDLE"
 
 rm -f "$MNT/usr/sbin/policy-rc.d" "$MNT/etc/resolv.conf"
 if [ -e "$MNT/etc/resolv.conf.myboxi-orig" ] || [ -L "$MNT/etc/resolv.conf.myboxi-orig" ]; then
@@ -134,4 +149,4 @@ trap - EXIT
 xz -T0 -6 -f "$IMG"
 (cd "$OUT" && sha256sum "$(basename "$IMG").xz" > "$(basename "$IMG").xz.sha256")
 ls -la "$IMG.xz"
-echo "version $VERSION"
+echo "version $VERSION, agent $AGENT_VERSION"

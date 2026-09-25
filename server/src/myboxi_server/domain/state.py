@@ -48,6 +48,7 @@ def device_config_message(cfg: DeviceConfig | None) -> DeviceConfigMsg:
             "locale": cfg.locale,
             "timezone": cfg.timezone,
             "providers_enabled": cfg.providers_enabled,
+            "auto_update": cfg.auto_update,
         }
     )
 

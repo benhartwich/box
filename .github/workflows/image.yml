@@ -34,6 +34,12 @@ jobs:
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v7.0.1
+      - name: release version matches the agent
+        if: github.ref_type == 'tag'
+        run: |
+          agent="$(sed -n 's/^version = "\(.*\)"$/\1/p' agent/pyproject.toml | head -n 1)"
+          [ "${GITHUB_REF_NAME#box-v}" = "$agent" ] || {
+            echo "tag $GITHUB_REF_NAME but agent version $agent"; exit 1; }
       - name: build tools
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg parted e2fsprogs xz-utils espeak-ng
       - uses: actions/setup-python@v7.0.0
@@ -66,6 +72,16 @@ jobs:
             build/myboxi-*.img.xz.sha256
           retention-days: 14
           compression-level: 0
+      - name: artifact (update bundle)
+        if: github.ref_type != 'tag'
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: myboxi-agent-bundle
+          path: |
+            build/myboxi-agent-*-arm64.tar.xz
+            build/myboxi-agent-*-arm64.tar.xz.sha256
+          retention-days: 14
+          compression-level: 0
       - name: release
         if: github.ref_type == 'tag'
         env:
@@ -82,11 +98,37 @@ jobs:
           - Anleitung: [Inbetriebnahme]($docs/box-inbetriebnahme.md), [Hardware]($docs/hardware.md)
           - Im Raspberry Pi Imager „Eigenes Image verwenden“ und die \`.img.xz\` wählen. Prüfsumme: \`.sha256\`.
 
-          Ansagen und Lizenz der Stimme (im Image unter \`/opt/myboxi-agent/prompts/NOTICE.txt\`):
+          Ansagen und Lizenz der Stimme (im Image unter \`/opt/myboxi-agent/current/prompts/NOTICE.txt\`):
 
           $(sed 's/^/> /' build/prompts/NOTICE.txt)
+
+          Boxen ab Version 0.3.0 installieren neue Versionen von selbst, sobald sie online sind (\`myboxi-agent-….tar.xz\` ist dieses Update-Paket).
 
           Quellcode: dieses Repository. Die Pakete von Raspberry Pi OS und Debian mit ihren Quellen: archive.raspberrypi.com, deb.debian.org.
           EOF
           gh release create "$GITHUB_REF_NAME" build/myboxi-*.img.xz build/myboxi-*.img.xz.sha256 \
+            build/myboxi-agent-*-arm64.tar.xz build/myboxi-agent-*-arm64.tar.xz.sha256 \
             --title "Myboxi ${GITHUB_REF_NAME#box-v}" --notes-file build/notes.md $pre
+      - name: update channel (signed manifest, SPEC v0.7 §11.1)
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          UPDATE_KEY: ${{ secrets.MYBOXI_UPDATE_KEY }}
+        run: |
+          version="${GITHUB_REF_NAME#box-v}"
+          bundle="myboxi-agent-$version-arm64.tar.xz"
+          url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME/$bundle"
+          python3 tools/release/make_manifest.py --version "$version" --bundle "build/$bundle" \
+            --url "$url" --out build/manifest.json
+          key="$(mktemp)"
+          trap 'rm -f "$key"' EXIT
+          printf '%s\n' "$UPDATE_KEY" > "$key"
+          openssl pkeyutl -sign -inkey "$key" -rawin -in build/manifest.json -out build/manifest.json.sig
+          # The boxes trust the keys in the image; the signature must verify against the main one.
+          openssl pkeyutl -verify -pubin -inkey image/files/etc/myboxi-agent/update-keys/myboxi-2026-main.pem \
+            -rawin -in build/manifest.json -sigfile build/manifest.json.sig
+          gh release view channel-stable >/dev/null 2>&1 || gh release create channel-stable \
+            --title "Update-Kanal stable" --prerelease --latest=false \
+            --notes "Signiertes Manifest für die automatischen Updates der Boxen (SPEC §11.1). Nicht zum Herunterladen gedacht."
+          gh release upload channel-stable build/manifest.json build/manifest.json.sig --clobber
+          cat build/manifest.json

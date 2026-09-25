@@ -141,6 +141,48 @@ def _cmd_setupd(args: argparse.Namespace, settings: Settings) -> int:
     return 0 if asyncio.run(main()) else 1
 
 
+def _cmd_update(args: argparse.Namespace, settings: Settings) -> int:
+    """SPEC v0.7 §11.1: one update run (root, myboxi-updater.service)."""
+    del args
+    import time
+
+    import httpx
+
+    from myboxi_agent.adapters.hardware import run_command
+    from myboxi_agent.update.installer import Paths, Updater
+
+    async def status() -> dict[str, Any] | None:
+        try:
+            return await request(settings.control_socket, {"cmd": "status"}, limit_s=5)
+        except (OSError, TimeoutError, ValueError):
+            return None
+
+    async def main() -> None:
+        timeout = httpx.Timeout(30.0, connect=15.0)
+        async with httpx.AsyncClient(timeout=timeout) as http:
+            updater = Updater(
+                paths=Paths(
+                    install_dir=settings.install_dir,
+                    work_dir=settings.update_work_dir,
+                    state_file=settings.update_state_file,
+                    db_path=settings.db_path,
+                    keys_dir=settings.update_keys_dir,
+                ),
+                manifest_url=settings.update_manifest_url,
+                http=http,
+                status=status,
+                run=run_command,
+                sleep=asyncio.sleep,
+                monotonic=time.monotonic,
+                fallback_version=__version__,
+                agent_user=settings.agent_user,
+            )
+            await updater.run_once()
+
+    asyncio.run(main())
+    return 0
+
+
 def _cmd_doctor(args: argparse.Namespace, settings: Settings) -> int:
     from myboxi_agent.doctor import run_doctor
 
@@ -194,6 +236,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--host", default="10.42.0.1")
     p.add_argument("--port", type=int, default=80)
     p.set_defaults(func=_cmd_setupd)
+
+    sub.add_parser("update", help="install a software update (root, systemd)").set_defaults(
+        func=_cmd_update
+    )
 
     p = sub.add_parser("library", help="local library without server")
     ls = p.add_subparsers(dest="library_command", required=True)

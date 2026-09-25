@@ -1,0 +1,10 @@
+[Unit]
+Description=Look for Myboxi software updates
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=1h
+RandomizedDelaySec=10min
+
+[Install]
+WantedBy=timers.target

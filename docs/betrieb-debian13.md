@@ -179,6 +179,8 @@ rsync -a /var/lib/myboxi-server/assets/ backup-host:/backups/myboxi-server/asset
 
 **Aufräumen:** Der Worker löscht täglich um 03:17 Events älter als 30 Tage (SPEC §3.11), abgelaufene Sessions, Einladungen und Kopplungscodes sowie Audiodateien, auf die kein Inhalt mehr verweist.
 
+**Box-Updates:** `MYBOXI_SERVER_UPDATE_MANIFEST_URL` zeigt auf das Update-Manifest (Vorgabe: Kanal `channel-stable` auf GitHub). Die App zeigt damit auf der Box-Seite, ob eine Box aktuell ist; leer schaltet die Anzeige der neuesten Version ab. Siehe `docs/updates.md`.
+
 **Links im Einrichtungs-Assistenten:** `MYBOXI_SERVER_IMAGE_URL` (Download der Box-Images, Vorgabe: GitHub-Releases) und `MYBOXI_SERVER_DOCS_URL` (Hardware-Anleitung). Für eigene Builds oder Forks anpassen.
 
 **Upload-Größe:** `MYBOXI_SERVER_MAX_UPLOAD_MB` gilt pro Datei. `client_max_body_size` in der nginx-Site begrenzt die gesamte Anfrage und muss dazu passen.

@@ -33,6 +33,7 @@ from myboxi_server.domain import devices
 from myboxi_server.domain.authz import TenantContext
 from myboxi_server.domain.errors import DomainError, NotFoundError
 from myboxi_server.domain.setup import health_hints
+from myboxi_server.domain.updates import Release, software_view
 from myboxi_server.models import Device, Tenant
 
 router = APIRouter(prefix="/t/{tid}/boxes", dependencies=[Depends(csrf_protect)])
@@ -100,7 +101,9 @@ async def add_box(
     return RedirectResponse(f"/t/{ctx.tenant_id}/boxes/{claimed.device_id}/setup", status_code=303)
 
 
-def _reported_view(device: Device, config_rev: int) -> dict[str, Any] | None:
+def _reported_view(
+    device: Device, config_rev: int, latest: Release | None
+) -> dict[str, Any] | None:
     if not device.reported:
         return None
     try:
@@ -115,6 +118,7 @@ def _reported_view(device: Device, config_rev: int) -> dict[str, Any] | None:
         )
     return {
         "data": data,
+        "software": software_view(data, latest),
         "health": health_hints(data),
         "config_in_sync": data.applied_config_rev >= config_rev,
         "device_in_sync": data.applied_device_rev >= device.device_rev,
@@ -136,13 +140,14 @@ async def _box_page(
     device = await devices.get_device(db, ctx, device_id)
     cfg = await devices.get_config(db, ctx, device_id)
     tenant = await db.get(Tenant, ctx.tenant_id)
+    latest = request.app.state.update_channel.latest()
     return render(
         request,
         "box.html",
         {
             "device": device,
             "cfg": cfg,
-            "reported": _reported_view(device, tenant.config_rev if tenant else 0),
+            "reported": _reported_view(device, tenant.config_rev if tenant else 0, latest),
             "providers": PROVIDERS,
             "locales": LOCALES,
             "timezones": TIMEZONES,
@@ -203,6 +208,7 @@ async def update_config(
     quiet_end: Annotated[str, Form()] = "06:30",
     quiet_mode: Annotated[str, Form()] = "limit",
     quiet_max_volume: Annotated[int, Form()] = 25,
+    auto_update: Annotated[bool, Form()] = False,
 ) -> Response:
     quiet: dict[str, Any] | None = None
     if quiet_enabled:
@@ -222,6 +228,7 @@ async def update_config(
                 "locale": locale,
                 "timezone": timezone,
                 "providers_enabled": providers or [],
+                "auto_update": auto_update,
             }
         )
     except (ValidationError, ValueError):

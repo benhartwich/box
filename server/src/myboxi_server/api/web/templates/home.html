@@ -22,6 +22,14 @@
 </section>
 {% endfor %}
 
+{% for d, sw in update_notices %}
+<section class="card attention">
+  <h2>Software von {{ d.name or "Box" }}</h2>
+  <p class="muted">{{ sw.text }}</p>
+  <p><a class="button small secondary" href="/t/{{ tid }}/boxes/{{ d.id }}">Zur Box</a></p>
+</section>
+{% endfor %}
+
 {% if unknown %}
 <section class="card attention">
   <h2>Neue Figur erkannt</h2>

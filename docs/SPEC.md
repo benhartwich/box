@@ -1,4 +1,4 @@
-# Myboxi — Spezifikation v0.6: Datenmodell & Geräteprotokoll
+# Myboxi — Spezifikation v0.7: Datenmodell & Geräteprotokoll
 
 Status: Entwurf · Stand: 2026-09-25 · Änderungen: §14
 Scope: Der Vertrag zwischen **Box-Agent** (Raspberry Pi) und **Server**.
@@ -88,6 +88,7 @@ Neue Mandanten: Jeder angemeldete Nutzer kann einen Mandanten („Haushalt“) a
 | locale | text | `de-AT` | Für TTS-Ansagen |
 | timezone | text | `Europe/Vienna` | IANA-Zeitzone, in der `quiet_hours` gelten |
 | providers_enabled | text[] | `["local","podcast"]` | `spotify` nur wenn auf der Box eingerichtet |
+| auto_update | bool | `true` | Software-Updates selbst installieren (§11); `false`: nur herunterladen |
 
 ### 3.5 `token` (Figur)
 | Feld | Typ | Notiz |
@@ -323,7 +324,8 @@ Bei Änderung, höchstens alle 30 s (in der Einrichtungsphase alle 5 s, §9.6), 
       { "check": "nfc", "level": "ok", "code": "ok" },
       { "check": "audio", "level": "fail", "code": "no_output" }
     ],
-    "button_test": { "seen": ["play_pause", "volume_up"] }
+    "button_test": { "seen": ["play_pause", "volume_up"] },
+    "update": { "state": "waiting", "version": "0.3.0" }
   }
 }
 ```
@@ -340,6 +342,7 @@ Optionale Felder (fehlen sie, weiß der Server es nicht):
   | `buttons` | `gpio_error` (Taster lassen sich nicht einrichten) |
   | `prompts` | `missing` (Ansagen fehlen) |
 - `button_test`: nur in der Einrichtungsphase (§9.6); die Namen der Tasten (§9.4), die seit Beginn der Phase gedrückt wurden.
+- `update`: Stand der Software-Updates (§11). `state` ist einer von `up_to_date`, `available` (neue Version bekannt, `auto_update` aus), `downloading`, `waiting` (geladen, wartet auf Ruhe), `installed` (seit dem letzten Update läuft die neue Version), `failed`, `rolled_back` (neue Version war nicht gesund, die alte läuft). `version`: die betroffene Version. `code` (nur bei `failed`/`rolled_back`) ist ein Maschinencode wie `bad_signature`, `checksum`, `no_space`, `download`, `unhealthy`.
 
 ### 6.5 `events` — Box → Server, QoS 1
 Die Box schreibt Events zuerst in die `outbox` und löscht sie erst nach PUBACK. Der Server dedupliziert über die Event-ID.
@@ -510,6 +513,7 @@ Die ersten 60 min nach einer erfolgreichen Kopplung, gemessen ab `paired_at` (Wa
 - v1 ohne Mikrofon. Kommt Sprache in v2, bleibt die Verarbeitung vollständig lokal; kein Audio zum Server.
 - Events: nur die Liste in §6.5, 30 Tage Aufbewahrung.
 - `button_test` enthält nur Tastennamen, keine Zeitpunkte, und nur während der Einrichtungsphase (§9.6).
+- Software-Updates (§11) installiert nur ein eigener Root-Dienst auf der Box, nie der Agent selbst. Die Box vertraut ausschließlich signierten Manifesten (Ed25519, Schlüssel im Image) und installiert nie eine ältere oder gleiche Version.
 - Mandanten-Isolation serverseitig durchgängig; automatisierte Tests, die mandantenübergreifenden Zugriff versuchen, sind Teil der CI.
 
 ---
@@ -518,8 +522,22 @@ Die ersten 60 min nach einer erfolgreichen Kopplung, gemessen ab `paired_at` (Wa
 
 - Protokollversion im Topic (`myboxi/v1/…`), im API-Pfad (`/api/v1`) und im Envelope (`"v": 1`).
 - Breaking Changes nur mit neuer Hauptversion; der Server bedient N und N-1 parallel.
-- Agent-Updates über eigenes apt-Repository, Kanäle `stable` und `beta`.
-- Image-Updates sind nicht Teil dieser Spec.
+- Image-Updates (ganzes Betriebssystem, A/B-Partitionen) sind nicht Teil dieser Spec.
+
+### 11.1 Software-Updates der Box
+Die Box aktualisiert den Agent (samt Ansagen) selbst, sobald sie online ist.
+
+- **Paket**: `myboxi-agent-<version>-arm64.tar.xz` enthält das Verzeichnis `<version>/` (Venv und Ansagen) für `/opt/myboxi-agent/releases/`.
+- **Manifest** je Kanal (vorerst nur `stable`), JSON, dazu `manifest.json.sig` (Ed25519 über die Bytes der Datei, roh, 64 Byte):
+  ```json
+  { "channel": "stable", "version": "0.3.0", "released_at": "2026-09-25T12:00:00Z",
+    "bundle": { "url": "https://…/myboxi-agent-0.3.0-arm64.tar.xz", "sha256": "…", "size": 41234567 } }
+  ```
+  Standard-Ort: `https://github.com/benhartwich/myboxi/releases/download/channel-stable/manifest.json`, auf der Box einstellbar.
+- **Vertrauen**: Ein Manifest gilt nur mit gültiger Signatur eines Schlüssels aus `/etc/myboxi-agent/update-keys/`. Die Box installiert nur Versionen, die höher sind als die laufende; das Paket muss die SHA-256 und Größe aus dem Manifest haben.
+- **Ablauf**: prüfen nach jedem Verbindungsaufbau und stündlich → herunterladen (fortsetzbar) → prüfen → entpacken nach `releases/<version>` → warten, bis nichts spielt → Symlink `current` atomar umstellen → Agent neu starten → gesund, wenn der neue Agent sich innerhalb von 90 s mit der neuen Version meldet; sonst zurück auf die alte Version (`rolled_back`). Es bleiben die zwei neuesten Versionen.
+- **Mit `auto_update = false`** lädt die Box, installiert aber nicht (`available`).
+- **Betriebssystem**: Sicherheitsupdates von Debian und Raspberry Pi OS installiert `unattended-upgrades`. Braucht ein Update einen Neustart, startet die Box neu, wenn 10 min lang nichts gespielt hat.
 
 ---
 
@@ -551,6 +569,12 @@ Der Agent wird in M0 gegen einen **Mock-Server** entwickelt, der die Endpunkte a
 ---
 
 ## 14. Änderungen
+
+**v0.7 (2026-09-25)** — Software-Updates der Box; Protokollversion bleibt `v1`, alle Änderungen additiv.
+- §3.4: `auto_update`.
+- §6.4: optionales Feld `update`.
+- §10: Update-Dienst und Signaturen.
+- §11: signierte Agent-Updates statt apt-Repository; Sicherheitsupdates des Betriebssystems.
 
 **v0.6 (2026-09-25)** — Einrichtung mit Selbsttest; Protokollversion bleibt `v1`, alle Änderungen additiv.
 - §3.2: Nutzer legen Mandanten selbst an (höchstens 10 als `owner`).

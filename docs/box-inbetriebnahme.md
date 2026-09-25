@@ -43,6 +43,10 @@ Neu koppeln (z. B. für einen anderen Haushalt): **`play_pause` + `next` 5 Sekun
 2. In der Web-UI unter **Figuren → Unbekannte Figuren** mit „Übernehmen“ anlegen, einen Inhalt zuordnen.
 3. Nach einer unbekannten Figur fragt die Box 10 Minuten lang alle 30 Sekunden beim Server nach, sonst alle 15 Minuten. Sie lädt die Dateien vollständig. Danach spielt die Figur auch ohne Internet. Die Figur einfach noch einmal auflegen.
 
+## Updates
+
+Ab Image 0.3.0 aktualisiert sich die Box selbst, sobald sie online ist, aber nie während etwas spielt. Den Stand zeigt die App auf der Box-Seite unter „Software“; dort lassen sich automatische Updates auch abschalten. Sicherheitsupdates des Systems kommen täglich, ein nötiger Neustart erst nach 10 ruhigen Minuten. Boxen mit einem älteren Image brauchen einmal das neue Image. Details: `docs/updates.md`.
+
 ## Checkliste für die erste Inbetriebnahme
 
 - [ ] Einrichtungs-WLAN `Myboxi-NNNN` erscheint, die Seite öffnet sich
@@ -60,11 +64,11 @@ Neu koppeln (z. B. für einen anderen Haushalt): **`play_pause` + `next` 5 Sekun
 Mit SSH (Schlüssel über den Imager gesetzt):
 
 ```text
-sudo -u myboxi XDG_RUNTIME_DIR=/run/user/$(id -u myboxi) /opt/myboxi-agent/.venv/bin/myboxi-agent doctor
+sudo -u myboxi XDG_RUNTIME_DIR=/run/user/$(id -u myboxi) /opt/myboxi-agent/current/.venv/bin/myboxi-agent doctor
 sudo journalctl _SYSTEMD_USER_UNIT=myboxi-agent.service -f      # Agent
 sudo journalctl -u myboxi-setupd -f                             # Einrichtungsmodus
 ```
 
-Die mitgelieferten Ansagen spricht die Stimme „Thorsten-Voice/Kokoro“ (Apache-2.0, Lizenzhinweis in `/opt/myboxi-agent/prompts/NOTICE.txt`).
+Die mitgelieferten Ansagen spricht die Stimme „Thorsten-Voice/Kokoro“ (Apache-2.0, Lizenzhinweis in `/opt/myboxi-agent/current/prompts/NOTICE.txt`).
 
 Eigene Ansagen, z. B. mit deiner Stimme: Opus-Dateien mit dem Namen der Ansage (siehe `agent/prompts.toml`, z. B. `unknown_token.opus`) nach `/var/lib/myboxi/prompts/` kopieren (Besitzer `myboxi`). Sie haben Vorrang vor den mitgelieferten.

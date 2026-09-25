@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     # Links in the setup wizard: box images and the hardware guide.
     image_url: str = "https://github.com/benhartwich/myboxi/releases"
     docs_url: str = "https://github.com/benhartwich/myboxi/blob/main/docs"
+    # Newest box software (SPEC v0.7 §11.1), shown on the box pages; empty: not shown.
+    update_manifest_url: str | None = (
+        "https://github.com/benhartwich/myboxi/releases/download/channel-stable/manifest.json"
+    )
 
     # SPEC §7.2: HS256 key for device JWTs; at least 32 bytes.
     device_jwt_key: SecretStr

@@ -49,6 +49,14 @@
   </dl>
 </section>
 
+{% if reported %}
+{% set sw = reported.software %}
+<section class="card{% if sw.level == 'fail' %} attention{% endif %}" aria-labelledby="software">
+  <div class="card-head"><h2 id="software">Software</h2><span class="muted">Version {{ sw.version }}{% if sw.image %} · Image {{ sw.image }}{% endif %}</span></div>
+  <p class="{% if sw.level == 'fail' %}warn{% elif sw.level == 'ok' %}muted{% endif %}">{{ sw.text }}</p>
+</section>
+{% endif %}
+
 <section class="card">
   <div class="card-head"><h2>Selbsttest</h2><a href="/t/{{ tid }}/boxes/{{ device.id }}/setup">Einrichtungs-Assistent</a></div>
   {% if reported and reported.health %}
@@ -114,6 +122,7 @@
           <select name="timezone">{% for z in timezones %}<option {% if z == cfg.timezone %}selected{% endif %}>{{ z }}</option>{% endfor %}</select>
         </label>
       </div>
+      <label class="check"><input type="checkbox" name="auto_update" value="true" {% if cfg.auto_update %}checked{% endif %}> Software-Updates automatisch installieren (nie während etwas spielt)</label>
       <fieldset class="box stack">
         <legend>Quellen</legend>
         {% for value, label in providers %}

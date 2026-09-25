@@ -1,9 +1,15 @@
-// The agent (user "myboxi") may start and stop the setup mode service, nothing else.
+// The agent (user "myboxi") may start and stop the setup mode service and start the
+// updater (SPEC v0.7 §11.1), nothing else.
 polkit.addRule(function (action, subject) {
-    if (action.id == "org.freedesktop.systemd1.manage-units" &&
-        action.lookup("unit") == "myboxi-setupd.service" &&
-        (action.lookup("verb") == "start" || action.lookup("verb") == "stop") &&
-        subject.user == "myboxi") {
+    if (action.id != "org.freedesktop.systemd1.manage-units" || subject.user != "myboxi") {
+        return polkit.Result.NOT_HANDLED;
+    }
+    var unit = action.lookup("unit"), verb = action.lookup("verb");
+    if (unit == "myboxi-setupd.service" && (verb == "start" || verb == "stop")) {
         return polkit.Result.YES;
     }
+    if (unit == "myboxi-updater.service" && verb == "start") {
+        return polkit.Result.YES;
+    }
+    return polkit.Result.NOT_HANDLED;
 });

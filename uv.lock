@@ -495,7 +495,7 @@ wheels = [
 
 [[package]]
 name = "myboxi-agent"
-version = "0.2.0"
+version = "0.3.0"
 source = { editable = "agent" }
 dependencies = [
     { name = "httpx" },
@@ -525,7 +525,7 @@ provides-extras = ["hw"]
 
 [[package]]
 name = "myboxi-protocol"
-version = "0.5.0"
+version = "0.6.0"
 source = { editable = "packages/protocol" }
 dependencies = [
     { name = "pydantic" },
@@ -536,7 +536,7 @@ requires-dist = [{ name = "pydantic", specifier = ">=2.11" }]
 
 [[package]]
 name = "myboxi-server"
-version = "0.2.0"
+version = "0.3.0"
 source = { editable = "server" }
 dependencies = [
     { name = "alembic" },

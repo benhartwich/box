@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 
 from manifold3d import Manifold
 
-from myboxi_case import components, parts
+from myboxi_case import characters, components, parts
 from myboxi_case.components import Component
 from myboxi_case.config import CaseConfig
 from myboxi_case.geom import bbox
@@ -87,12 +87,25 @@ def build(cfg: CaseConfig) -> CaseModel:
             (0, 0.6, 0),
         ),
     ]
-    if layout.ears:
+    if layout.character is not None:
         for i, (x, y) in enumerate(parts.ear_positions(layout)):
             key = ("ear_left", "ear_right")[i]
+            label = characters.topper(layout.character).label
             pieces.append(
-                piece(key, "Ohr", parts.ear(g, x, y), body_c, TOOL_BODY, (90, 0, 0), (0, 0, 1.4))
+                piece(key, label, parts.ear(g, x, y), body_c, TOOL_BODY, (90, 0, 0), (0, 0, 1.4))
             )
+    if layout.character == "unicorn":
+        pieces.append(
+            piece(
+                "horn",
+                "Horn",
+                parts.horn(g),
+                accent_c if multi else body_c,
+                TOOL_ACCENT if multi else TOOL_BODY,
+                (0, 0, 0),
+                (0, 0, 1.6),
+            )
+        )
     figure = parts.figure_base(g)
     pieces.append(
         piece(

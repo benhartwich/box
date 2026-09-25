@@ -32,6 +32,11 @@ class Settings(BaseSettings):
     device_jwt_key: SecretStr
     device_jwt_ttl_s: int = 3600
 
+    # "Box gestalten": in-process cache for generated previews and print files.
+    case_cache_mb: int = Field(default=64, ge=0)
+    # Order requests for printed cases go here; empty: the request form is off.
+    order_notify_email: str | None = None
+
     data_dir: Path = Path("/var/lib/myboxi-server")
     # nginx internal location for X-Accel-Redirect (SPEC §3.8); None serves files from the app.
     accel_redirect_prefix: str | None = None

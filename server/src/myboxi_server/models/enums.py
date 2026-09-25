@@ -73,3 +73,13 @@ EVENT_TYPES = (
     "resume_position",
 )
 PROVIDERS = ("local", "podcast", "spotify", "stream")
+
+
+class CaseRequestStatus(StrEnum):
+    """Order requests for printed cases (docs/gehaeuse.md); outside the device protocol."""
+
+    UNCONFIRMED = "unconfirmed"  # waiting for the e-mail confirmation
+    CONFIRMED = "confirmed"  # the operator was notified
+    ANSWERED = "answered"  # offer sent
+    DONE = "done"
+    CANCELLED = "cancelled"

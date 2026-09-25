@@ -138,6 +138,61 @@ def _cmd_create_admin(args: argparse.Namespace) -> int:
     return asyncio.run(run())
 
 
+def _cmd_case_requests(args: argparse.Namespace) -> int:
+    """Order requests for printed cases (docs/gehaeuse.md): list, show, set status, delete."""
+    import uuid
+
+    from myboxi_case.config import CaseConfig
+    from myboxi_server.db import create_engine, create_sessionmaker
+    from myboxi_server.domain import case_requests
+    from myboxi_server.domain.errors import NotFoundError
+    from myboxi_server.models import CaseRequest
+    from myboxi_server.models.enums import CaseRequestStatus
+
+    settings = get_settings()
+    configure_logging(settings.log_level, "console")
+
+    async def run() -> int:
+        engine = create_engine(settings)
+        try:
+            async with create_sessionmaker(engine)() as db:
+                match args.action:
+                    case "list":
+                        status = CaseRequestStatus(args.status) if args.status else None
+                        for req in await case_requests.list_requests(db, status):
+                            cfg = CaseConfig.model_validate(req.config)
+                            print(
+                                f"{req.id}  {req.created_at:%Y-%m-%d}  {req.status.value:<11} "
+                                f"{req.quantity}x {cfg.form:<5} {cfg.name!r:<16} {req.email}"
+                            )
+                    case "show":
+                        req = await db.get(CaseRequest, uuid.UUID(args.id))
+                        if req is None:
+                            raise NotFoundError()
+                        cfg = CaseConfig.model_validate(req.config)
+                        print(f"{req.contact_name} <{req.email}>, {req.country}")
+                        print(f"Status {req.status.value}, {req.quantity} Stück")
+                        for label, value in case_requests.describe(cfg):
+                            print(f"  {label}: {value}")
+                        print(req.message or "(keine Nachricht)")
+                    case "status":
+                        await case_requests.set_status(
+                            db, uuid.UUID(args.id), CaseRequestStatus(args.status)
+                        )
+                        await db.commit()
+                    case _:
+                        await case_requests.delete_request(db, uuid.UUID(args.id))
+                        await db.commit()
+        except NotFoundError:
+            print("Anfrage nicht gefunden.", file=sys.stderr)
+            return 1
+        finally:
+            await engine.dispose()
+        return 0
+
+    return asyncio.run(run())
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="myboxi-server")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -167,6 +222,20 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--display-name")
     p.add_argument("--password-stdin", action="store_true", help="read the password from stdin")
     p.set_defaults(func=_cmd_create_admin)
+
+    p = sub.add_parser("case-requests", help="order requests for printed cases")
+    actions = p.add_subparsers(dest="action", required=True)
+    statuses = ["unconfirmed", "confirmed", "answered", "done", "cancelled"]
+    a = actions.add_parser("list")
+    a.add_argument("--status", choices=statuses)
+    a = actions.add_parser("show")
+    a.add_argument("id")
+    a = actions.add_parser("status")
+    a.add_argument("id")
+    a.add_argument("status", choices=statuses)
+    a = actions.add_parser("delete")
+    a.add_argument("id")
+    p.set_defaults(func=_cmd_case_requests)
 
     return parser
 

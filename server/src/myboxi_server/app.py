@@ -21,6 +21,7 @@ from myboxi_server.api.device.errors import ApiError, code_for_status, error_res
 from myboxi_server.api.web import (
     routes_auth,
     routes_boxes,
+    routes_case,
     routes_contents,
     routes_figures,
     routes_members,
@@ -31,6 +32,7 @@ from myboxi_server.api.web.render import render
 from myboxi_server.api.web.templating import STATIC_DIR
 from myboxi_server.db import create_engine, create_sessionmaker
 from myboxi_server.domain.authz import PermissionDeniedError
+from myboxi_server.domain.case_builds import CaseBuilds
 from myboxi_server.domain.errors import NotFoundError
 from myboxi_server.domain.updates import UpdateChannel
 from myboxi_server.jobs.app import open_job_app
@@ -180,6 +182,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.state.settings = settings
     app.state.update_channel = UpdateChannel(settings.update_manifest_url)
+    app.state.case_builds = CaseBuilds(settings.case_cache_mb * 1024 * 1024)
     app.state.asset_store = FilesystemAssetStore(settings.asset_dir, settings.accel_redirect_prefix)
     app.add_middleware(AccessLogMiddleware)
     _install_error_handlers(app)
@@ -191,6 +194,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(routes_setup.router)
     app.include_router(routes_figures.router)
     app.include_router(routes_contents.router)
+    app.include_router(routes_case.router)
     app.include_router(device_router.router)
     app.include_router(device_claim.router)
 

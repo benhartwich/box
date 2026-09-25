@@ -7,7 +7,7 @@ import math
 from manifold3d import CrossSection
 
 from myboxi_case.config import Grille
-from myboxi_case.geom import bounds, circle, polygon, rect, regular, rounded_rect, section_union
+from myboxi_case.geom import bounds, circle, polygon, rect, rounded_rect, section_union
 from myboxi_case.layout import Symbol
 
 MAX_HOLE = 5.0  # keeps fingers and pens out (documented in docs/gehaeuse.md)
@@ -36,7 +36,7 @@ def symbol(kind: Symbol, size: float = 8.0) -> CrossSection:
             return section_union([tri, rect(s / 2 - bar, -s / 2, s / 2, s / 2)])
 
 
-def _star(r_out: float, r_in: float) -> CrossSection:
+def star(r_out: float, r_in: float) -> CrossSection:
     points: list[tuple[float, float]] = []
     for i in range(10):
         r = r_out if i % 2 == 0 else r_in
@@ -77,7 +77,7 @@ def grille(kind: Grille, radius: float) -> CrossSection:
         case "dots":
             return _hex_grid(radius, 5.4, CrossSection.circle(1.75), 1.75)
         case "stars":
-            return _hex_grid(radius, 7.3, _star(3.4, 2.0), 3.4)
+            return _hex_grid(radius, 7.3, star(3.4, 2.0), 3.4)
         case "hearts":
             return _hex_grid(radius, 7.6, _heart(6.8), 3.7)
         case "lines":
@@ -90,14 +90,3 @@ def grille(kind: Grille, radius: float) -> CrossSection:
                 if half > 4:
                     slots.append(rounded_rect(-half, y - 1.5, half, y + 1.5, 1.5))
             return section_union(slots)
-
-
-def eye(r: float = 4.5) -> CrossSection:
-    return CrossSection.circle(r)
-
-
-def nose(width: float = 11.0) -> CrossSection:
-    """Rounded triangle, point down."""
-    r = 2.2
-    pts = regular(3, width / 2 - r, rotation=-90)
-    return CrossSection.batch_hull([circle(r, x, y) for x, y in pts])

@@ -21,7 +21,7 @@ from myboxi_case import GENERATOR_VERSION, text
 
 MAX_NAME = 14
 
-Form = Literal["radio", "cube", "bear"]
+Form = Literal["radio", "cube", "bear", "cat", "bunny", "unicorn", "frog"]
 Board = Literal["zero2w", "pi4"]
 Power = Literal["usbc", "powerbank"]
 Grille = Literal["dots", "stars", "hearts", "lines"]

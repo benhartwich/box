@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
+from myboxi_case.characters import CHARACTERS, Character
 from myboxi_case.config import CaseConfig, Form
 
 WALL = 2.4  # side and back walls: 6 perimeters with a 0.4 mm nozzle
@@ -76,8 +77,15 @@ class Layout:
     amp: tuple[float, float]  # centre of the amplifier groove (x, y); board stands along x
     socket: tuple[float, float]  # USB-C socket in the back wall (x, z)
     powerbank: tuple[float, float] | None  # corner (x, y) of the compartment
-    ears: bool = False
-    face: bool = False
+    character: Character | None = None  # ears or horn on top, a face on the front
+
+    @property
+    def ears(self) -> bool:
+        return self.character is not None
+
+    @property
+    def face(self) -> bool:
+        return self.character is not None
 
     @property
     def ri_front(self) -> float:
@@ -113,10 +121,11 @@ def _cube(cfg: CaseConfig) -> Layout:
     if cfg.power == "powerbank":
         raise LayoutError("Eine Powerbank passt nur ins Radio (mit Pi Zero 2 W).")
     if cfg.button != 16:
-        raise LayoutError("In Würfel und Bär passen nur 16-mm-Taster.")
+        raise LayoutError("In Würfel und Tierfiguren passen nur 16-mm-Taster.")
     if cfg.speaker != 40:
-        raise LayoutError("In Würfel und Bär passt ein Lautsprecher mit 40 mm Durchmesser.")
-    bear = cfg.form == "bear"
+        raise LayoutError("In Würfel und Tierfiguren passt ein Lautsprecher mit 40 mm Durchmesser.")
+    character = cfg.form if cfg.form in CHARACTERS else None
+    animal = character is not None
     board = BoardPlace(22.5, 50.0, 180) if cfg.board == "zero2w" else BoardPlace(12.5, 40.0, 0)
     return Layout(
         form=cfg.form,
@@ -128,14 +137,13 @@ def _cube(cfg: CaseConfig) -> Layout:
         frame_top=15.0,
         figure=(w / 2, 58.0),
         buttons=_cube_buttons(w),
-        speaker=(w / 2, 50.0 if bear else 56.0),
-        name_box=(22.0, 9.0 if bear else 11.0, w - 22.0, 21.0 if bear else 27.0),
+        speaker=(w / 2, 50.0 if animal else 56.0),
+        name_box=(22.0, 9.0 if animal else 11.0, w - 22.0, 21.0 if animal else 27.0),
         board=board,
         amp=(24.0, 31.0) if cfg.board == "zero2w" else (60.0, 32.0),
         socket=(75.0, 14.0) if cfg.board == "zero2w" else (30.0, 46.0),
         powerbank=None,
-        ears=bear,
-        face=bear,
+        character=character,
     )
 
 

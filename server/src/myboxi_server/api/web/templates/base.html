@@ -13,6 +13,7 @@
   <link rel="preload" href="/static/fonts/figtree-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/static/app.css">
   <script src="/static/htmx.min.js" defer></script>
+  {% block head %}{% endblock %}
 </head>
 <body class="{% if user and tid %}has-tabs{% endif %}" {% if csrf_token %}hx-headers='{"X-CSRF-Token": "{{ csrf_token }}"}'{% endif %}>
   <header class="appbar">
@@ -28,15 +29,20 @@
     </nav>
     {% endif %}
     <div class="appbar-end">
-      {% if tid %}<a class="pill" href="/households">Haushalte {{ icon.chevron() }}</a>{% endif %}
+      {% if tid or path not in ('/households', '/') %}<a class="pill" href="/households">Haushalte {{ icon.chevron() }}</a>{% endif %}
       <form method="post" action="/logout" class="inline logout{% if tid %} in-tenant{% endif %}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <button class="link">Abmelden</button>
       </form>
     </div>
+    {% else %}
+    <nav class="appbar-end" aria-label="Myboxi">
+      {% if path != '/gestalten' %}<a class="pill" href="/gestalten">Box gestalten</a>{% endif %}
+      {% if path != '/login' %}<a class="appbar-link" href="/login">Anmelden</a>{% endif %}
+    </nav>
     {% endif %}
   </header>
-  <main>
+  <main class="{% block main_class %}{% endblock %}">
     {% if error %}<p class="msg error" role="alert">{{ error }}</p>{% endif %}
     {% if notice %}<p class="msg ok" role="status">{{ notice }}</p>{% endif %}
     {% block content %}{% endblock %}

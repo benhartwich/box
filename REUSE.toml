@@ -41,6 +41,11 @@ SPDX-FileCopyrightText = "Big Sky Software (htmx.org)"
 SPDX-License-Identifier = "0BSD"
 
 [[annotations]]
+path = "server/src/myboxi_server/api/web/static/vendor/three-0.186.1/**"
+SPDX-FileCopyrightText = "2010-2026 Three.js Authors"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
 path = "server/migrations/sql/procrastinate_3.10.0_schema.sql"
 SPDX-FileCopyrightText = [
   "2019-2021 PeopleDoc",

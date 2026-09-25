@@ -19,6 +19,7 @@ from manifold3d import Manifold
 
 from myboxi_case import GENERATOR_VERSION
 from myboxi_case.build import CaseModel, Piece
+from myboxi_case.config import CaseConfig
 from myboxi_case.geom import bbox, mesh_arrays
 
 PLATE = (5.0, 265.0)  # usable area on a Snapmaker U1 plate (270 x 270), x and y
@@ -180,7 +181,7 @@ def _threemf_plate(model: CaseModel, placed: list[Placed], plate: int, plates: i
         next_id += 1
 
     bases = "".join(f'<base name="{escape(c)}" displaycolor="{c}FF"/>' for c in colors)
-    name = title(model) + (f" – Platte {plate + 1} von {plates}" if plates > 1 else "")
+    name = title(model.config) + (f" – Platte {plate + 1} von {plates}" if plates > 1 else "")
     model_xml = (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         '<model unit="millimeter" xml:lang="de-DE" '
@@ -228,22 +229,22 @@ def _zip(entries: Iterable[tuple[str, str | bytes]]) -> bytes:
     return buf.getvalue()
 
 
-def title(model: CaseModel) -> str:
+def title(cfg: CaseConfig) -> str:
     forms = {"radio": "Radio", "cube": "Würfel", "bear": "Bär"}
-    name = f" „{model.config.name}“" if model.config.name else ""
-    return f"Myboxi {forms[model.config.form]}{name}"
+    name = f" „{cfg.name}“" if cfg.name else ""
+    return f"Myboxi {forms[cfg.form]}{name}"
 
 
-def file_stem(model: CaseModel) -> str:
+def file_stem(cfg: CaseConfig) -> str:
     """ASCII-safe file name stem, e.g. ``myboxi-radio-lotta``."""
     table = str.maketrans(
         {"ä": "ae", "ö": "oe", "ü": "ue", "ß": "ss", "Ä": "Ae", "Ö": "Oe", "Ü": "Ue"}
     )
-    name = model.config.name.translate(table).lower()
+    name = cfg.name.translate(table).lower()
     slug = "".join(ch if ch.isascii() and ch.isalnum() else "-" for ch in name).strip("-")
     while "--" in slug:
         slug = slug.replace("--", "-")
-    return "-".join(part for part in ("myboxi", model.config.form, slug) if part)
+    return "-".join(part for part in ("myboxi", cfg.form, slug) if part)
 
 
 def preview(model: CaseModel, *, components: bool = True) -> bytes:
@@ -345,8 +346,8 @@ def _readme(model: CaseModel, files: list[str], url: str | None) -> str:
     multi = cfg.colors == "multi"
     labels = {p.key: p.label for p in model.pieces}
     lines = [
-        title(model),
-        "=" * len(title(model)),
+        title(model.config),
+        "=" * len(title(model.config)),
         "",
         "Druckvorlage für die Myboxi, erzeugt mit „Box gestalten“" + (f":\n{url}" if url else "."),
         "",
@@ -408,7 +409,7 @@ def _readme(model: CaseModel, files: list[str], url: str | None) -> str:
 
 def bundle_zip(model: CaseModel, url: str | None = None) -> bytes:
     """Everything for printing: 3MF per plate, STL per part, configuration and a German readme."""
-    stem = file_stem(model)
+    stem = file_stem(model.config)
     entries: list[tuple[str, str | bytes]] = []
     plates = threemf(model)
     for i, data in enumerate(plates):

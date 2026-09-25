@@ -14,7 +14,7 @@ from dataclasses import dataclass
 
 from manifold3d import CrossSection, Manifold
 
-from myboxi_case import patterns, text
+from myboxi_case import characters, patterns, text
 from myboxi_case.components import BOARDS, PN532, board_footprint, board_holes
 from myboxi_case.config import CaseConfig
 from myboxi_case.geom import (
@@ -141,10 +141,11 @@ def body(g: Geometry) -> Shape:
         cylinder_z(g.cfg.button / 2 + tol, b.x, b.y, top - 1.0, lay.height + 1.0)
         for b in lay.buttons
     ]
-    if lay.ears:
-        tw, tt, _ = EAR_TENON
+    if lay.character is not None:
+        tw = characters.topper(lay.character).tenon
+        tt = EAR_TENON[1]
         for ex, ey in ear_positions(lay):
-            ty0 = ey - EAR_T / 2  # the tenon is flush with the ear's front face
+            ty0 = ey - EAR_T / 2  # the tenon is flush with the topper's front face
             holes.append(
                 box(
                     ex - tw / 2 - tol,
@@ -155,6 +156,9 @@ def body(g: Geometry) -> Shape:
                     lay.height + 1.0,
                 )
             )
+    if lay.character == "unicorn":
+        hx, hy = horn_position(lay)
+        holes.append(cylinder_z(1.7, hx, hy, top - 1.0, lay.height + 1.0))  # M3 from inside
     sx, sz = lay.socket
     socket_hole = rounded_rect(sx - 6.5, sz - 3.5, sx + 6.5, sz + 3.5, 3.0)
     screw_holes = [circle(1.6, sx + dx, sz) for dx in (-SOCKET_HOLE_DX, SOCKET_HOLE_DX)]
@@ -247,14 +251,10 @@ def front(g: Geometry) -> Shape:
         label = text.fitted(cfg.name, nx1 - nx0, min(nz1 - nz0, 16.0) * 0.72, 5.0)
         _, by0, _, by1 = bounds(label)
         marks.append(label.translate(((nx0 + nx1) / 2, (nz0 + nz1) / 2 - (by0 + by1) / 2)))
-    if lay.face:
-        marks += [
-            patterns.eye().translate((sx - 16.0, sz + 29.0)),
-            patterns.eye().translate((sx + 16.0, sz + 29.0)),
-        ]
-        marks.append(patterns.nose().translate((sx, sz + 21.5)))
-        ring = circle(r + 2.2, sx, sz) - circle(r + 1.0, sx, sz)
-        marks.append(ring)
+    if lay.character is not None:
+        face = characters.face_marks(lay.character, r).translate((sx, sz))
+        # Keep a bar between the face and the grille openings.
+        marks.append(face - patterns.grille(cfg.grille, r - 2.0).translate((sx, sz)).offset(1.0))
     if not marks:
         return Shape(solid, Manifold())
     inlay = _engrave_front(section_union(marks))
@@ -341,23 +341,46 @@ def base(g: Geometry) -> Shape:
 
 
 def ear_positions(lay: Layout) -> list[tuple[float, float]]:
-    y = 11.0
-    return [(24.0, y), (lay.width - 24.0, y)]
+    if lay.character is None:
+        return []
+    offset = characters.topper(lay.character).offset
+    return [(offset, 11.0), (lay.width - offset, 11.0)]
 
 
 def ear(g: Geometry, x: float, y: float) -> Shape:
-    """Round ear standing on the top, parallel to the front; its tenon is glued into a slot.
+    """Ear (or eye) standing on the top, parallel to the front; its tenon is glued into a slot.
 
     Printed lying on its front face, so the tenon is flush with that face (nothing floats).
     """
+    if g.lay.character is None:
+        raise ValueError("ears only belong to character forms")
+    top = characters.topper(g.lay.character)
     h = g.lay.height
-    tw, tt, td = EAR_TENON
-    disc = circle(15.0, x, h + 13.0) - rect(x - 20, h - 20, x + 20, h)
-    tenon = rect(x - tw / 2, h - TOP - td + 2.0, x + tw / 2, h + 0.5)
+    _, tt, td = EAR_TENON
+    outline = top.outline.translate((x, h))
+    tenon = rect(x - top.tenon / 2, h - TOP - td + 2.0, x + top.tenon / 2, h + 0.5)
     y0 = y - EAR_T / 2
-    solid = union([xz_slab(disc, y0, y0 + EAR_T), xz_slab(tenon, y0, y0 + tt)])
-    inlay = xz_slab(circle(8.0, x, h + 14.0), y0 - 0.01, y0 + ENGRAVE)
+    solid = union([xz_slab(outline, y0, y0 + EAR_T), xz_slab(tenon, y0, y0 + tt)])
+    inlay = xz_slab(top.inlay.translate((x, h)), y0 - 0.01, y0 + ENGRAVE)
     return Shape(solid - inlay, inlay)
+
+
+HORN_R = 9.0
+HORN_H = 40.0
+
+
+def horn_position(lay: Layout) -> tuple[float, float]:
+    return (lay.width / 2, 13.0)
+
+
+def horn(g: Geometry) -> Shape:
+    """Twisted unicorn horn; stands on its flat base and is screwed on from inside (M3)."""
+    hx, hy = horn_position(g.lay)
+    h = g.lay.height
+    star = patterns.star(HORN_R - 1.2, HORN_R - 3.2).offset(1.2)
+    spiral = star.extrude(HORN_H, n_divisions=40, twist_degrees=-300.0, scale_top=(0.08, 0.08))
+    solid = spiral.translate((hx, hy, h)) - cylinder_z(g.pilot(PILOT_M3), hx, hy, h - 1.0, h + 9.0)
+    return Shape(solid, Manifold())
 
 
 def figure_base(g: Geometry) -> Shape:

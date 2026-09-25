@@ -32,6 +32,11 @@ LAYOUTS = [
     ("cube", "pi4", "usbc"),
     ("bear", "zero2w", "usbc"),
     ("bear", "pi4", "usbc"),
+    *[
+        (form, board, "usbc")
+        for form in ("unicorn", "cat", "bunny", "frog")
+        for board in ("zero2w", "pi4")
+    ],
 ]
 
 
@@ -129,6 +134,15 @@ def test_parts_are_single_watertight_bodies() -> None:
     assert not front.inlay.is_empty()  # name, eyes and nose as a second colour
 
 
+def test_unicorn_has_a_horn_in_the_accent_colour() -> None:
+    model = build(CaseConfig(form="unicorn", color_accent="sonne"))
+    horn = model.piece("horn")
+    assert horn.color == "#F2C66D"
+    assert horn.tool == 3
+    box = bbox(horn.printed(horn.solid))
+    assert box[5] - box[2] == pytest.approx(40.0, abs=0.01)  # stands on its base
+
+
 def test_single_colour_has_no_inlays() -> None:
     model = build(CaseConfig(name="Mia", colors="mono"))
     assert all(p.inlay.is_empty() for p in model.pieces)
@@ -186,7 +200,7 @@ def test_exports_are_deterministic() -> None:
 
 def test_bundle_contents_and_names() -> None:
     model = build(CaseConfig(form="radio", name="Jörg Ü"))
-    assert export.file_stem(model) == "myboxi-radio-joerg-ue"
+    assert export.file_stem(model.config) == "myboxi-radio-joerg-ue"
     zf = zipfile.ZipFile(
         io.BytesIO(export.bundle_zip(model, "https://app.myboxi.eu/gestalten?form=radio"))
     )

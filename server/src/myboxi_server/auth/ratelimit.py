@@ -62,3 +62,7 @@ DEVICE_TOKEN_PER_DEVICE = (Limit(10, 60),)
 LOGIN_PER_ACCOUNT = (Limit(10, 900),)
 LOGIN_PER_IP = (Limit(50, 900),)
 TENANT_CREATE_PER_USER = (Limit(5, 3600),)  # SPEC v0.6 §3.2
+# "Box gestalten": only builds that miss the cache count (docs/gehaeuse.md).
+CASE_BUILD_PER_IP = (Limit(60, 600), Limit(400, 86400))
+CASE_REQUEST_PER_IP = (Limit(5, 3600),)
+CASE_REQUEST_PER_EMAIL = (Limit(3, 86400),)

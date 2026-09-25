@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}{{ heading }} · Myboxi{% endblock %}
+{% block content %}
+<section class="auth">
+  <div class="auth-head">
+    <h1>{{ heading }}</h1>
+    <p class="muted">{{ text }}</p>
+  </div>
+  <a class="button secondary" href="/gestalten">Zurück zur Gestaltung</a>
+</section>
+{% endblock %}

@@ -18,10 +18,12 @@ dependencies = [
   "pydantic-settings>=2.10",
   "python-multipart>=0.0.20",
   "pyjwt>=2.10",
+  "myboxi-case",
 ]
 
 [tool.uv.sources]
 myboxi-protocol = { workspace = true }
+myboxi-case = { workspace = true }
 
 [project.scripts]
 myboxi-server = "myboxi_server.cli:main"

@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Anfrage bestätigen · Myboxi{% endblock %}
+{% block content %}
+<h1>Anfrage bestätigen</h1>
+<section class="card">
+  <dl class="facts">
+    <dt>Name</dt><dd>{{ req.contact_name }}</dd>
+    <dt>Anzahl</dt><dd>{{ req.quantity }}</dd>
+    {% for label, value in rows %}<dt>{{ label }}</dt><dd>{{ value }}</dd>{% endfor %}
+  </dl>
+</section>
+<form method="post" action="/gestalten/anfrage/bestaetigen" class="stack">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input type="hidden" name="token" value="{{ token }}">
+  <button type="submit">Anfrage bestätigen</button>
+</form>
+{% endblock %}

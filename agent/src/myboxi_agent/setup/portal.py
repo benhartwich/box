@@ -16,11 +16,12 @@ from dataclasses import dataclass
 from urllib.parse import parse_qs, urlsplit
 
 from myboxi_agent.setup.nm import HOTSPOT_ADDRESS, Network
+from myboxi_agent.sync.tls import MAX_CA_PEM, normalize_ca, valid_ca
 
 log = logging.getLogger(__name__)
 
 MAX_HEADER = 8192
-MAX_BODY = 4096
+MAX_BODY = 16384  # the form with an own CA certificate (SPEC v0.13 §9.3)
 PORTAL = f"http://{HOTSPOT_ADDRESS}/"
 # Captive portal probes (Android, ChromeOS, Windows); Apple gets the page itself.
 REDIRECT_PROBES = {"/generate_204", "/gen_204", "/connecttest.txt", "/ncsi.txt", "/redirect"}
@@ -35,6 +36,9 @@ class Submission:
     # SPEC v0.9 §9.3: None keeps the stored key; never shown again, never logged.
     soloist_key: str | None = None
     soloist_clear: bool = False
+    # SPEC v0.13 §9.3: own CA of a self-hosted server; None keeps the stored one.
+    server_ca: str | None = None
+    server_ca_clear: bool = False
 
     def __repr__(self) -> str:  # no password or key in any log line
         return f"Submission(ssid={self.ssid!r}, server_url={self.server_url!r})"
@@ -64,7 +68,17 @@ def validate(form: dict[str, str]) -> Submission:
             "kopieren."
         )
     clear = form.get("soloist_clear") == "1"
-    return Submission(ssid, password, url.rstrip("/"), None if clear else key, clear)
+    ca = form.get("server_ca", "").strip() or None
+    if ca is not None and not valid_ca(ca):
+        raise InvalidInput(
+            "Das CA-Zertifikat sieht nicht richtig aus. Bitte die Datei myboxi-ca.pem "
+            "vollständig einfügen, mit -----BEGIN CERTIFICATE-----."
+        )
+    ca_clear = form.get("server_ca_clear") == "1"
+    return Submission(
+        ssid, password, url.rstrip("/"), None if clear else key, clear,
+        None if ca_clear or ca is None else normalize_ca(ca), ca_clear,
+    )  # fmt: skip
 
 
 STYLE = (
@@ -111,8 +125,36 @@ def spotify_fields(key_set: bool) -> str:
     )
 
 
+def server_ca_fields(ca_set: bool) -> str:
+    """SPEC v0.13 §9.3: only for a self-hosted server without a public certificate."""
+    state = (
+        "Ein Zertifikat ist gespeichert. Leer lassen, um es zu behalten."
+        if ca_set
+        else "Nur für einen eigenen Server mit eigener Zertifizierungsstelle, z. B. nur im "
+        "Heimnetz. Den Inhalt von myboxi-ca.pem hier einfügen."
+    )
+    clear = (
+        '<label class="check"><input type="checkbox" name="server_ca_clear" value="1">'
+        "Zertifikat entfernen</label>"
+        if ca_set
+        else ""
+    )
+    return (
+        f"<details{' open' if ca_set else ''}><summary>Eigenes Zertifikat (optional)</summary>"
+        '<label for="server_ca">CA-Zertifikat (PEM)</label>'
+        f'<textarea id="server_ca" name="server_ca" rows="5" maxlength="{MAX_CA_PEM}" '
+        'autocomplete="off" spellcheck="false" style="width:100%;font:12px monospace">'
+        "</textarea>"
+        f'<p class="muted">{html.escape(state)}</p>{clear}</details>'
+    )
+
+
 def form_page(
-    networks: Sequence[Network], server_url: str, error: str | None, key_set: bool = False
+    networks: Sequence[Network],
+    server_url: str,
+    error: str | None,
+    key_set: bool = False,
+    ca_set: bool = False,
 ) -> bytes:
     options = "".join(
         f'<option value="{html.escape(n.ssid, quote=True)}">'
@@ -131,6 +173,7 @@ def form_page(
         '<label for="server_url">Server</label>'
         f'<input id="server_url" name="server_url" value="{html.escape(server_url, quote=True)}">'
         '<p class="muted">Nur ändern, wenn du einen eigenen Myboxi-Server betreibst.</p>'
+        f"{server_ca_fields(ca_set)}"
         f"{spotify_fields(key_set)}"
         "<button type=submit>Verbinden</button></form>"
     )
@@ -151,11 +194,13 @@ class Portal:
         default_server_url: str,
         error: str | None = None,
         key_set: bool = False,
+        ca_set: bool = False,
     ) -> None:
         self.networks = list(networks)
         self.default_server_url = default_server_url
         self.error = error
         self.key_set = key_set
+        self.ca_set = ca_set
         self.last_activity = time.monotonic()
         self.submission: asyncio.Future[Submission] | None = None
 
@@ -208,7 +253,13 @@ class Portal:
                 return (
                     200,
                     html_type,
-                    form_page(self.networks, form.get("server_url", ""), str(exc), self.key_set),
+                    form_page(
+                        self.networks,
+                        form.get("server_url", ""),
+                        str(exc),
+                        self.key_set,
+                        self.ca_set,
+                    ),
                 )
             if self.submission is not None and not self.submission.done():
                 self.submission.set_result(submission)
@@ -217,6 +268,8 @@ class Portal:
             return (
                 200,
                 html_type,
-                form_page(self.networks, self.default_server_url, self.error, self.key_set),
+                form_page(
+                    self.networks, self.default_server_url, self.error, self.key_set, self.ca_set
+                ),
             )
         return 302, {"Location": PORTAL}, b""

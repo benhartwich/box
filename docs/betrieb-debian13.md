@@ -1,6 +1,6 @@
 # Myboxi-Server auf Debian 13 betreiben
 
-Diese Anleitung führt von einem frisch installierten Debian 13 (Trixie) bis zur laufenden Web-UI unter HTTPS.
+Diese Anleitung führt von einem frisch installierten Debian 13 (Trixie) bis zur laufenden Web-UI unter HTTPS. Mit Docker Compose geht es schneller, und für einen Server nur im Heimnetz, ohne öffentliches Zertifikat, siehe [selbst-hosten.md](selbst-hosten.md).
 Stack laut `CLAUDE.md`: nginx als Reverse-Proxy, PostgreSQL 17, ffmpeg, systemd – alles aus Debian. Einzige Fremdquelle ist `uv` (Python-Paketmanager), das als geprüftes Binary installiert wird.
 
 Die Shell-Blöcke dieser Anleitung werden von `tools/debian13-check/run.sh` in einem Debian-13-Container ausgeführt. Die Anleitung ist damit selbst getestet.

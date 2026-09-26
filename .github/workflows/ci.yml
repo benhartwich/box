@@ -60,3 +60,11 @@ jobs:
           version: ${{ env.UV_VERSION }}
       - run: uv sync
       - run: uv run pytest -q -rs
+
+  # Self-hosting (docs/selbst-hosten.md): the image builds and the whole Compose stack works
+  # with an own CA, MQTT and the device API.
+  docker:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - run: deploy/docker/smoke-test.sh

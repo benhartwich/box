@@ -6,6 +6,7 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import httpx
 import pytest
@@ -24,6 +25,8 @@ from myboxi_agent.setup.nm import (
 )
 from myboxi_agent.setup.portal import Portal, Submission
 from myboxi_agent.setup.watch import OFFLINE_GRACE_S, RETRIGGER_AFTER_S, NetworkWatch
+
+from . import owncerts
 
 SECRET = "sehr-geheimes-passwort"
 SOLOIST_KEY = "sk-test-0123456789abcdef"
@@ -220,7 +223,7 @@ async def test_oversized_request_is_rejected(portal: tuple[Portal, str]) -> None
     _, url = portal
     async with httpx.AsyncClient() as c:
         r = await c.post(
-            url + "/connect", content=b"x" * 10_000, headers={"content-type": "text/plain"}
+            url + "/connect", content=b"x" * 20_000, headers={"content-type": "text/plain"}
         )
     assert r.status_code == 400
 
@@ -260,8 +263,11 @@ class FakeAgent:
     async def announce(self, *prompts: str) -> None:
         self.said.append(tuple(str(p) for p in prompts))
 
-    async def set_server_url(self, url: str) -> None:
+    cas: list[tuple[str | None, bool]] = field(default_factory=list[tuple[str | None, bool]])
+
+    async def set_server_url(self, url: str, ca: str | None = None, ca_clear: bool = False) -> None:
         self.urls.append(url)
+        self.cas.append((ca, ca_clear))
 
     async def set_soloist_key(self, key: str | None) -> None:
         self.keys.append(key)
@@ -442,3 +448,39 @@ def test_ethernet_never_starts_setup() -> None:
     clock.advance(OFFLINE_GRACE_S * 3)
     w.check()
     assert system.setups == 0
+
+
+# --- own CA of a self-hosted server (SPEC v0.13 §9.3) ---------------------------------------
+
+
+@pytest.mark.skipif(not owncerts.available(), reason="openssl not installed")
+async def test_portal_takes_an_own_ca(portal: tuple[Portal, str], tmp_path: Path) -> None:
+    p, url = portal
+    pem = owncerts.make(tmp_path / "c").ca.read_text()
+    async with httpx.AsyncClient() as c:
+        page = await c.get(url + "/")
+        assert 'name="server_ca"' in page.text
+        junk = "-----BEGIN CERTIFICATE-----\nnope\n-----END CERTIFICATE-----"
+        bad = {"ssid": "Heim", "password": SECRET, "server_url": "https://nas.home.example",
+               "server_ca": junk}  # fmt: skip
+        r = await c.post(url + "/connect", data=bad)
+        assert "CA-Zertifikat sieht nicht richtig aus" in r.text
+        good = bad | {"server_ca": pem.replace("\n", "\r\n")}
+        await c.post(url + "/connect", data=good)
+    assert p.submission is not None
+    submission = p.submission.result()
+    assert submission.server_ca == pem
+    assert not submission.server_ca_clear
+
+
+async def test_setup_hands_over_the_own_ca(tmp_path: Path) -> None:
+    nm, agent = FakeNM(connect_results=[True]), FakeAgent()
+    form = {"ssid": "Heim", "password": SECRET, "server_url": "https://nas.home.example",
+            "server_ca_clear": "1"}  # fmt: skip
+    phone = asyncio.create_task(_submit_when_ready(form))
+    ok = await run_setup(nm, agent, ssid="Myboxi-0042", default_server_url="https://x.test",
+                         host="127.0.0.1", server_ca_set=True)  # fmt: skip
+    await phone
+    assert ok
+    assert agent.urls == ["https://nas.home.example"]
+    assert agent.cas == [(None, True)]

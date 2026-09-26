@@ -22,7 +22,7 @@ SD-Karte einlegen und Netzteil anstecken. Der erste Start dauert etwa zwei Minut
 Ohne WLAN sagt die Box: „Einrichtung. Verbinde dein Handy mit dem WLAN Myboxi, Nummer …“.
 
 1. Mit dem Handy das offene WLAN `Myboxi-NNNN` wählen. Die Einrichtungsseite öffnet sich von selbst, sonst http://10.42.0.1/ aufrufen.
-2. Heim-WLAN wählen, Passwort eingeben. Den Server nur ändern, wenn du einen eigenen betreibst (Vorgabe `https://app.myboxi.eu`).
+2. Heim-WLAN wählen, Passwort eingeben. Den Server nur ändern, wenn du einen eigenen betreibst (Vorgabe `https://app.myboxi.eu`, siehe [selbst-hosten.md](selbst-hosten.md)). Die Adresse muss mit `https://` beginnen. Hat dein Server ein Zertifikat deiner eigenen Zertifizierungsstelle, fügst du unter „Eigenes Zertifikat (optional)“ den Inhalt von `myboxi-ca.pem` ein.
 3. „Verbinden“ tippen. Die Box sagt an, ob es geklappt hat. Bei einem Fehler öffnet sie das Einrichtungs-WLAN erneut.
 
 Später lässt sich der Einrichtungsmodus jederzeit starten: **`volume_up` + `volume_down` 5 Sekunden halten.** Nach 15 Minuten ohne Eingabe endet er von selbst.

@@ -53,9 +53,14 @@ ACK_GRACE = dt.timedelta(seconds=30)
 
 
 def tls_context(settings: Settings) -> ssl.SSLContext | None:
+    """The system's CAs, plus ``mqtt_ca_file`` for a broker with an own CA (self-hosting,
+    docs/selbst-hosten.md)."""
     if not settings.mqtt_tls:
         return None
-    return ssl.create_default_context(cafile=settings.mqtt_ca_file)
+    context = ssl.create_default_context()
+    if settings.mqtt_ca_file is not None:
+        context.load_verify_locations(cafile=settings.mqtt_ca_file)
+    return context
 
 
 @asynccontextmanager

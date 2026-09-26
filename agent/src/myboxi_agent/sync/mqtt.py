@@ -44,8 +44,12 @@ CommandResult = tuple[str, str | None]  # result (ok, expired, rejected, error),
 CommandHandler = Callable[[CmdMessage], Awaitable[CommandResult]]
 
 
-def tls_context(ca_file: Path | None = None) -> ssl.SSLContext:
+def tls_context(ca_file: Path | None = None, ca_pem: str | None = None) -> ssl.SSLContext:
+    """``ca_file`` replaces the system's CAs (development); ``ca_pem`` is a self-hosted
+    server's own CA, trusted in addition (SPEC v0.13 §9.3)."""
     context = ssl.create_default_context(cafile=ca_file)
+    if ca_pem:
+        context.load_verify_locations(cadata=ca_pem)
     context.minimum_version = ssl.TLSVersion.TLSv1_2
     return context  # verifies the certificate and the host name
 
@@ -108,6 +112,7 @@ class MqttLink:
 
     async def _session(self, creds: MqttCredentials) -> None:
         device = creds.username
+        ca = self.state.server_ca()
         will = aiomqtt.Will(topic(device, "online"), OFFLINE, qos=1, retain=True)
         async with aiomqtt.Client(
             hostname=creds.host,
@@ -115,7 +120,7 @@ class MqttLink:
             username=creds.username,
             password=creds.password,
             identifier=creds.username,  # the broker allows no other (SPEC v0.12 §6)
-            tls_context=tls_context(self.ca_file) if self.tls else None,
+            tls_context=tls_context(self.ca_file, ca) if self.tls else None,
             will=will,
             clean_session=True,
             keepalive=KEEPALIVE_S,
@@ -130,15 +135,16 @@ class MqttLink:
                 async with asyncio.TaskGroup() as tg:
                     tg.create_task(self._messages(client, device))
                     tg.create_task(self._events(client, device))
-                    tg.create_task(self._watch_credentials(creds))
+                    tg.create_task(self._watch_credentials(creds, ca))
             except* aiomqtt.MqttError as group:
                 raise aiomqtt.MqttError(str(group.exceptions[0])) from None
 
-    async def _watch_credentials(self, creds: MqttCredentials) -> None:
-        """Leave when the box was unpaired or paired anew (other credentials)."""
+    async def _watch_credentials(self, creds: MqttCredentials, ca: str | None) -> None:
+        """Leave when the box was unpaired or paired anew (other credentials), or the
+        server's own CA changed."""
         while True:
             await self._sleep(30)
-            if self.state.mqtt() != creds:
+            if self.state.mqtt() != creds or self.state.server_ca() != ca:
                 raise aiomqtt.MqttError("credentials changed")
 
     # --- to the box -----------------------------------------------------------------------

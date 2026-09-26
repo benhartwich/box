@@ -105,6 +105,7 @@ async def content_list(
             "contents": await contents.list_contents(db, ctx),
             "kind_labels": KIND_LABELS,
             "kind_choices": KIND_CHOICES,
+            "spotify_account": await spotify.get_account(db, ctx),
         },
         session=session,
         ctx=ctx,

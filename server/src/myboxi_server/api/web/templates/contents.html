@@ -23,6 +23,20 @@
 {% else %}
 <p class="muted">Ein Inhalt ist das, was eine Figur abspielt: zum Beispiel ein Hörspiel oder ein Album mit mehreren Titeln.</p>
 {% endif %}
+<section class="card stack" aria-labelledby="spotify-head">
+  <div class="card-head"><h2 id="spotify-head">Spotify</h2>
+    {% if spotify_account and spotify_account.refresh_token %}<span class="muted">verbunden</span>{% endif %}</div>
+  {% if spotify_account and spotify_account.refresh_token %}
+  <p>Verbunden mit <strong>{{ spotify_account.display_name or "eurem Spotify-Konto" }}</strong>. Alben und Playlists sucht ihr direkt hier.</p>
+  <p class="actions">
+    {% if ctx.can(Perm.CONTENT_WRITE) %}<a class="button small" href="/t/{{ tid }}/contents/new?kind=spotify">Spotify durchsuchen</a>{% endif %}
+    <a class="button small secondary" href="/t/{{ tid }}/spotify">Einrichtung und Boxen</a>
+  </p>
+  {% else %}
+  <p>Mit Spotify Premium spielt eine Figur ein Album oder eine Playlist. Einmal einrichten: Schlüssel auf der Box, Anmeldung in der Spotify-App, Suche hier in Myboxi.</p>
+  <p class="actions"><a class="button small" href="/t/{{ tid }}/spotify">Spotify einrichten</a></p>
+  {% endif %}
+</section>
 {% if ctx.can(Perm.CONTENT_WRITE) %}
 <section class="stack">
   <h2>Neuer Inhalt</h2>

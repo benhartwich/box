@@ -19,7 +19,7 @@ from sqlalchemy import select
 from myboxi_protocol.state import StateResponse
 from myboxi_server.auth.secretbox import unseal
 from myboxi_server.domain.spotify import PURPOSE, SpotifyWeb
-from myboxi_server.models import Content, SpotifyAccount
+from myboxi_server.models import Content, Device, DeviceConfig, SpotifyAccount
 from myboxi_server.models.enums import Role
 
 from .helpers import add_member, login, make_tenant, pair_device, sessionmaker_of
@@ -140,6 +140,34 @@ async def test_the_page_explains_the_setup(rig: Rig) -> None:
     assert "/spotify/callback" in page.text  # the redirect URI to copy
     r = await rig.post("/spotify/app", client_id="nicht-gueltig")
     assert "32 Zeichen" in (await rig.client.get(r.headers["location"])).text
+
+
+async def test_spotify_is_easy_to_find_and_shows_each_box(rig: Rig) -> None:
+    """The setup is linked from the contents page; the page says what each box still needs."""
+    page = await rig.client.get(rig.url("/contents"))
+    assert f'href="/t/{rig.tid}/spotify"' in page.text
+    assert "Spotify einrichten" in page.text
+    off = await pair_device(rig.app, rig.client, rig.tid)
+    on = await pair_device(rig.app, rig.client, rig.tid)
+    reported = {"agent_version": "0.7.0", "hw_model": "rpi-zero2w", "applied_config_rev": 1,
+                "applied_device_rev": 1, "storage": {"free_mb": 100}, "time_trusted": True,
+                "playback": {"status": "stopped", "volume": 30},
+                "soloist": {"installed": False, "state": "no_key"}}  # fmt: skip
+    async with sessionmaker_of(rig.app)() as db:
+        device = await db.get(Device, on.device_id)
+        assert device is not None
+        device.reported = reported
+        config = await db.scalar(select(DeviceConfig).where(DeviceConfig.device_id == on.device_id))
+        assert config is not None
+        config.providers_enabled = [*config.providers_enabled, "spotify"]
+        await db.commit()
+    page = await rig.client.get(rig.url("/spotify"))
+    assert "Spotify Soloist API Key" in page.text  # the box part comes first
+    assert f"/boxes/{off.device_id}" in page.text
+    assert "Spotify ist aus" in page.text
+    assert "Der Spotify-Schlüssel fehlt" in page.text
+    box = await rig.client.get(rig.url(f"/boxes/{on.device_id}"))
+    assert f'href="/t/{rig.tid}/spotify"' in box.text
 
 
 async def test_pkce_login_stores_the_refresh_token_sealed(rig: Rig) -> None:

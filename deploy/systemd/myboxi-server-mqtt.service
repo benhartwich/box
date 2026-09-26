@@ -9,11 +9,15 @@ Type=simple
 User=myboxi-server
 Group=myboxi-server
 EnvironmentFile=/etc/myboxi-server/myboxi-server.env
+# The broker's admin password only here, not in the API's or the worker's environment.
+EnvironmentFile=/etc/myboxi-server/mqtt.env
 WorkingDirectory=/opt/myboxi-server
 ExecStart=/opt/myboxi-server/.venv/bin/myboxi-server mqtt
 Restart=always
 RestartSec=5
 UMask=0027
+MemoryMax=256M
+TasksMax=64
 
 NoNewPrivileges=yes
 ProtectSystem=strict

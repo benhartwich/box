@@ -28,6 +28,7 @@ from myboxi_server.api.web.deps import (
 )
 from myboxi_server.api.web.render import render
 from myboxi_server.api.web.routes_setup import render_start
+from myboxi_server.auth import ratelimit
 from myboxi_server.auth.sessions import SessionInfo
 from myboxi_server.domain import commands, devices, events, tokens
 from myboxi_server.domain.authz import TenantContext
@@ -290,6 +291,15 @@ async def send_command(
     token_id: Annotated[uuid.UUID | None, Form()] = None,
 ) -> Response:
     """SPEC §6.2 (M2): the MQTT service sends it; it expires after 60 seconds."""
+    try:
+        await ratelimit.hit(
+            request.app.state.engine, f"command:{session.user.id}", ratelimit.COMMAND_PER_USER
+        )
+    except ratelimit.RateLimitedError:
+        return await _box_page(
+            request, db, session, ctx, device_id,
+            error="Zu viele Befehle. Bitte kurz warten.", status_code=429,
+        )  # fmt: skip
     args: dict[str, Any] = {}
     if name == "set_volume":
         args["volume"] = volume

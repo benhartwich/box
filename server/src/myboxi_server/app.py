@@ -82,6 +82,11 @@ class AccessLogMiddleware:
                 message["headers"] = headers
             await send(message)
 
+        if _too_large(scope):
+            await _reject_too_large(send_wrapper)
+            status = 413
+            access_log.info("%s %s %s", scope["method"], scope["path"], status)
+            return
         try:
             await self.app(scope, receive, send_wrapper)
         finally:
@@ -92,6 +97,31 @@ class AccessLogMiddleware:
                 status,
                 extra={"duration_ms": round((time.perf_counter() - start) * 1000, 1)},
             )
+
+
+# The device API takes small JSON documents only (SPEC §7); the body is parsed before the
+# bearer token is checked, so large bodies are refused up front (nginx does it too).
+API_MAX_BODY = 256 * 1024
+
+
+def _too_large(scope: Scope) -> bool:
+    if not str(scope.get("path", "")).startswith("/api/"):
+        return False
+    for name, value in scope.get("headers", []):
+        if name == b"content-length":
+            try:
+                return int(value) > API_MAX_BODY
+            except ValueError:
+                return True
+    return False
+
+
+async def _reject_too_large(send: Send) -> None:
+    body = b'{"error": {"code": "invalid_request", "message": "Request body too large"}}'
+    await send({"type": "http.response.start", "status": 413,
+                "headers": [(b"content-type", b"application/json"),
+                            (b"content-length", str(len(body)).encode())]})  # fmt: skip
+    await send({"type": "http.response.body", "body": body})
 
 
 def _wants_html(request: Request) -> bool:

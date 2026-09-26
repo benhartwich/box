@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     # against production by accident.
     default_server_url: str | None = None
     sim: bool = False
+    # SPEC v0.12 §9.3: the device secret and tokens travel only over HTTPS. Development only
+    # (implied by --sim): allow an http:// server.
+    allow_http_server: bool = False
 
     # Hardware (docs/hardware.md): BCM pin numbers, buttons wired to GND.
     pin_play_pause: int = 17

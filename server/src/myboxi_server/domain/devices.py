@@ -6,7 +6,7 @@ import datetime as dt
 import uuid
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from myboxi_protocol.reported import ReportedData
@@ -14,7 +14,7 @@ from myboxi_protocol.state import DeviceConfig as DeviceConfigMsg
 from myboxi_server.domain.authz import Perm, TenantContext
 from myboxi_server.domain.errors import InvalidInputError, NotFoundError
 from myboxi_server.domain.state import device_config_message
-from myboxi_server.models import Device, DeviceConfig
+from myboxi_server.models import Device, DeviceCommand, DeviceConfig
 from myboxi_server.models.enums import OnTokenRemoved
 
 
@@ -31,6 +31,12 @@ async def unpair(db: AsyncSession, device: Device) -> None:
         )
     if device.mqtt_provisioned or device.mqtt_password is not None:
         device.mqtt_revoke = True  # the MQTT service deletes the broker account (SPEC §6)
+    # Commands of the old household never reach the box (SPEC §6.2).
+    await db.execute(
+        update(DeviceCommand)
+        .where(DeviceCommand.device_id == device.id, DeviceCommand.result.is_(None))
+        .values(result="expired")
+    )
     device.mqtt_password = None
     device.tenant_id = None
     device.secret_hash = None

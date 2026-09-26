@@ -158,7 +158,7 @@ Danach ist die Web-UI unter `https://<Domain>/` erreichbar. Anmelden mit der E-M
 
 ## MQTT: sofortiger Abgleich und Fernbedienung (optional)
 
-Ohne MQTT fragen die Boxen alle 15 Minuten nach Änderungen (SPEC §5.2). Mit MQTT gleichen sie sofort ab, und die App kann Befehle schicken (Stopp, Lautstärke, Figur abspielen, „Welche Box ist das?“). Der Broker ist Mosquitto aus Debian, nur mit TLS auf Port 8883, und jede Box bekommt ein eigenes Konto, das nur ihre eigenen Topics nutzen darf (SPEC §6).
+Ohne MQTT fragen die Boxen alle 15 Minuten nach Änderungen (SPEC §5.2). Mit MQTT gleichen sie sofort ab, und die App kann Befehle schicken (Stopp, Lautstärke, Figur abspielen, „Welche Box ist das?“). Der Broker ist Mosquitto aus Debian, nur mit TLS auf Port 8883, und jede Box bekommt ein eigenes Konto, das nur ihre eigenen Topics nutzen darf (SPEC §6). Die Client-ID ist immer der Benutzername, so kann niemand die Sitzung einer anderen Box oder des Servers übernehmen.
 
 1. Paket, Zertifikat, Konfiguration. Das Zertifikat ist das der Web-UI; der Deploy-Hook kopiert es bei jeder Erneuerung für Mosquitto.
    ```text
@@ -167,20 +167,22 @@ Ohne MQTT fragen die Boxen alle 15 Minuten nach Änderungen (SPEC §5.2). Mit MQ
      /etc/letsencrypt/renewal-hooks/deploy/myboxi-mosquitto
    RENEWED_LINEAGE=/etc/letsencrypt/live/$MYBOXI_DOMAIN /etc/letsencrypt/renewal-hooks/deploy/myboxi-mosquitto
    install -m 0644 /opt/myboxi-server/deploy/mosquitto/myboxi.conf /etc/mosquitto/conf.d/myboxi.conf
+   install -m 0644 /opt/myboxi-server/deploy/logrotate/mosquitto /etc/logrotate.d/mosquitto
    ```
-2. Konto des Servers anlegen. Das Passwort nur hier und in der Env-Datei verwenden.
+   Der Hook liest den Hostnamen aus `MYBOXI_SERVER_MQTT_HOST` (Schritt 2); vor Schritt 2 also erst die Zeile `MYBOXI_SERVER_MQTT_HOST=…` eintragen oder den Hook nach Schritt 2 noch einmal ausführen. Das Log von Mosquitto (mit IP-Adressen) bleibt 14 Tage.
+2. Konto des Servers anlegen. Das Passwort steht nur in `mqtt.env`, die allein der MQTT-Dienst liest (Web-UI und Worker brauchen es nicht).
    ```text
    MQTT_PASSWORD=$(openssl rand -base64 32)
    mosquitto_ctrl dynsec init /var/lib/mosquitto/dynamic-security.json myboxi-server "$MQTT_PASSWORD"
    chown mosquitto:mosquitto /var/lib/mosquitto/dynamic-security.json
    chmod 0600 /var/lib/mosquitto/dynamic-security.json
    systemctl restart mosquitto
-   cat >> /etc/myboxi-server/myboxi-server.env <<EOF
-   MYBOXI_SERVER_MQTT_HOST=$MYBOXI_DOMAIN
-   MYBOXI_SERVER_MQTT_PASSWORD=$MQTT_PASSWORD
-   EOF
+   echo "MYBOXI_SERVER_MQTT_HOST=$MYBOXI_DOMAIN" >> /etc/myboxi-server/myboxi-server.env
+   install -m 0640 -g myboxi-server /dev/null /etc/myboxi-server/mqtt.env
+   echo "MYBOXI_SERVER_MQTT_PASSWORD=$MQTT_PASSWORD" > /etc/myboxi-server/mqtt.env
    myboxi-server mqtt-setup
    ```
+   `mqtt-setup` gibt dem Server-Konto seine Rechte und stellt den Broker so ein, dass ein Client nur empfängt, was seine Rolle erlaubt. Es läuft einmal, bevor der Dienst startet.
 3. Dienst starten und die Web-UI neu starten (sie gibt Boxen ab jetzt beim Koppeln MQTT-Zugangsdaten).
    ```text
    install -m 0644 /opt/myboxi-server/deploy/systemd/myboxi-server-mqtt.service /etc/systemd/system/
@@ -191,6 +193,7 @@ Ohne MQTT fragen die Boxen alle 15 Minuten nach Änderungen (SPEC §5.2). Mit MQ
 4. Prüfen: Der Port 8883 antwortet nur mit TLS, ein anonymer Zugang wird abgewiesen.
    ```text
    mosquitto_sub -h "$MYBOXI_DOMAIN" -p 8883 -t 'myboxi/#' -W 3 --capath /etc/ssl/certs   # "not authorised"
+   mosquitto_sub -h "$MYBOXI_DOMAIN" -p 8883 -t 'myboxi/#' -W 3   # ohne TLS: keine Verbindung
    journalctl -u myboxi-server-mqtt -n 20
    ```
 

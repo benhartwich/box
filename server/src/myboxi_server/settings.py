@@ -103,7 +103,9 @@ class Settings(BaseSettings):
 
     @property
     def mqtt_enabled(self) -> bool:
-        return bool(self.mqtt_host and self.mqtt_password)
+        """Boxes get MQTT credentials. Only the MQTT service needs the broker password, so
+        it lives in its own env file (docs/betrieb-debian13.md)."""
+        return bool(self.mqtt_host)
 
     @property
     def tmp_dir(self) -> Path:

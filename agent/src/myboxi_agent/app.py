@@ -53,7 +53,7 @@ from myboxi_agent.store.repos import (
     StateRepo,
 )
 from myboxi_agent.sync.client import DeviceApi
-from myboxi_agent.sync.engine import Api, SyncEngine
+from myboxi_agent.sync.engine import Api, SyncEngine, server_url_ok
 from myboxi_agent.sync.mqtt import MqttLink
 from myboxi_agent.update.installer import read_state
 from myboxi_protocol.messages import (
@@ -135,6 +135,7 @@ class App:
             clock=clock,
             api_factory=api_factory or DeviceApi,
             default_server_url=settings.default_server_url,
+            allow_http=settings.allow_http_server or settings.sim,
             hw_model=self.hw_model,
             reported_data=self.reported_data,
             disk_free=lambda: free_bytes(settings.data_dir),
@@ -156,7 +157,7 @@ class App:
             ca_file=settings.mqtt_ca_file,
         )
         self.sync.mqtt = self.mqtt
-        self.sync.on_paired = self.mqtt.trigger
+        self.sync.on_credentials = self.mqtt.trigger
         self.outbox.on_emit = self.mqtt.events_pending
         system: Any = self.adapters.system
         if hasattr(system, "on_repair"):
@@ -375,7 +376,11 @@ class App:
             self.announcer.announce(*prompts)
             return {"ok": True}
         if cmd == "set_server_url":
-            self.state.set_server_url(str(req["url"]) or None)
+            url = str(req["url"]) or None
+            if url is not None and not server_url_ok(url, allow_http=self._allow_http()):
+                return {"ok": False, "error": "the server url must start with https://"}
+            self.state.set_server_url(url)
+            self.mqtt.trigger()  # another server means other credentials
             self.sync.trigger()
             return self.status()
         if cmd in ("set_soloist_key", "clear_soloist_key"):
@@ -409,6 +414,9 @@ class App:
         await asyncio.sleep(0.2)  # let the loops react before reporting
         return self.status()
 
+    def _allow_http(self) -> bool:
+        return self.settings.allow_http_server or self.settings.sim
+
     async def handle_command(self, cmd: CmdMessage) -> tuple[str, str | None]:
         """SPEC §6.2: a command from the app; the result goes back as ``cmd/ack`` (§6.3)."""
         match cmd.data:
@@ -423,7 +431,8 @@ class App:
                 if reason := self.controller.play_remote(uid):
                     return "rejected", reason
             case IdentifyCmd():
-                self.announcer.announce(Prompt.TONE_ATTENTION, Prompt.HELLO)
+                if reason := self.controller.identify():
+                    return "rejected", reason
             case SyncNowCmd():
                 self.sync.trigger()
             case UpdateCheckCmd():

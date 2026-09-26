@@ -90,7 +90,7 @@ def _cmd_mqtt(args: argparse.Namespace) -> int:
 
     settings = get_settings()
     configure_logging(settings.log_level, settings.log_format)
-    if not settings.mqtt_enabled:
+    if not settings.mqtt_enabled or settings.mqtt_password is None:
         print("MQTT is off: set MYBOXI_SERVER_MQTT_HOST and _MQTT_PASSWORD.", file=sys.stderr)
         return 2
 
@@ -111,7 +111,7 @@ def _cmd_mqtt_setup(args: argparse.Namespace) -> int:
 
     settings = get_settings()
     configure_logging(settings.log_level, "console")
-    if not settings.mqtt_enabled:
+    if not settings.mqtt_enabled or settings.mqtt_password is None:
         print("MQTT is off: set MYBOXI_SERVER_MQTT_HOST and _MQTT_PASSWORD.", file=sys.stderr)
         return 2
     asyncio.run(setup_server_role(settings))

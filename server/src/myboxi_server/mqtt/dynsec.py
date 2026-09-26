@@ -1,8 +1,10 @@
 """Mosquitto's dynamic security plugin: one account and one role per box (SPEC §6).
 
 A box may only publish its own ``reported``, ``events``, ``cmd/ack`` and ``online`` and only
-subscribe to its own ``notify`` and ``cmd``. The server's account gets its role once
-(``myboxi-server mqtt-setup``).
+subscribe to and receive its own ``notify`` and ``cmd``. Its client id must be its user name
+(the broker also forces that: ``use_username_as_clientid``), so nobody can take over another
+client's session. The server's account gets its role once (``myboxi-server mqtt-setup``),
+which also turns receiving off by default: only what a role allows reaches a client.
 """
 
 from __future__ import annotations
@@ -44,9 +46,11 @@ def provision_box(device_id: uuid.UUID, password: str) -> list[Command]:
         {"command": "createRole", "rolename": role},
         *(_acl(role, "publishClientSend", topic(device_id, leaf)) for leaf in FROM_BOX),
         *(_acl(role, "subscribePattern", topic(device_id, leaf)) for leaf in TO_BOX),
+        *(_acl(role, "publishClientReceive", topic(device_id, leaf)) for leaf in TO_BOX),
         {
             "command": "createClient",
             "username": str(device_id),
+            "clientid": str(device_id),
             "password": password,
             "roles": [{"rolename": role}],
         },
@@ -62,6 +66,11 @@ def server_role(username: str) -> list[Command]:
         _acl(SERVER_ROLE, "publishClientSend", everything),
         _acl(SERVER_ROLE, "subscribePattern", everything),
         _acl(SERVER_ROLE, "publishClientReceive", everything),
+        {
+            "command": "setDefaultACLAccess",
+            "acls": [{"acltype": "publishClientReceive", "allow": False}],
+        },
+        {"command": "modifyClient", "username": username, "clientid": username},
         {
             "command": "addClientRole",
             "username": username,

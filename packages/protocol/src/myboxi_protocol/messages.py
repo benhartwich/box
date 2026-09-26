@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Annotated, Final, Literal
 from uuid import UUID
 
-from pydantic import AwareDatetime, Field
+from pydantic import AwareDatetime, Field, StringConstraints
 
 from myboxi_protocol.common import NonNegativeInt, Percent, ProtocolModel, Ulid
 from myboxi_protocol.envelope import EnvelopeBase
@@ -85,7 +85,8 @@ class CmdMessage(EnvelopeBase):
 class CmdAckData(ProtocolModel):
     cmd_id: Ulid
     result: Literal["ok", "expired", "rejected", "error"]
-    message: str | None = None
+    # SPEC v0.12 §6.3: a machine code, never free text.
+    message: Annotated[str, StringConstraints(pattern=r"^[a-z0-9_]{1,32}$")] | None = None
 
 
 class CmdAckMessage(EnvelopeBase):

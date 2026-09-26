@@ -188,6 +188,31 @@ async def test_reported_is_retained(rig: Rig) -> None:
         assert json.loads(payload)["data"]["agent_version"] == "0.7.0"
 
 
+async def test_a_broken_connection_does_not_break_reporting(tmp_path: Path) -> None:
+    """The publish fails (connection just lost): the engine falls back to HTTPS (§7.3)."""
+    clock = FakeClock(NOW)
+    state = StateRepo(Database(connect(tmp_path / "x.db"), tmp_path / "assets", clock))
+
+    async def on_command(cmd: CmdMessage) -> tuple[str, str | None]:
+        raise AssertionError(cmd)
+
+    link = MqttLink(state=state, outbox=OutboxRepo(state.db), clock=clock,
+                    on_notify=lambda: None, on_command=on_command, tls=False)  # fmt: skip
+
+    class Broken:
+        async def publish(self, *args: object, **kwargs: object) -> None:
+            raise aiomqtt.MqttError("Disconnected during message iteration")
+
+    link._client = Broken()  # type: ignore[assignment]  # pyright: ignore[reportPrivateUsage, reportAttributeAccessIssue]
+    message = ReportedMessage.model_validate(
+        {"id": "01J8Z3M5W6XK2C4B7N9P0QRSTX", "ts": NOW,
+         "data": {"agent_version": "0.7.0", "hw_model": "rpi-zero2w", "applied_config_rev": 1,
+                  "applied_device_rev": 1, "storage": {"free_mb": 1}, "time_trusted": True,
+                  "playback": {"status": "stopped", "volume": 30}}}
+    )  # fmt: skip
+    assert await link.publish_reported(message) is False
+
+
 async def test_the_box_cannot_publish_as_another_box(rig: Rig) -> None:
     """The broker ACL, from the box's side: its credentials only cover its own topics."""
     other = str(uuid.uuid4())
@@ -234,6 +259,11 @@ def test_remote_stop_and_play_follow_the_rules() -> None:
     ctl.stop_remote()
     assert player.calls[-1] == "pause"
     assert ctl.play_remote("04FFFFFFFF") == "unknown_token"
+    assert ctl.identify() is None
+    assert Prompt.HELLO in announcer.flat
     cfg["quiet_hours"] = {"start": "11:00", "end": "13:00", "lock": True}
     assert ctl.play_remote("04A2B3C4D5E680") == "quiet_hours"
     assert Prompt.QUIET_TIME in announcer.flat
+    said = len(announcer.said)
+    assert ctl.identify() == "quiet_hours"  # the child sleeps: no sound
+    assert len(announcer.said) == said

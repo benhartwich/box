@@ -19,9 +19,11 @@ from myboxi_agent.config import Settings
 from myboxi_agent.core.model import Playable, Prompt
 from myboxi_agent.sync import engine as engine_module
 from myboxi_agent.sync.client import ApiError, ChecksumMismatch
+from myboxi_agent.sync.engine import server_url_ok
 from myboxi_protocol.errors import ErrorCode
 from myboxi_protocol.events import EventBatchResponse, EventResult
 from myboxi_protocol.pairing import (
+    MqttCredentials,
     PairingClaimed,
     PairingPending,
     PairingStartRequest,
@@ -71,9 +73,10 @@ class FakeApi:
     unpaired: int = 0
     downloads: int = 0
     reject_ids: set[str] = field(default_factory=set[str])
+    start_bodies: list[PairingStartRequest] = field(default_factory=list[PairingStartRequest])
 
     async def pairing_start(self, body: PairingStartRequest) -> PairingStartResponse:
-        del body
+        self.start_bodies.append(body)
         self.starts += 1
         return PairingStartResponse(code=f"{self.starts:06d}", expires_in=600, poll_token="p" * 40)
 
@@ -222,6 +225,8 @@ async def test_rejected_credentials_trigger_pairing(app: App, api: FakeApi) -> N
     app.state.set_paired(TENANT, "s" * 43)
     api.token_error = ApiError(401, ErrorCode.INVALID_CREDENTIALS)
     api.polls = [claimed()]
+    changed: list[bool] = []
+    app.sync.on_credentials = lambda: changed.append(True)  # e.g. leave the broker at once
 
     def repaired() -> bool:
         if api.starts:
@@ -230,6 +235,40 @@ async def test_rejected_credentials_trigger_pairing(app: App, api: FakeApi) -> N
 
     await run_until(app, repaired)
     assert app.state.get().tenant_id == TENANT
+    assert len(changed) == 2  # dropped, then paired again
+
+
+async def test_pairing_proves_the_box_with_its_key_and_stores_mqtt_at_once(
+    app: App, api: FakeApi
+) -> None:
+    """SPEC v0.12 §7.1: the same pairing key every time, also after unpairing; the broker
+    account is stored together with the device secret."""
+    creds = MqttCredentials(host="mqtt.test", port=8883, username=str(app.state.get().device_id),
+                            password="m" * 43)  # fmt: skip
+    api.polls = [claimed().model_copy(update={"mqtt": creds})]
+    await run_until(app, lambda: app.state.get().tenant_id is not None)
+    assert app.state.mqtt() == creds
+    key = api.start_bodies[0].pairing_key
+    assert key is not None
+    assert len(key) == 43
+    app.state.clear_tenant()
+    assert app.state.mqtt() is None
+    assert app.state.pairing_key() == key
+
+
+async def test_plain_http_server_is_refused(app: App, api: FakeApi) -> None:
+    """SPEC v0.12 §9.3: the device secret never travels without TLS."""
+    assert server_url_ok("https://app.myboxi.eu")
+    assert not server_url_ok("http://nas.local:8000")
+    assert server_url_ok("http://127.0.0.1:8010", allow_http=True)
+    app.settings = app.settings.model_copy(update={"sim": False})
+    answer = await app.handle_control({"cmd": "set_server_url", "url": "http://nas.local"})
+    assert answer["ok"] is False
+    assert app.sync.server_url() == "https://box.test"
+    app.state.set_server_url("http://nas.local")  # e.g. from an older agent
+    app.sync.allow_http = False
+    await run_until(app, lambda: app.sync.status.last_error is not None)
+    assert api.starts == 0
 
 
 async def test_outbox_is_emptied_including_rejected(app: App, api: FakeApi) -> None:

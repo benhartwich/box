@@ -42,6 +42,8 @@ class Device(Timestamps, Base):
     agent_version: Mapped[str] = mapped_column(Text)
     # Argon2id hash of the device secret (SPEC §10); NULL while unpaired.
     secret_hash: Mapped[str | None] = mapped_column(Text)
+    # SPEC v0.12 §7.1: SHA-256 of the box's pairing key, bound at the first pairing start.
+    pairing_key_hash: Mapped[str | None] = mapped_column(Text)
     # Bumped on every pairing and unpair; device JWTs carry it and become invalid on change.
     auth_generation: Mapped[int] = mapped_column(Integer, server_default="0")
     # SPEC §5.1: raised by database triggers only.
@@ -137,7 +139,15 @@ class DeviceCommand(Timestamps, Base):
     """
 
     __tablename__ = "device_command"
-    __table_args__ = (Index("ix_device_command_device_created", "device_id", "created_at"),)
+    __table_args__ = (
+        Index("ix_device_command_device_created", "device_id", "created_at"),
+        # The MQTT service looks for waiting commands every second.
+        Index(
+            "ix_device_command_waiting",
+            "created_at",
+            postgresql_where=text("result IS NULL"),
+        ),
+    )
 
     id: Mapped[str] = mapped_column(Text, primary_key=True)
     # Not a composite key with the device: unpairing clears device.tenant_id.

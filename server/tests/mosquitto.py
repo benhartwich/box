@@ -57,6 +57,7 @@ def broker(tmp: Path) -> Generator[Broker]:
     conf = tmp / "mosquitto.conf"
     conf.write_text(
         f"listener {port} 127.0.0.1\nallow_anonymous false\npersistence false\n"
+        "use_username_as_clientid true\n"
         f"plugin {_plugin()}\nplugin_opt_config_file {dynsec}\nlog_dest stderr\n"
         + ("user root\n" if os.geteuid() == 0 else "")
     )

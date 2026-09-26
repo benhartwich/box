@@ -31,15 +31,21 @@ _SECRET_KEYS = (
     "soloist_key",
     "soloist_api_key",
     "api_key",
+    "pairing_key",
+    "refresh_token",
 )
 _KEY_ALT = "|".join(re.escape(k) for k in sorted(_SECRET_KEYS, key=len, reverse=True))
+# ...also with a prefix: mqtt_password, MYBOXI_SERVER_MQTT_PASSWORD, x-device-secret
+_PREFIX = r"(?:[\w-]*[_-])?"
 # key=value, key: value, "key": "value", ?key=value&...
 _PATTERNS = (
     # HTTP header lines: the whole value up to the end of the line.
     re.compile(r"(\b(?:authorization|cookie|set-cookie)\s*:\s*)(?!\[REDACTED\])[^\r\n]+", re.I),
-    re.compile(rf'("(?:{_KEY_ALT})"\s*:\s*)"[^"]*"', re.IGNORECASE),
-    re.compile(rf"('(?:{_KEY_ALT})'\s*:\s*)'[^']*'", re.IGNORECASE),
-    re.compile(rf"(\b(?:{_KEY_ALT})\s*[=:]\s*)(?!\[REDACTED\])[^\s&,;'\"}}]+", re.IGNORECASE),
+    re.compile(rf'("{_PREFIX}(?:{_KEY_ALT})"\s*:\s*)"[^"]*"', re.IGNORECASE),
+    re.compile(rf"('{_PREFIX}(?:{_KEY_ALT})'\s*:\s*)'[^']*'", re.IGNORECASE),
+    re.compile(
+        rf"(\b{_PREFIX}(?:{_KEY_ALT})\s*[=:]\s*)(?!\[REDACTED\])[^\s&,;'\"}}]+", re.IGNORECASE
+    ),
     re.compile(r"(\bBearer\s+)[A-Za-z0-9._~+/=-]+", re.IGNORECASE),
     # Soloist's command line (SPEC v0.9 §10): --api-key KEY, -k KEY
     re.compile(r"((?:--api-key|(?<!\w)-k)[=\s]+)(?!\[REDACTED\])\S+"),
@@ -58,8 +64,13 @@ def redact(text: str) -> str:
     return text
 
 
+def _secret_key(key: str) -> bool:
+    k = key.lower()
+    return any(k == s or k.endswith(("_" + s, "-" + s)) for s in _SECRET_KEYS)
+
+
 def redact_value(key: str, value: Any) -> Any:
-    if key.lower() in _SECRET_KEYS:
+    if _secret_key(key):
         return REDACTED
     if isinstance(value, str):
         return redact(value)

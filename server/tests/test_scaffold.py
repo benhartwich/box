@@ -42,6 +42,10 @@ def test_settings_derive_asyncpg_url() -> None:
         "{'password': 'abc123SECRET'}",
         "Authorization: Bearer abc123SECRET.part.sig",
         "hash=$argon2id$v=19$m=65536,t=3,p=4$abc123SECRET",
+        # prefixed keys (SPEC v0.12): the broker password in an env dump
+        "MYBOXI_SERVER_MQTT_PASSWORD=abc123SECRET",
+        '{"mqtt_password": "abc123SECRET"}',
+        '{"pairing_key": "abc123SECRET"}',
     ],
 )
 def test_redact_removes_secrets(raw: str) -> None:

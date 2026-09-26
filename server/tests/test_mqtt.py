@@ -32,6 +32,7 @@ from . import mosquitto
 from .helpers import (
     add_member,
     claim_code,
+    fresh_window,
     login,
     make_tenant,
     seed_library,
@@ -124,7 +125,11 @@ def test_box_acl_only_its_own_topics() -> None:
         ("publishClientSend", topic(device, "online")),
         ("subscribePattern", topic(device, "notify")),
         ("subscribePattern", topic(device, "cmd")),
+        ("publishClientReceive", topic(device, "notify")),
+        ("publishClientReceive", topic(device, "cmd")),
     }
+    (create,) = [c for c in commands if c["command"] == "createClient"]
+    assert create["clientid"] == str(device)  # SPEC v0.12 §6: client id = user name
     assert (
         dynsec.failures(commands[:2], [{"error": "Client not found"}, {"error": "Role not found"}])
         == []
@@ -249,10 +254,21 @@ async def test_unpair_removes_the_broker_account(
     assert claimed.mqtt is not None
     device_id = uuid.UUID(claimed.mqtt.username)
     await eventually(lambda: provisioned(app, device_id))
+    soon = dt.datetime.now(dt.UTC) + dt.timedelta(seconds=60)
+    async with sessionmaker_of(app)() as db:
+        db.add(
+            DeviceCommand(id="01J8Z3M5W6XK2C4B7N9P0QRSTZ", tenant_id=t.tenant_id,
+                          device_id=device_id, name="stop", args={}, expires_at=soon)
+        )  # fmt: skip
+        await db.commit()
     body = {"device_id": str(device_id), "device_secret": claimed.device_secret}
     token = (await client.post("/api/v1/device/token", json=body)).json()["access_token"]
     r = await client.post("/api/v1/device/unpair", headers={"Authorization": f"Bearer {token}"})
     assert r.status_code == 204
+    async with sessionmaker_of(app)() as db:
+        pending = await db.get(DeviceCommand, "01J8Z3M5W6XK2C4B7N9P0QRSTZ")
+        assert pending is not None
+        assert pending.result == "expired"  # never reaches the box of another household
 
     async def revoked() -> bool:
         async with sessionmaker_of(app)() as db:
@@ -323,3 +339,125 @@ async def test_without_a_broker_no_credentials(
     t = await make_tenant(app)
     claimed = await pair(app, client, t.tenant_id)
     assert claimed.mqtt is None
+
+
+async def test_a_client_cannot_take_over_another_session(
+    app: FastAPI, client: httpx.AsyncClient, broker: mosquitto.Broker, service: MqttService
+) -> None:
+    """SPEC v0.12 §6: the broker forces client id = user name, so a box that connects with the
+    id of another box (or of the server) does not kick it off."""
+    t = await make_tenant(app)
+    victim = await pair(app, client, t.tenant_id)
+    attacker = await pair(app, client, t.tenant_id)
+    assert victim.mqtt is not None
+    assert attacker.mqtt is not None
+    victim_id, attacker_id = uuid.UUID(victim.mqtt.username), uuid.UUID(attacker.mqtt.username)
+    await eventually(lambda: provisioned(app, victim_id))
+    await eventually(lambda: provisioned(app, attacker_id))
+    async with box_client(broker, victim) as box:
+        await box.subscribe(topic(victim_id, "notify"), qos=1)
+        await asyncio.sleep(1.5)  # the service has seen the current revisions
+        for stolen in (victim.mqtt.username, "myboxi-server"):
+            forger = aiomqtt.Client(broker.host, broker.port, username=attacker.mqtt.username,
+                                    password=attacker.mqtt.password, identifier=stolen)  # fmt: skip
+            async with forger:
+                pass
+        async with sessionmaker_of(app)() as db:
+            await db.execute(
+                update(Tenant).where(Tenant.id == t.tenant_id)
+                .values(config_rev=Tenant.config_rev + 1)
+            )  # fmt: skip
+            await db.commit()
+        # still connected, and the service still sends: nobody was kicked off
+        message = await next_message(box, timeout=3.0)
+        assert NotifyMessage.model_validate_json(bytes(message.payload))
+
+
+async def test_events_sent_while_the_service_restarts_arrive(
+    app: FastAPI, client: httpx.AsyncClient, broker: mosquitto.Broker, mqtt_settings: Settings
+) -> None:
+    """SPEC v0.12 §6.5: the server's session is persistent; the broker keeps what boxes send
+    while the service is down (the box has already removed the event after the PUBACK)."""
+    t = await make_tenant(app)
+    claimed = await pair(app, client, t.tenant_id)
+    assert claimed.mqtt is not None
+    device_id = uuid.UUID(claimed.mqtt.username)
+
+    async def run_service() -> asyncio.Task[None]:
+        task = asyncio.create_task(MqttService(mqtt_settings, sessionmaker_of(app)).run())
+        await asyncio.sleep(0.3)
+        return task
+
+    first = await run_service()
+    await eventually(lambda: provisioned(app, device_id))
+    first.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await first
+    event = {"v": 1, "id": "01J8Z3M5W6XK2C4B7N9P0QRSTX", "ts": "2026-09-26T10:00:00Z",
+             "type": "token_unknown", "boot_id": BOOT, "mono_ms": 5,
+             "data": {"uid": "04A2B3C4D5E680"}}  # fmt: skip
+    async with box_client(broker, claimed) as box:
+        await box.publish(topic(device_id, "events"), json.dumps(event), qos=1)
+    second = await run_service()
+    try:
+
+        async def stored() -> bool:
+            async with sessionmaker_of(app)() as db:
+                return len((await db.scalars(select(Event))).all()) == 1
+
+        await eventually(stored)
+    finally:
+        second.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await second
+
+
+async def test_retained_messages_and_floods_are_ignored(
+    mqtt_settings: Settings, app: FastAPI
+) -> None:
+    """Retained copies are old news; one box cannot flood the service."""
+    svc = MqttService(mqtt_settings, sessionmaker_of(app))
+    handled: list[str] = []
+
+    async def handle(name: str, payload: bytes) -> None:
+        handled.append(name)
+
+    svc.handle = handle  # type: ignore[method-assign]
+    device = uuid.uuid4()
+
+    old = aiomqtt.Message(topic(device, "reported"), b"{}", qos=1, retain=True, mid=1,
+                          properties=None)  # fmt: skip
+    new = aiomqtt.Message(topic(device, "reported"), b"{}", qos=1, retain=False, mid=2,
+                          properties=None)  # fmt: skip
+
+    async def messages() -> AsyncIterator[aiomqtt.Message]:
+        for m in (old, new):
+            yield m
+
+    fake: Any = type("Fake", (), {"messages": messages()})()
+    await svc._listen(fake, None)  # type: ignore[arg-type]  # pyright: ignore[reportPrivateUsage]
+    assert handled == [topic(device, "reported")]
+    allowed = [svc._allow(device) for _ in range(250)]  # pyright: ignore[reportPrivateUsage]
+    assert allowed[:200] == [True] * 200
+    assert not any(allowed[200:])
+    assert svc._allow(uuid.uuid4())  # pyright: ignore[reportPrivateUsage]  # others go on
+
+
+async def test_commands_are_rate_limited(
+    app: FastAPI, client: httpx.AsyncClient, mqtt_settings: Settings
+) -> None:
+    t = await make_tenant(app)
+    device_id = uuid.uuid4()
+    async with sessionmaker_of(app)() as db:
+        db.add(Device(id=device_id, tenant_id=t.tenant_id, hw_model="x", agent_version="1",
+                      name="Kinderzimmer", mqtt_provisioned=True))  # fmt: skip
+        await db.commit()
+    await fresh_window(60, 15)
+    csrf = await login(client, t.owner_email)
+    url = f"/t/{t.tenant_id}/boxes/{device_id}/command"
+    statuses = [
+        (await client.post(url, data={"csrf_token": csrf, "name": "identify"})).status_code
+        for _ in range(31)
+    ]
+    assert statuses[:30] == [303] * 30
+    assert statuses[30] == 429

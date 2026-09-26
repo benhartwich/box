@@ -348,3 +348,61 @@ async def test_secret_only_as_argon2id_and_never_logged(
     shipped = "\n".join(formatter.format(rec) for rec in caplog.records)
     assert secret not in shipped
     assert started.poll_token not in shipped
+
+
+# --- SPEC v0.12 §7.1: pairing key ----------------------------------------------------------
+
+
+async def test_pairing_key_binds_the_device_id(app: FastAPI, client: httpx.AsyncClient) -> None:
+    """Knowing a box's device id is not enough to start a pairing for it."""
+    device_id = str(uuid.uuid4())
+
+    async def start(key: str | None) -> httpx.Response:
+        body = {"device_id": device_id, "hw_model": "rpi4", "agent_version": "0.6.0"}
+        if key is not None:
+            body["pairing_key"] = key
+        return await client.post("/api/v1/pairing/start", json=body)
+
+    assert (await start("K" * 43)).status_code == 200  # first use binds the key
+    assert (await start("K" * 43)).status_code == 200
+    for other in ("X" * 43, None):
+        r = await start(other)
+        assert r.status_code == 403
+        assert error_code(r) == ErrorCode.PAIRING_DENIED
+    async with sessionmaker_of(app)() as db:
+        device = await db.get(Device, uuid.UUID(device_id))
+        assert device is not None
+        assert device.pairing_key_hash is not None
+        assert "K" * 43 not in device.pairing_key_hash  # only a hash is stored
+
+
+async def test_boxes_without_a_pairing_key_still_pair(client: httpx.AsyncClient) -> None:
+    """Agents before v0.12 send no key; their device ids stay unbound."""
+    device_id = uuid.uuid4()
+    await start_pairing(client, device_id)
+    await start_pairing(client, device_id)
+
+
+async def test_device_token_rate_limited_per_ip(app: FastAPI, client: httpx.AsyncClient) -> None:
+    """Many device ids from one address (guessing secrets) hit a limit as well."""
+    await fresh_window(60, 10)
+    statuses = [
+        (
+            await client.post(
+                "/api/v1/device/token",
+                json={"device_id": str(uuid.uuid4()), "device_secret": "w" * 43},
+            )
+        ).status_code
+        for _ in range(31)
+    ]
+    assert statuses[:30] == [401] * 30
+    assert statuses[30] == 429
+
+
+async def test_large_api_bodies_are_refused_before_parsing(client: httpx.AsyncClient) -> None:
+    r = await client.post(
+        "/api/v1/device/events",
+        content=b"[" + b" " * (300 * 1024) + b"]",
+        headers={"content-type": "application/json"},
+    )
+    assert r.status_code == 413

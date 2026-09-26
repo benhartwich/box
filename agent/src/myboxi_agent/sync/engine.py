@@ -16,6 +16,7 @@ import math
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Protocol
+from urllib.parse import urlsplit
 
 from myboxi_agent import __version__
 from myboxi_agent.adapters.outbox import EventOutbox
@@ -70,6 +71,12 @@ class MessageBus(Protocol):
     async def publish_reported(self, message: ReportedMessage) -> bool: ...
 
 
+def server_url_ok(url: str, *, allow_http: bool = False) -> bool:
+    """SPEC v0.12 §9.3: the device secret and tokens only over HTTPS."""
+    scheme = urlsplit(url).scheme
+    return scheme == "https" or (allow_http and scheme == "http")
+
+
 class NeedsPairing(Exception):
     """Credentials missing or rejected (e.g. the box was removed in the app)."""
 
@@ -103,6 +110,7 @@ class SyncEngine:
         interval_s: float,
         setup_phase: SetupPhase | None = None,
         on_synced: Callable[[], None] | None = None,
+        allow_http: bool = False,
     ) -> None:
         self.state = state
         self.library = library
@@ -119,7 +127,9 @@ class SyncEngine:
         self.interval_s = interval_s
         self.setup_phase = setup_phase
         self.on_synced = on_synced  # e.g. new podcasts: read their feeds (SPEC v0.8 §8.2)
-        self.on_paired: Callable[[], None] | None = None  # e.g. connect to the broker
+        self.allow_http = allow_http
+        # paired, unpaired, credentials rejected: e.g. (dis)connect the broker at once
+        self.on_credentials: Callable[[], None] | None = None
         self.mqtt: MessageBus | None = None  # SPEC §6: reported and events over MQTT
         self.status = SyncStatus()
         self._wake = asyncio.Event()
@@ -173,6 +183,10 @@ class SyncEngine:
             if not url:
                 await self._wait(3600)
                 continue
+            if not server_url_ok(url, allow_http=self.allow_http):
+                self._failed("server url must use https")
+                await self._wait(3600)
+                continue
             api = await self._api_for(url)
             try:
                 if self._repair:
@@ -190,6 +204,7 @@ class SyncEngine:
                 log.warning("credentials rejected: pairing again")
                 self.state.clear_tenant()
                 api.forget_token()
+                self._credentials_changed()
             except Unreachable as exc:
                 self._failed(f"unreachable: {exc}")
                 await self._wait(backoff)
@@ -212,6 +227,10 @@ class SyncEngine:
             await asyncio.wait_for(self._wake.wait(), seconds)
         self._wake.clear()
 
+    def _credentials_changed(self) -> None:
+        if self.on_credentials is not None:
+            self.on_credentials()
+
     async def _api_for(self, url: str) -> Api:
         if self._api is None or self._api_url != url:
             if self._api is not None:
@@ -225,7 +244,10 @@ class SyncEngine:
         st = self.state.get()
         start = await api.pairing_start(
             PairingStartRequest(
-                device_id=st.device_id, hw_model=self.hw_model, agent_version=__version__
+                device_id=st.device_id,
+                hw_model=self.hw_model,
+                agent_version=__version__,
+                pairing_key=self.state.pairing_key(),  # SPEC v0.12 §7.1
             )
         )
         self.controller.pairing_started(start.code)
@@ -245,14 +267,13 @@ class SyncEngine:
                     break
                 raise
             if isinstance(result, PairingClaimed):
-                self.state.set_paired(result.tenant_id, result.device_secret)
-                self.state.set_mqtt(result.mqtt)  # SPEC §7.1: optional, only with a broker
+                # SPEC §7.1: the broker account is optional, only with a broker
+                self.state.set_paired(result.tenant_id, result.device_secret, result.mqtt)
                 api.forget_token()
                 if self.setup_phase is not None:
                     self.setup_phase.started()
                 self.controller.pairing_finished(success=True)
-                if self.on_paired is not None:
-                    self.on_paired()
+                self._credentials_changed()
                 log.info("paired", extra={"tenant_id": str(result.tenant_id)})
                 return
         self.controller.pairing_code = None
@@ -266,6 +287,7 @@ class SyncEngine:
                 await api.unpair(await api.token(self.state.get().device_id, secret))
         self.state.clear_tenant()
         api.forget_token()
+        self._credentials_changed()
 
     # --- sync (SPEC §5.2) ----------------------------------------------------------------------
 

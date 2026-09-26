@@ -155,6 +155,8 @@ async def test_valid_submission(portal: tuple[Portal, str]) -> None:
         {"ssid": "Heim", "password": "kurz", "server_url": "https://app.myboxi.eu"},
         {"ssid": "", "password": SECRET, "server_url": "https://app.myboxi.eu"},
         {"ssid": "Heim", "password": SECRET, "server_url": "javascript:alert(1)"},
+        # SPEC v0.12 §9.3: never plain HTTP
+        {"ssid": "Heim", "password": SECRET, "server_url": "http://nas.local:8000"},
     ],
 )
 async def test_invalid_submission_shows_an_error(
@@ -206,12 +208,12 @@ async def test_manual_ssid_wins_and_open_network_is_allowed(portal: tuple[Portal
         "ssid": "Heim",
         "ssid_manual": "Gast",
         "password": "",
-        "server_url": "http://nas.local:8000",
+        "server_url": "https://nas.local:8000",
     }
     async with httpx.AsyncClient() as c:
         await c.post(url + "/connect", data=form)
     assert p.submission is not None
-    assert p.submission.result() == Submission("Gast", "", "http://nas.local:8000")
+    assert p.submission.result() == Submission("Gast", "", "https://nas.local:8000")
 
 
 async def test_oversized_request_is_rejected(portal: tuple[Portal, str]) -> None:

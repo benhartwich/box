@@ -128,6 +128,14 @@ class Controller:
             self.session.token_present = False
         return reason
 
+    def identify(self) -> str | None:
+        """``identify``: a short sound to find the box, but never during a quiet-hour lock
+        (it would wake the child); returns why it stayed silent."""
+        if volume.limits(self.config(), self.clock.now(), self.clock.time_trusted()).locked:
+            return "quiet_hours"
+        self.announcer.announce(Prompt.TONE_ATTENTION, Prompt.HELLO)
+        return None
+
     def stop_remote(self) -> None:
         """``stop``: pause with the position saved, so the figure continues later."""
         s = self.session

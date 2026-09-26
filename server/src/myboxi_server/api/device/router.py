@@ -60,9 +60,17 @@ async def pairing_start(
     await _limit(
         request, f"pairing_start:ip:{client_ip(request, settings)}", ratelimit.PAIRING_START_PER_IP
     )
-    started = await pairing.start(
-        db, device_id=body.device_id, hw_model=body.hw_model, agent_version=body.agent_version
-    )
+    try:
+        started = await pairing.start(
+            db,
+            device_id=body.device_id,
+            hw_model=body.hw_model,
+            agent_version=body.agent_version,
+            pairing_key=body.pairing_key,
+        )
+    except pairing.PairingDeniedError:
+        await db.rollback()
+        raise ApiError(403, ErrorCode.PAIRING_DENIED, "Pairing denied") from None
     await db.commit()
     return PairingStartResponse(
         code=started.code, expires_in=started.expires_in, poll_token=started.poll_token
@@ -123,7 +131,9 @@ async def device_token(
     request: Request, body: DeviceTokenRequest, db: DbSession, settings: SettingsDep
 ) -> DeviceTokenResponse:
     """SPEC §7.2."""
-    await _limit(request, f"device_token:{body.device_id}", ratelimit.DEVICE_TOKEN_PER_DEVICE)
+    ip = client_ip(request, settings)
+    await _limit(request, f"device_token:ip:{ip}", ratelimit.DEVICE_TOKEN_PER_IP)
+    await _limit(request, f"device_token:{body.device_id}:{ip}", ratelimit.DEVICE_TOKEN_PER_DEVICE)
     device = await pairing.authenticate_device(db, body.device_id, body.device_secret)
     if device is None or device.tenant_id is None:
         raise ApiError(401, ErrorCode.INVALID_CREDENTIALS, "Invalid credentials")

@@ -545,3 +545,29 @@ def test_mqtt_topics_6() -> None:
     assert parse(f"myboxi/v1/{TOKEN}/cmd/ack") == (device, "cmd/ack")
     assert parse("myboxi/v1/not-a-uuid/events") is None
     assert parse(f"box/v1/{TOKEN}/events") is None
+
+
+def test_pairing_key_and_ack_codes_v0_12() -> None:
+    """SPEC v0.12 §7.1: optional key, never printed; §6.3: ack messages are machine codes."""
+    from myboxi_protocol.messages import CmdAckData
+    from myboxi_protocol.pairing import PairingStartRequest
+
+    key = "A" * 43
+    req = PairingStartRequest.model_validate(
+        {"device_id": TOKEN, "hw_model": "rpi4", "agent_version": "0.6.0", "pairing_key": key}
+    )
+    assert key not in repr(req)
+    old = PairingStartRequest.model_validate(
+        {"device_id": TOKEN, "hw_model": "rpi4", "agent_version": "0.5.0"}
+    )
+    assert "pairing_key" not in old.model_dump(mode="json")
+    with pytest.raises(ValidationError):
+        PairingStartRequest.model_validate(
+            {"device_id": TOKEN, "hw_model": "x", "agent_version": "1", "pairing_key": "short"}
+        )
+    ack = CmdAckData.model_validate(
+        {"cmd_id": ULID, "result": "rejected", "message": "quiet_hours"}
+    )
+    assert ack.message == "quiet_hours"
+    with pytest.raises(ValidationError):
+        CmdAckData.model_validate({"cmd_id": ULID, "result": "error", "message": "x" * 100})

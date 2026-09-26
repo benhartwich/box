@@ -9,6 +9,7 @@ from __future__ import annotations
 import dataclasses
 import datetime as dt
 import json
+import secrets
 import sqlite3
 import uuid
 from collections.abc import Callable, Generator, Sequence
@@ -87,6 +88,16 @@ class SyncState:
     paired_at: dt.datetime | None = None
 
 
+def _write_mqtt(c: sqlite3.Connection, creds: MqttCredentials | None) -> None:
+    c.execute(
+        "UPDATE sync_state SET mqtt_host = ?, mqtt_port = ?, mqtt_username = ? WHERE id = 1",
+        (creds.host, creds.port, creds.username) if creds else (None, None, None),
+    )
+    c.execute("DELETE FROM secret WHERE name = 'mqtt_password'")
+    if creds is not None:
+        c.execute("INSERT INTO secret (name, value) VALUES ('mqtt_password', ?)", (creds.password,))
+
+
 class StateRepo:
     def __init__(self, db: Database) -> None:
         self.db = db
@@ -119,7 +130,25 @@ class StateRepo:
         with self.db.tx() as c:
             c.execute("UPDATE sync_state SET server_url = ? WHERE id = 1", (url,))
 
-    def set_paired(self, tenant_id: uuid.UUID, secret: str) -> None:
+    def pairing_key(self) -> str:
+        """SPEC v0.12 §7.1: 256 random bits, created once with the device id and kept when
+        unpairing; proves to the server that a pairing start comes from this box."""
+        row = self.db.conn.execute("SELECT value FROM secret WHERE name = 'pairing_key'").fetchone()
+        if row is not None:
+            return str(row["value"])
+        with self.db.tx() as c:
+            c.execute(
+                "INSERT OR IGNORE INTO secret (name, value) VALUES ('pairing_key', ?)",
+                (secrets.token_urlsafe(32),),
+            )
+        row = self.db.conn.execute("SELECT value FROM secret WHERE name = 'pairing_key'").fetchone()
+        return str(row["value"])
+
+    def set_paired(
+        self, tenant_id: uuid.UUID, secret: str, mqtt: MqttCredentials | None = None
+    ) -> None:
+        """Tenant, device secret and broker account together: a power cut never leaves a
+        paired box without its MQTT account (SPEC §7.1)."""
         with self.db.tx() as c:
             c.execute(
                 "UPDATE sync_state SET tenant_id = ?, paired_at = ?, applied_config_rev = 0,"
@@ -131,6 +160,7 @@ class StateRepo:
                 " ON CONFLICT (name) DO UPDATE SET value = excluded.value",
                 (secret,),
             )
+            _write_mqtt(c, mqtt)
 
     def device_secret(self) -> str | None:
         row = self.db.conn.execute(
@@ -142,17 +172,7 @@ class StateRepo:
 
     def set_mqtt(self, creds: MqttCredentials | None) -> None:
         with self.db.tx() as c:
-            c.execute(
-                "UPDATE sync_state SET mqtt_host = ?, mqtt_port = ?, mqtt_username = ?"
-                " WHERE id = 1",
-                (creds.host, creds.port, creds.username) if creds else (None, None, None),
-            )
-            c.execute("DELETE FROM secret WHERE name = 'mqtt_password'")
-            if creds is not None:
-                c.execute(
-                    "INSERT INTO secret (name, value) VALUES ('mqtt_password', ?)",
-                    (creds.password,),
-                )
+            _write_mqtt(c, creds)
 
     def mqtt(self) -> MqttCredentials | None:
         row = self.db.conn.execute(

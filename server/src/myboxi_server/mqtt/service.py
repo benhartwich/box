@@ -46,6 +46,10 @@ TICK_S = 1.0
 RECONNECT_S = 5.0
 DYNSEC_TIMEOUT_S = 10.0
 SUBSCRIPTIONS = ("reported", "events", "cmd/ack", "online")
+INBOX_LIMIT = 5000  # messages waiting for the database; more are dropped
+BURST = 200  # per box: a box back online sends up to 100 events at once (SPEC §6.5)
+REFILL_PER_S = 2.0
+ACK_GRACE = dt.timedelta(seconds=30)
 
 
 def tls_context(settings: Settings) -> ssl.SSLContext | None:
@@ -55,7 +59,11 @@ def tls_context(settings: Settings) -> ssl.SSLContext | None:
 
 
 @asynccontextmanager
-async def connect(settings: Settings, identifier: str) -> AsyncGenerator[aiomqtt.Client]:
+async def connect(
+    settings: Settings, *, persistent: bool = False
+) -> AsyncGenerator[aiomqtt.Client]:
+    """``persistent``: the broker keeps the session and queues QoS 1 messages from the boxes
+    while the service restarts, so no event is lost (SPEC v0.12 §6)."""
     if settings.mqtt_host is None or settings.mqtt_password is None:
         raise aiomqtt.MqttError("MQTT is not configured")
     async with aiomqtt.Client(
@@ -63,9 +71,11 @@ async def connect(settings: Settings, identifier: str) -> AsyncGenerator[aiomqtt
         port=settings.mqtt_port,
         username=settings.mqtt_username,
         password=settings.mqtt_password.get_secret_value(),
-        identifier=identifier,
+        identifier=settings.mqtt_username,  # enforced by the broker (dynsec.py)
+        clean_session=not persistent,
         tls_context=tls_context(settings),
         timeout=DYNSEC_TIMEOUT_S,
+        max_queued_incoming_messages=INBOX_LIMIT,
     ) as client:
         yield client
 
@@ -118,11 +128,13 @@ class MqttService:
         self.sessionmaker = sessionmaker
         self.now = now or (lambda: dt.datetime.now(dt.UTC))
         self._revisions: dict[uuid.UUID, tuple[int, int]] = {}
+        self._buckets: dict[uuid.UUID, tuple[float, float]] = {}  # tokens, last refill
+        self._dropped: set[uuid.UUID] = set()
 
     async def run(self) -> None:
         while True:
             try:
-                async with connect(self.settings, "myboxi-server") as client:
+                async with connect(self.settings, persistent=True) as client:
                     log.info("mqtt connected")
                     await self.serve(client)
             except aiomqtt.MqttError as exc:
@@ -148,47 +160,83 @@ class MqttService:
             if name == dynsec.RESPONSE:
                 control.response(payload)
                 continue
+            if message.retain:
+                # Retained copies are old news (a restart of this service would treat every
+                # box as just seen); boxes report again at least every 10 minutes (§6.4).
+                continue
             try:
                 await self.handle(name, payload)
             except Exception:
                 log.exception("mqtt message failed", extra={"topic": name})
 
+    def _allow(self, device_id: uuid.UUID) -> bool:
+        """Token bucket per box: one box cannot flood the service for everyone."""
+        now = asyncio.get_running_loop().time()
+        tokens, last = self._buckets.get(device_id, (float(BURST), now))
+        tokens = min(float(BURST), tokens + (now - last) * REFILL_PER_S)
+        if tokens < 1:
+            self._buckets[device_id] = (tokens, now)
+            if device_id not in self._dropped:
+                self._dropped.add(device_id)
+                log.warning("mqtt box too chatty, dropping", extra={"device_id": str(device_id)})
+            return False
+        self._buckets[device_id] = (tokens - 1, now)
+        self._dropped.discard(device_id)
+        return True
+
     async def _loop(self, client: aiomqtt.Client, control: Dynsec) -> None:
         while True:
-            await self.accounts(control)
+            await self.accounts(control, client)
             await self.notify(client)
             await self.commands(client)
             await asyncio.sleep(TICK_S)
 
     # --- accounts -------------------------------------------------------------------------
 
-    async def accounts(self, control: Dynsec) -> None:
+    async def accounts(self, control: Dynsec, client: aiomqtt.Client | None = None) -> None:
+        """Create and remove broker accounts. Each change is written only if the row still
+        holds what was acted on (a new pairing meanwhile is handled in the next round)."""
         async with self.sessionmaker() as db:
-            pending = list(
-                await db.scalars(
-                    select(Device).where(
-                        (Device.mqtt_password.is_not(None)) | Device.mqtt_revoke.is_(True)
+            rows = (
+                await db.execute(
+                    select(Device.id, Device.mqtt_password, Device.mqtt_revoke).where(
+                        Device.mqtt_password.is_not(None)
+                        | Device.mqtt_revoke.is_(True)
+                        # e.g. a deleted household (the FK sets tenant_id to NULL)
+                        | (Device.mqtt_provisioned.is_(True) & Device.tenant_id.is_(None))
                     )
                 )
-            )
-            for device in pending:
-                try:
-                    if device.mqtt_password is not None:
-                        password = unseal(self.settings, PURPOSE, device.mqtt_password)
-                        if password is None:
-                            device.mqtt_password = None
-                            continue
-                        await control.run(dynsec.provision_box(device.id, password))
-                        device.mqtt_password, device.mqtt_provisioned = None, True
-                        device.mqtt_revoke = False
-                        log.info("mqtt account created", extra={"device_id": str(device.id)})
-                    else:
-                        await control.run(dynsec.remove_box(device.id))
-                        device.mqtt_revoke, device.mqtt_provisioned = False, False
-                        device.mqtt_online = None
-                        log.info("mqtt account removed", extra={"device_id": str(device.id)})
-                except DynsecError as exc:
-                    log.warning("mqtt account failed", extra={"error": str(exc)})
+            ).all()
+        for device_id, sealed, _ in rows:
+            try:
+                if sealed is not None:
+                    password = unseal(self.settings, PURPOSE, sealed)
+                    if password is not None:
+                        await control.run(dynsec.provision_box(device_id, password))
+                    await self._store(
+                        update(Device).where(Device.id == device_id,
+                                             Device.mqtt_password == sealed)
+                        .values(mqtt_password=None, mqtt_provisioned=password is not None,
+                                mqtt_revoke=False)
+                    )  # fmt: skip
+                    log.info("mqtt account created", extra={"device_id": str(device_id)})
+                else:
+                    await control.run(dynsec.remove_box(device_id))
+                    if client is not None:  # forget what the box left on the broker
+                        for leaf in ("reported", "online"):
+                            await client.publish(topic(device_id, leaf), b"", qos=1, retain=True)
+                    await self._store(
+                        update(Device).where(Device.id == device_id,
+                                             Device.mqtt_password.is_(None))
+                        .values(mqtt_revoke=False, mqtt_provisioned=False, mqtt_online=None)
+                    )  # fmt: skip
+                    log.info("mqtt account removed", extra={"device_id": str(device_id)})
+            except DynsecError as exc:
+                log.warning("mqtt account failed", extra={"error": str(exc)})
+
+    async def _store(self, statement: Any) -> None:
+        async with self.sessionmaker() as db:
+            await db.execute(statement)
             await db.commit()
 
     # --- notify ---------------------------------------------------------------------------
@@ -228,10 +276,24 @@ class MqttService:
                        DeviceCommand.expires_at <= now)
                 .values(result="expired")
             )  # fmt: skip
+            # Sent but never acknowledged (box offline or gone): expired as well.
+            await db.execute(
+                update(DeviceCommand)
+                .where(DeviceCommand.sent_at.is_not(None), DeviceCommand.result.is_(None),
+                       DeviceCommand.expires_at <= now - ACK_GRACE)
+                .values(result="expired")
+            )  # fmt: skip
             due = list(
                 await db.scalars(
                     select(DeviceCommand)
-                    .where(DeviceCommand.sent_at.is_(None), DeviceCommand.result.is_(None))
+                    .join(Device, Device.id == DeviceCommand.device_id)
+                    .where(
+                        DeviceCommand.sent_at.is_(None),
+                        DeviceCommand.result.is_(None),
+                        # only to the box as long as it belongs to the household that sent it
+                        Device.tenant_id == DeviceCommand.tenant_id,
+                        Device.mqtt_provisioned.is_(True),
+                    )
                     .order_by(DeviceCommand.created_at)
                 )
             )
@@ -253,6 +315,8 @@ class MqttService:
         if parsed is None:
             return
         device_id, leaf = parsed
+        if not self._allow(device_id):
+            return
         async with self.sessionmaker() as db:
             device = await db.get(Device, device_id, with_for_update=True)
             if device is None or device.tenant_id is None:
@@ -286,7 +350,8 @@ class MqttService:
                     await db.execute(
                         update(DeviceCommand)
                         .where(DeviceCommand.id == ack.data.cmd_id,
-                               DeviceCommand.device_id == device.id)
+                               DeviceCommand.device_id == device.id,
+                               DeviceCommand.tenant_id == device.tenant_id)
                         .values(result=ack.data.result, message=ack.data.message, acked_at=now)
                     )  # fmt: skip
                 case _:
@@ -295,7 +360,7 @@ class MqttService:
 
 
 async def _server_roles(settings: Settings) -> set[str]:
-    async with connect(settings, "myboxi-server-setup") as client:
+    async with connect(settings) as client:
         await client.subscribe(dynsec.RESPONSE, qos=1)
         get = [{"command": "getClient", "username": settings.mqtt_username}]
         await client.publish(dynsec.CONTROL, json.dumps({"commands": get}), qos=1)
@@ -306,14 +371,16 @@ async def _server_roles(settings: Settings) -> set[str]:
 
 
 async def setup_server_role(settings: Settings) -> None:
-    """Once per broker (``myboxi-server mqtt-setup``): the server's account may send and
-    receive under ``myboxi/v1/#``. Nothing happens if it already can. Mosquitto disconnects a
-    client whose roles change, so the answer may not arrive; a second connection checks."""
+    """Once per broker (``myboxi-server mqtt-setup``), before the service starts: the server's
+    account may send and receive under ``myboxi/v1/#``. Nothing happens if it already can.
+    Mosquitto disconnects a client whose roles change, so the answer may not arrive; a second
+    connection checks. (It uses the service's client id with a clean session, so it would
+    also drop messages queued for a stopped service.)"""
     if dynsec.SERVER_ROLE in await _server_roles(settings):
         return
     commands = dynsec.server_role(settings.mqtt_username)
     with contextlib.suppress(aiomqtt.MqttError):
-        async with connect(settings, "myboxi-server-setup") as client:
+        async with connect(settings) as client:
             await client.subscribe(dynsec.RESPONSE, qos=1)
             await client.publish(dynsec.CONTROL, json.dumps({"commands": commands}), qos=1)
             with contextlib.suppress(TimeoutError):

@@ -1,6 +1,8 @@
 """MQTT on the box (SPEC §6, M2): notify, commands, reported, events, last will.
 
 - TLS only, with the system's CAs and host name check (SPEC §6: no plain-text port).
+- The client id is the user name (the broker enforces it), so no one can take over the
+  session of another box or the server.
 - Clean session: nothing queued while the box was offline is delivered later, so an old
   ``play_token`` can never start music hours afterwards (§6.2); ``notify`` is not needed
   after a reconnect because the box asks for the state then anyway (§5.2).
@@ -112,7 +114,7 @@ class MqttLink:
             port=creds.port,
             username=creds.username,
             password=creds.password,
-            identifier=f"box-{device}",
+            identifier=creds.username,  # the broker allows no other (SPEC v0.12 §6)
             tls_context=tls_context(self.ca_file) if self.tls else None,
             will=will,
             clean_session=True,
@@ -190,8 +192,13 @@ class MqttLink:
         if client is None:
             return False
         device = str(self.state.get().device_id)
-        await client.publish(topic(device, "reported"), message.model_dump_json(), qos=1,
-                             retain=True)  # fmt: skip
+        try:
+            await client.publish(topic(device, "reported"), message.model_dump_json(), qos=1,
+                                 retain=True)  # fmt: skip
+        except (aiomqtt.MqttError, TimeoutError) as exc:
+            # the connection just broke: the caller reports over HTTPS instead (§7.3)
+            log.info("mqtt reported failed", extra={"error": str(exc)[:200]})
+            return False
         return True
 
     async def _events(self, client: aiomqtt.Client, device: str) -> None:

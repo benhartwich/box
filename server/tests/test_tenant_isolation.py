@@ -167,6 +167,7 @@ def foreign_object_request(world: World, method: str, path: str) -> dict[str, ob
     forms: dict[tuple[str, str], dict[str, object]] = {
         ("POST", "/t/{tid}/members/{user_id}/role"): {"data": {"role": "viewer"}},
         ("POST", "/t/{tid}/boxes/{device_id}/rename"): {"data": {"name": "x"}},
+        ("POST", "/t/{tid}/boxes/{device_id}/command"): {"data": {"name": "stop"}},
         ("POST", "/t/{tid}/boxes/{device_id}/config"): {
             "data": {
                 "max_volume": "50", "start_volume": "30", "on_token_removed": "pause",

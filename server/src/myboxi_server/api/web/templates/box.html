@@ -57,6 +57,41 @@
 </section>
 {% endif %}
 
+{% if remote %}
+<section class="card stack" id="remote" aria-labelledby="remote-title">
+  <div class="card-head"><h2 id="remote-title">Fernbedienung</h2>
+    <span class="badge {% if device.mqtt_online %}ok{% endif %}">{% if device.mqtt_online %}verbunden{% elif device.mqtt_online is none %}noch nie verbunden{% else %}nicht verbunden{% endif %}</span></div>
+  {% if ctx.can(Perm.DEVICE_CONFIG) %}
+  <div class="actions">
+    {% for name in ("stop", "identify", "sync_now", "update_check") %}
+    <form method="post" action="/t/{{ tid }}/boxes/{{ device.id }}/command">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="name" value="{{ name }}">
+      <button class="small{% if name != 'stop' %} secondary{% endif %}">{{ command_labels[name] }}</button>
+    </form>
+    {% endfor %}
+  </div>
+  <form method="post" action="/t/{{ tid }}/boxes/{{ device.id }}/command" class="row">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="name" value="set_volume">
+    <label class="grow">Lautstärke (höchstens {{ cfg.max_volume }})
+      <input type="range" name="volume" min="0" max="100" step="5" value="{{ reported.data.playback.volume if reported else cfg.start_volume }}"></label>
+    <button class="small secondary">Setzen</button>
+  </form>
+  {% if figures %}
+  <form method="post" action="/t/{{ tid }}/boxes/{{ device.id }}/command" class="row">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="name" value="play_token">
+    <select name="token_id" aria-label="Figur" class="grow">{% for f in figures %}<option value="{{ f.id }}">{{ f.label }}</option>{% endfor %}</select>
+    <button class="small secondary">Abspielen</button>
+  </form>
+  {% endif %}
+  <p class="muted">Befehle verfallen nach einer Minute. Höchstlautstärke und Ruhezeiten gelten auch hier.</p>
+  {% endif %}
+  {% set device_id = device.id %}{% include "_commands.html" %}
+</section>
+{% endif %}
+
 {% if problems %}
 <section class="card attention" aria-labelledby="problems">
   <h2 id="problems">Probleme bei der Wiedergabe</h2>

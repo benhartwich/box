@@ -1,0 +1,12 @@
+#!/bin/sh
+# /etc/letsencrypt/renewal-hooks/deploy/myboxi-mosquitto: give Mosquitto the renewed
+# certificate of the Myboxi host (readable only for the mosquitto user), then reload it.
+set -eu
+case "${RENEWED_LINEAGE:-}" in
+    */app.myboxi.eu) ;;
+    *) exit 0 ;;
+esac
+install -d -o root -g mosquitto -m 0750 /etc/mosquitto/certs/myboxi
+install -o root -g mosquitto -m 0640 "$RENEWED_LINEAGE/fullchain.pem" /etc/mosquitto/certs/myboxi/fullchain.pem
+install -o root -g mosquitto -m 0640 "$RENEWED_LINEAGE/privkey.pem" /etc/mosquitto/certs/myboxi/privkey.pem
+systemctl restart mosquitto.service

@@ -146,6 +146,7 @@ class PollPending:
 class PollClaimed:
     device_secret: str
     tenant_id: uuid.UUID
+    device_id: uuid.UUID
 
 
 class PairingExpiredError(DomainError):
@@ -181,7 +182,7 @@ async def poll(db: AsyncSession, poll_token: str) -> PollPending | PollClaimed:
     device.secret_hash = await hash_secret_async(secret)
     pairing.delivered_at = now
     await db.flush()
-    return PollClaimed(device_secret=secret, tenant_id=device.tenant_id)
+    return PollClaimed(device_secret=secret, tenant_id=device.tenant_id, device_id=device.id)
 
 
 async def authenticate_device(db: AsyncSession, device_id: uuid.UUID, secret: str) -> Device | None:

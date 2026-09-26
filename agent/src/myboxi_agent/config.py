@@ -42,6 +42,10 @@ class Settings(BaseSettings):
     # a feed on the local network or on this machine.
     podcast_allow_private: bool = False
 
+    # MQTT (SPEC §6): TLS always on the box; off only against a local test broker.
+    mqtt_tls: bool = True
+    mqtt_ca_file: Path | None = None
+
     # Spotify (SPEC v0.9 §8.1): Soloist's WebSocket, only on 127.0.0.1.
     soloist_ws_port: int = Field(default=24879, ge=1024, le=65535)
 

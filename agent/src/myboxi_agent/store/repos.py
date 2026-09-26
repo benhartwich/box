@@ -31,6 +31,7 @@ from myboxi_agent.core.model import (
 )
 from myboxi_agent.ids import uuid7
 from myboxi_agent.store.podcasts import PodcastRepo
+from myboxi_protocol.pairing import MqttCredentials
 from myboxi_protocol.state import (
     DeviceConfig,
     PodcastSource,
@@ -137,6 +138,38 @@ class StateRepo:
         ).fetchone()
         return row["value"] if row else None
 
+    # SPEC §6, §7.1 (M2): the broker account from pairing; gone with the tenant.
+
+    def set_mqtt(self, creds: MqttCredentials | None) -> None:
+        with self.db.tx() as c:
+            c.execute(
+                "UPDATE sync_state SET mqtt_host = ?, mqtt_port = ?, mqtt_username = ?"
+                " WHERE id = 1",
+                (creds.host, creds.port, creds.username) if creds else (None, None, None),
+            )
+            c.execute("DELETE FROM secret WHERE name = 'mqtt_password'")
+            if creds is not None:
+                c.execute(
+                    "INSERT INTO secret (name, value) VALUES ('mqtt_password', ?)",
+                    (creds.password,),
+                )
+
+    def mqtt(self) -> MqttCredentials | None:
+        row = self.db.conn.execute(
+            "SELECT mqtt_host, mqtt_port, mqtt_username FROM sync_state WHERE id = 1"
+        ).fetchone()
+        secret = self.db.conn.execute(
+            "SELECT value FROM secret WHERE name = 'mqtt_password'"
+        ).fetchone()
+        if row is None or secret is None or not row["mqtt_host"] or not row["mqtt_username"]:
+            return None
+        return MqttCredentials(
+            host=row["mqtt_host"],
+            port=row["mqtt_port"] or 8883,
+            username=row["mqtt_username"],
+            password=secret["value"],
+        )
+
     # SPEC v0.9 §8.1: the Soloist key stays on the box, also after unpairing; never logged.
 
     def soloist_key(self) -> str | None:
@@ -159,10 +192,11 @@ class StateRepo:
     def clear_tenant(self) -> None:
         """Unpair (SPEC §7.3): drop credentials and the server's slice; keep local library."""
         with self.db.tx() as c:
-            c.execute("DELETE FROM secret WHERE name = 'device_secret'")
+            c.execute("DELETE FROM secret WHERE name IN ('device_secret', 'mqtt_password')")
             c.execute(
                 "UPDATE sync_state SET tenant_id = NULL, paired_at = NULL,"
-                " applied_config_rev = 0, applied_device_rev = 0 WHERE id = 1"
+                " applied_config_rev = 0, applied_device_rev = 0,"
+                " mqtt_host = NULL, mqtt_port = NULL, mqtt_username = NULL WHERE id = 1"
             )
             _delete_server_rows(c)
             c.execute("DELETE FROM device_config")
@@ -365,6 +399,13 @@ class LibraryRepo:
                 if token.uid == uid and token.id in bound:
                     return token.id
         return None
+
+    def uid_of(self, token_id: uuid.UUID) -> str | None:
+        """For ``play_token`` from the app (SPEC §6.2)."""
+        row = self.db.conn.execute(
+            "SELECT uid FROM token WHERE id = ?", (str(token_id),)
+        ).fetchone()
+        return str(row["uid"]) if row else None
 
     def mark_played(self, sources: Sequence[str]) -> None:
         now = self.db.now_iso()

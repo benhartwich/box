@@ -54,7 +54,17 @@ from myboxi_agent.store.repos import (
 )
 from myboxi_agent.sync.client import DeviceApi
 from myboxi_agent.sync.engine import Api, SyncEngine
+from myboxi_agent.sync.mqtt import MqttLink
 from myboxi_agent.update.installer import read_state
+from myboxi_protocol.messages import (
+    CmdMessage,
+    IdentifyCmd,
+    PlayTokenCmd,
+    SetVolumeCmd,
+    StopCmd,
+    SyncNowCmd,
+    UpdateCheckCmd,
+)
 from myboxi_protocol.reported import ReportedData, UpdateState
 
 log = logging.getLogger(__name__)
@@ -135,6 +145,19 @@ class App:
         self.spotify = self._spotify_service()
         if self.spotify is not None:
             self.library.spotify_unavailable = self.spotify.unavailable
+        # SPEC §6 (M2): notify, commands, reported and events over MQTT when paired with one.
+        self.mqtt = MqttLink(
+            state=self.state,
+            outbox=self.outbox_repo,
+            clock=clock,
+            on_notify=self.sync.trigger,
+            on_command=self.handle_command,
+            tls=settings.mqtt_tls,
+            ca_file=settings.mqtt_ca_file,
+        )
+        self.sync.mqtt = self.mqtt
+        self.sync.on_paired = self.mqtt.trigger
+        self.outbox.on_emit = self.mqtt.events_pending
         system: Any = self.adapters.system
         if hasattr(system, "on_repair"):
             system.on_repair = self.sync.request_repair
@@ -165,6 +188,7 @@ class App:
                 tg.create_task(self.control.serve())
                 tg.create_task(self.sync.run())
                 tg.create_task(self.podcasts.run())
+                tg.create_task(self.mqtt.run())
                 if self.spotify is not None:
                     tg.create_task(self.spotify.run())
                 if not self.settings.sim:
@@ -384,6 +408,32 @@ class App:
                 return {"ok": False, "error": f"unknown command {cmd!r}"}
         await asyncio.sleep(0.2)  # let the loops react before reporting
         return self.status()
+
+    async def handle_command(self, cmd: CmdMessage) -> tuple[str, str | None]:
+        """SPEC §6.2: a command from the app; the result goes back as ``cmd/ack`` (§6.3)."""
+        match cmd.data:
+            case StopCmd():
+                self.controller.stop_remote()
+            case SetVolumeCmd(args=args):
+                self.controller.external_volume(args.volume)  # the one volume policy
+            case PlayTokenCmd(args=args):
+                uid = self.library.uid_of(args.token_id)
+                if uid is None:
+                    return "rejected", "unknown_token"
+                if reason := self.controller.play_remote(uid):
+                    return "rejected", reason
+            case IdentifyCmd():
+                self.announcer.announce(Prompt.TONE_ATTENTION, Prompt.HELLO)
+            case SyncNowCmd():
+                self.sync.trigger()
+            case UpdateCheckCmd():
+                system: Any = self.adapters.system
+                if hasattr(system, "request_update"):
+                    system.request_update()
+                if self.spotify is not None:
+                    self.spotify.trigger()
+        self.sync.report_soon()
+        return "ok", None
 
     def _set_soloist_key(self, key: object) -> dict[str, Any]:
         """SPEC v0.9 §9.3: from the setup portal (via setupd) or the CLI. The key is never

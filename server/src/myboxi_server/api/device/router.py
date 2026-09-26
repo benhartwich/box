@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import datetime as dt
+import secrets
+import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Query, Request
@@ -13,6 +15,7 @@ from myboxi_protocol.auth import DeviceTokenRequest, DeviceTokenResponse
 from myboxi_protocol.errors import ErrorCode
 from myboxi_protocol.events import EventBatchRequest, EventBatchResponse
 from myboxi_protocol.pairing import (
+    MqttCredentials,
     PairingClaimed,
     PairingPending,
     PairingStartRequest,
@@ -25,10 +28,13 @@ from myboxi_server.api.device.errors import ApiError, rate_limited
 from myboxi_server.api.device.jwt import DeviceClaims, issue
 from myboxi_server.api.web.deps import DbSession, SettingsDep, client_ip
 from myboxi_server.auth import ratelimit
+from myboxi_server.auth.secretbox import seal
 from myboxi_server.auth.tokens import hash_token
 from myboxi_server.domain import devices, events, pairing, state
 from myboxi_server.domain.errors import NotFoundError
 from myboxi_server.models import Asset, Device
+from myboxi_server.mqtt.service import PURPOSE as MQTT_PURPOSE
+from myboxi_server.settings import Settings
 from myboxi_server.storage.base import SHA256_RE
 from myboxi_server.storage.filesystem import FilesystemAssetStore
 
@@ -69,7 +75,10 @@ async def pairing_start(
     responses={202: {"model": PairingPending}},
 )
 async def pairing_poll(
-    request: Request, db: DbSession, poll_token: Annotated[str, Query(max_length=128)]
+    request: Request,
+    db: DbSession,
+    settings: SettingsDep,
+    poll_token: Annotated[str, Query(max_length=128)],
 ) -> Response | PairingClaimed:
     """SPEC §7.1 step 3: 202 pending, 200 with the secret exactly once, 410 afterwards."""
     await _limit(request, f"poll:{hash_token(poll_token).hex()}", ratelimit.POLL_PER_TOKEN)
@@ -85,8 +94,28 @@ async def pairing_poll(
         await db.rollback()
         body = PairingPending(expires_in=result.expires_in)
         return JSONResponse(body.model_dump(mode="json"), status_code=202)
+    mqtt = await _mqtt_account(db, settings, result.device_id)
     await db.commit()
-    return PairingClaimed(device_secret=result.device_secret, tenant_id=result.tenant_id)
+    return PairingClaimed(device_secret=result.device_secret, tenant_id=result.tenant_id, mqtt=mqtt)
+
+
+async def _mqtt_account(
+    db: DbSession, settings: Settings, device_id: uuid.UUID
+) -> MqttCredentials | None:
+    """SPEC §7.1: credentials exactly once, with the device secret. The MQTT service creates
+    the broker account within a second; until then the box's connect attempts fail and retry."""
+    if not settings.mqtt_enabled:
+        return None
+    device = await db.get(Device, device_id)
+    if device is None:  # pragma: no cover - the poll just delivered its secret
+        return None
+    password = secrets.token_urlsafe(32)
+    device.mqtt_password = seal(settings, MQTT_PURPOSE, password)
+    device.mqtt_revoke = False
+    host = settings.mqtt_public_host or settings.mqtt_host or ""
+    return MqttCredentials(
+        host=host, port=settings.mqtt_port, username=str(device_id), password=password
+    )
 
 
 @router.post("/device/token", response_model=DeviceTokenResponse)
@@ -158,10 +187,7 @@ async def device_reported(body: ReportedMessage, device: CurrentDevice, db: DbSe
     row = await db.get(Device, device.device_id, with_for_update=True)
     if row is None or row.tenant_id != device.tenant_id:  # pragma: no cover - checked in deps
         raise _not_found()
-    row.reported = body.data.model_dump(mode="json")
-    row.reported_at = dt.datetime.now(dt.UTC)
-    row.agent_version = body.data.agent_version
-    row.hw_model = body.data.hw_model
+    devices.store_reported(row, body.data, dt.datetime.now(dt.UTC))
     await db.commit()
     return Response(status_code=204)
 

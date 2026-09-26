@@ -1,0 +1,11 @@
+{# Remote commands and their results (SPEC §6.2, §6.3); HTMX partial. #}
+{% set waiting = commands | selectattr("result", "none") | list %}
+<ul id="commands" class="hints"{% if waiting %} hx-get="/t/{{ tid }}/boxes/{{ device_id }}/commands" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}>
+  {% for c in commands %}
+  <li class="hint-{% if c.result == 'ok' %}ok{% elif c.result %}warn{% else %}info{% endif %}">
+    {{ command_labels.get(c.name, c.name) }}{% if c.name == 'set_volume' %} {{ c.args.volume }}{% endif %}:
+    {% if c.result %}{{ result_labels.get(c.result, c.result) }}{% if c.message %} ({{ reason_labels.get(c.message, c.message) }}){% endif %}{% elif c.sent_at %}gesendet …{% else %}wird gesendet …{% endif %}
+    <span class="muted">{{ c.created_at | localtime }}</span>
+  </li>
+  {% endfor %}
+</ul>

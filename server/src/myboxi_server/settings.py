@@ -32,6 +32,16 @@ class Settings(BaseSettings):
     device_jwt_key: SecretStr
     device_jwt_ttl_s: int = 3600
 
+    # MQTT (SPEC §6, optional): the broker the MQTT service connects to; boxes get
+    # ``mqtt_public_host`` (default: the same). Off while host or password are unset.
+    mqtt_host: str | None = None
+    mqtt_public_host: str | None = None
+    mqtt_port: int = 8883
+    mqtt_username: str = "myboxi-server"
+    mqtt_password: SecretStr | None = None
+    mqtt_tls: bool = True  # SPEC §6: no plain-text port; off only for tests
+    mqtt_ca_file: Path | None = None
+
     # "Box gestalten": in-process cache for generated previews and print files.
     case_cache_mb: int = Field(default=64, ge=0)
     # Order requests for printed cases go here; empty: the request form is off.
@@ -90,6 +100,10 @@ class Settings(BaseSettings):
     @property
     def asset_dir(self) -> Path:
         return self.data_dir / "assets"
+
+    @property
+    def mqtt_enabled(self) -> bool:
+        return bool(self.mqtt_host and self.mqtt_password)
 
     @property
     def tmp_dir(self) -> Path:

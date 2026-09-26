@@ -62,6 +62,14 @@ class Api(Protocol):
     async def aclose(self) -> None: ...
 
 
+class MessageBus(Protocol):
+    """The MQTT link (SPEC §6); HTTPS stays the fallback (§7.3)."""
+
+    def connected(self) -> bool: ...
+    def events_pending(self) -> None: ...
+    async def publish_reported(self, message: ReportedMessage) -> bool: ...
+
+
 class NeedsPairing(Exception):
     """Credentials missing or rejected (e.g. the box was removed in the app)."""
 
@@ -111,6 +119,8 @@ class SyncEngine:
         self.interval_s = interval_s
         self.setup_phase = setup_phase
         self.on_synced = on_synced  # e.g. new podcasts: read their feeds (SPEC v0.8 §8.2)
+        self.on_paired: Callable[[], None] | None = None  # e.g. connect to the broker
+        self.mqtt: MessageBus | None = None  # SPEC §6: reported and events over MQTT
         self.status = SyncStatus()
         self._wake = asyncio.Event()
         self._report_wake = asyncio.Event()
@@ -236,10 +246,13 @@ class SyncEngine:
                 raise
             if isinstance(result, PairingClaimed):
                 self.state.set_paired(result.tenant_id, result.device_secret)
+                self.state.set_mqtt(result.mqtt)  # SPEC §7.1: optional, only with a broker
                 api.forget_token()
                 if self.setup_phase is not None:
                     self.setup_phase.started()
                 self.controller.pairing_finished(success=True)
+                if self.on_paired is not None:
+                    self.on_paired()
                 log.info("paired", extra={"tenant_id": str(result.tenant_id)})
                 return
         self.controller.pairing_code = None
@@ -342,6 +355,9 @@ class SyncEngine:
     # --- events and reported ----------------------------------------------------------------
 
     async def flush_outbox(self, api: Api) -> None:
+        if self.mqtt is not None and self.mqtt.connected():
+            self.mqtt.events_pending()  # SPEC §6.5: sent over MQTT, removed after PUBACK
+            return
         while pending := self.outbox_repo.pending(100):
             result = await api.events(await self._token(api), pending)
             # SPEC §7.3: every listed id leaves the outbox; ``rejected`` is final.
@@ -360,7 +376,8 @@ class SyncEngine:
         message = ReportedMessage.model_validate(
             {"id": ulid(), "ts": self.clock.now(), "data": data}
         )
-        await api.reported(await self._token(api), message)
+        if self.mqtt is None or not await self.mqtt.publish_reported(message):
+            await api.reported(await self._token(api), message)  # SPEC §7.3 fallback
         self._last_report, self._last_report_at = comparable, now
 
     async def _report_pause(self) -> None:

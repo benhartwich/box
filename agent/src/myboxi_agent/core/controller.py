@@ -96,20 +96,44 @@ class Controller:
 
     def token_placed(self, uid: str) -> None:
         self.current_uid = uid
+        self._play_uid(uid)
+
+    def _play_uid(self, uid: str) -> str | None:
+        """Resolve and play; returns why nothing plays (for ``cmd/ack``), None if it does."""
         match self.library.resolve(uid):
             case Unknown():
                 self.announcer.announce(Prompt.UNKNOWN_TOKEN)
                 self.outbox.emit("token_unknown", TokenUnknownData(uid=uid))
+                return "unknown_token"
             case Loading():
                 self.announcer.announce(Prompt.LOADING)
+                return "loading"
             case Unavailable() as u:
                 self.announcer.announce(Prompt.UNAVAILABLE, Prompt.TONE_ERROR)
                 self.outbox.emit(
                     "playback_error",
                     PlaybackErrorData(token_id=u.token_id, provider=u.provider, code=u.code),  # pyright: ignore[reportArgumentType]
                 )
+                return u.code
             case Playable() as plan:
-                self._start(plan)
+                return None if self._start(plan) else "quiet_hours"
+
+    # --- remote commands (SPEC §6.2, M2) ----------------------------------------------------
+
+    def play_remote(self, uid: str) -> str | None:
+        """``play_token`` from the app: like placing the figure, but no figure is on the box,
+        so taking another figure off does not pause it. The same limits apply."""
+        reason = self._play_uid(uid)
+        if reason is None and self.session is not None:
+            self.session.token_present = False
+        return reason
+
+    def stop_remote(self) -> None:
+        """``stop``: pause with the position saved, so the figure continues later."""
+        s = self.session
+        if s is not None and not s.finished and s.playing:
+            self._pause(s)
+        self._stop_external()
 
     def token_removed(self) -> None:
         self.current_uid = None
@@ -297,17 +321,17 @@ class Controller:
         self.requested_volume = max(0, min(self.requested_volume + delta, lim.ceiling, 100))
         self._apply_volume()
 
-    def _start(self, plan: Playable) -> None:
+    def _start(self, plan: Playable) -> bool:
         cfg = self.config()
         if volume.limits(cfg, self.clock.now(), self.clock.time_trusted()).locked:
             self.announcer.announce(Prompt.QUIET_TIME)
-            return
+            return False
         if self.session is not None and not self.session.finished:
             self._save(emit=True)
         self.external_playing = False  # a figure replaces a Connect session (SPEC v0.9 §8.1)
         if plan.context:
             self._start_context(plan, cfg)
-            return
+            return True
         n = len(plan.items)
         start = ResumePoint(0, 0)
         if plan.start is not None and 0 <= plan.start.item_index < n:
@@ -333,6 +357,7 @@ class Controller:
         self.outbox.emit(
             "token_played", TokenPlayedData(token_id=plan.token_id, content_id=plan.content_id)
         )
+        return True
 
     def _start_context(self, plan: Playable, cfg: DeviceConfig) -> None:
         """SPEC v0.9 §8.1: the provider walks the tracks; resume by track index and URI,

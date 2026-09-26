@@ -11,6 +11,7 @@ dependencies = [
   "pydantic-settings>=2.10",
   # Soloist's local WebSocket API on 127.0.0.1 (SPEC v0.9 §8.1; approved in CLAUDE.md).
   "websockets>=15",
+  "aiomqtt>=2.4",
 ]
 
 [project.optional-dependencies]

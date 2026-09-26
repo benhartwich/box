@@ -83,6 +83,42 @@ def _cmd_worker(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_mqtt(args: argparse.Namespace) -> int:
+    """SPEC §6 (M2): the MQTT service (systemd unit myboxi-server-mqtt)."""
+    from myboxi_server.db import create_engine, create_sessionmaker
+    from myboxi_server.mqtt.service import MqttService
+
+    settings = get_settings()
+    configure_logging(settings.log_level, settings.log_format)
+    if not settings.mqtt_enabled:
+        print("MQTT is off: set MYBOXI_SERVER_MQTT_HOST and _MQTT_PASSWORD.", file=sys.stderr)
+        return 2
+
+    async def run() -> None:
+        engine = create_engine(settings)
+        try:
+            await MqttService(settings, create_sessionmaker(engine)).run()
+        finally:
+            await engine.dispose()
+
+    asyncio.run(run())
+    return 0
+
+
+def _cmd_mqtt_setup(args: argparse.Namespace) -> int:
+    """Once per broker: the server's account may use ``myboxi/v1/#``."""
+    from myboxi_server.mqtt.service import setup_server_role
+
+    settings = get_settings()
+    configure_logging(settings.log_level, "console")
+    if not settings.mqtt_enabled:
+        print("MQTT is off: set MYBOXI_SERVER_MQTT_HOST and _MQTT_PASSWORD.", file=sys.stderr)
+        return 2
+    asyncio.run(setup_server_role(settings))
+    print("MQTT server role is set up.")
+    return 0
+
+
 def _cmd_migrate(args: argparse.Namespace) -> int:
     from alembic import command
     from alembic.config import Config
@@ -211,6 +247,13 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("worker", help="background job worker")
     p.add_argument("--concurrency", type=int, default=0)
     p.set_defaults(func=_cmd_worker)
+
+    sub.add_parser("mqtt", help="MQTT service: box accounts, notify, commands").set_defaults(
+        func=_cmd_mqtt
+    )
+    sub.add_parser(
+        "mqtt-setup", help="give the server account its broker role (once)"
+    ).set_defaults(func=_cmd_mqtt_setup)
 
     p = sub.add_parser("migrate", help="apply database migrations")
     p.add_argument("revision", nargs="?", default="head")

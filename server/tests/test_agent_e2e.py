@@ -68,10 +68,17 @@ async def test_agent_pairs_syncs_plays_and_reports(
         async with sessionmaker_of(app)() as db:
             types = set((await db.scalars(select(Event.type))).all())
             assert "token_played" in types
-            device = await db.get(Device, agent.state.get().device_id)
-            assert device is not None
-            assert device.reported is not None
-            assert device.reported["playback"]["status"] == "playing"
+
+        async def reported_playing() -> bool:
+            # "reported" has its own loop (SPEC §6.4): it may arrive after the events
+            async with sessionmaker_of(app)() as db:
+                device = await db.get(Device, agent.state.get().device_id)
+                assert device is not None
+                return (device.reported or {}).get("playback", {}).get("status") == "playing"
+
+        async with asyncio.timeout(30):
+            while not await reported_playing():
+                await asyncio.sleep(0.1)
 
         # A new limit set in the app applies on the next sync (SPEC §3.4, §9.2).
         async with sessionmaker_of(app)() as db:

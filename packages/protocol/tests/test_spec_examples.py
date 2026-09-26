@@ -436,7 +436,7 @@ def test_content_source_per_kind_3_6() -> None:
 def test_device_config_defaults_3_4() -> None:
     cfg = DeviceConfig()
     assert (cfg.max_volume, cfg.start_volume, cfg.on_token_removed) == (55, 35, "pause")
-    assert cfg.providers_enabled == ["local", "podcast"]
+    assert cfg.providers_enabled == ["local", "podcast", "stream"]  # v0.11
     assert cfg.locale == "de-AT"
 
 
@@ -517,3 +517,21 @@ def test_soloist_state_is_a_machine_code_v0_9() -> None:
     assert Soloist.model_validate({"installed": True, "state": "some_new_state"}).state
     with pytest.raises(ValidationError):
         Soloist.model_validate({"installed": True, "state": "Läuft"})
+
+
+def test_binding_start_at_v0_11() -> None:
+    """SPEC v0.11 §3.9: optional; omitted when not set, so older boxes see nothing new."""
+    from myboxi_protocol.state import BindingUpsert
+
+    plain = BindingUpsert.model_validate({"token_id": TOKEN, "content_id": CONTENT})
+    assert "start_at" not in plain.model_dump(mode="json")
+    start = BindingUpsert.model_validate(
+        {"token_id": TOKEN, "content_id": CONTENT,
+         "start_at": {"id": TOKEN, "item_index": 3, "position_ms": 0}}
+    )  # fmt: skip
+    assert start.start_at is not None
+    assert start.start_at.item_index == 3
+    with pytest.raises(ValidationError):
+        BindingUpsert.model_validate(
+            {"token_id": TOKEN, "content_id": CONTENT, "start_at": {"id": TOKEN, "item_index": -1}}
+        )

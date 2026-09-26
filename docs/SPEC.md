@@ -1,4 +1,4 @@
-# Myboxi — Spezifikation v0.10: Datenmodell & Geräteprotokoll
+# Myboxi — Spezifikation v0.11: Datenmodell & Geräteprotokoll
 
 Status: Entwurf · Stand: 2026-09-25 · Änderungen: §14
 Scope: Der Vertrag zwischen **Box-Agent** (Raspberry Pi) und **Server**.
@@ -87,7 +87,7 @@ Neue Mandanten: Jeder angemeldete Nutzer kann einen Mandanten („Haushalt“) a
 | on_token_removed | enum | `pause` | `pause` \| `continue` |
 | locale | text | `de-AT` | Für TTS-Ansagen |
 | timezone | text | `Europe/Vienna` | IANA-Zeitzone, in der `quiet_hours` gelten |
-| providers_enabled | text[] | `["local","podcast"]` | `spotify` nur wenn auf der Box eingerichtet |
+| providers_enabled | text[] | `["local","podcast","stream"]` | `spotify` nur wenn auf der Box eingerichtet |
 | auto_update | bool | `true` | Software-Updates selbst installieren (§11); `false`: nur herunterladen |
 | spotify_allow_explicit | bool | `false` | Spotify-Titel mit der Kennzeichnung `explicit` spielen (§8.1) |
 
@@ -156,6 +156,12 @@ Speicherung im Dateisystem unter einem konfigurierbaren Wurzelverzeichnis. Ausli
 | resume | bool | Default `true`: an letzter Position weiterspielen |
 | shuffle | bool | Default `false` |
 | repeat | enum | `off` \| `all` \| `one` |
+| start_at | json | optional, Startpunkt für das nächste Auflegen (v0.11), siehe unten |
+
+`start_at`: `{ "id": "<uuid>", "item_index": 3, "position_ms": 0 }`. Eltern setzen ihn in der App („von vorn“, „ab Titel 4“).
+- Die Box übernimmt jede `id` genau einmal, beim nächsten Auflegen der Figur, und spielt ab diesem Punkt, auch wenn `resume` aus ist. Danach gilt wieder die Resume-Position.
+- `item_index` zählt in Abspielreihenfolge: bei einer Sammlung die Titel, bei einem Podcast die ausgewählten Folgen in `order`, bei Spotify die Titel des Albums oder der Playlist. Liegt er hinter dem letzten Titel, beginnt die Wiedergabe beim ersten.
+- Mit `shuffle` beginnt die Wiedergabe beim gewählten Titel, danach zufällig.
 
 ### 3.10 `resume_position`
 tenant_id, token_id, item_index, position_ms, item_key (optional), updated_at (von der Box gemeldet), device_id.
@@ -233,7 +239,8 @@ Eine Änderung, deren Assets noch nicht vollständig vorliegen, landet in `stage
     "token":        [ { "id": "...", "uid": "04A2B3C4D5E680", "label": "Bibi" } ],
     "content":      [ { "id": "...", "kind": "collection", "title": "...", "rev": 3, "source": {} } ],
     "content_item": [ { "content_id": "...", "position": 0, "asset_sha256": "...", "bytes": 3702144, "title": "...", "duration_ms": 612000 } ],
-    "binding":      [ { "token_id": "...", "content_id": "...", "resume": true, "shuffle": false, "repeat": "off" } ]
+    "binding":      [ { "token_id": "...", "content_id": "...", "resume": true, "shuffle": false, "repeat": "off",
+                        "start_at": { "id": "...", "item_index": 0, "position_ms": 0 } } ]
   },
   "deletes": {
     "token": ["..."], "content": ["..."], "binding": ["token_id..."]
@@ -392,6 +399,7 @@ Der Envelope-`type` ist der Event-Typ aus der Tabelle. `resume_position` aktuali
 | `spotify` | `not_logged_in` | Noch kein Spotify-Konto verbunden |
 | `spotify` | `explicit` | Nur Titel mit `explicit`, die die Box nicht spielen darf |
 | `spotify` | `soloist_error` | Soloist meldet einen Fehler, z. B. ohne Internet |
+| `stream` | `stream_error` | Sender nicht erreichbar, z. B. ohne Internet (§8.3) |
 
 ### 6.6 `online` — Last Will, retained
 Box setzt beim Verbinden `"1"`, Broker setzt bei Verbindungsabbruch `"0"`.
@@ -517,6 +525,12 @@ resolve(content) -> PlaybackPlan | Unavailable(reason)
 
 **Nicht verfügbar:** Ansage und Fehlerton, `playback_error` mit `disabled`, `not_configured`, `not_running`, `expired` oder `not_logged_in` (§6.5).
 
+### 8.3 Radio (Streams)
+- Die Box spielt `source.url` direkt ab (`http` oder `https`, auch Senderlisten wie `.m3u` und `.pls`). Kein Cache, nur online.
+- Kein Resume: ein Sender beginnt immer live. `next` hat keinen nächsten Titel und quittiert mit dem Fehlerton.
+- Ist der Sender nicht erreichbar oder bricht er ab: Ansage und Fehlerton, `playback_error` `stream_error`.
+- `stream` steht standardmäßig in `providers_enabled` (§3.4).
+
 ### 8.2 Podcast-Provider
 **Aktualisierung**
 - Neue oder geänderte Feeds fragt die Box direkt nach der Synchronisierung ab, bekannte alle 6 h (mit bis zu 30 min Zufall). Nach einem Fehler erneut nach 15 min, danach mit doppeltem Abstand bis höchstens 6 h.
@@ -565,7 +579,7 @@ resolve(content) -> PlaybackPlan | Unavailable(reason)
 ### 9.1 Figuren-Logik
 | Ereignis | Verhalten |
 |---|---|
-| Bekannte Figur aufgelegt | Start-Ton → Inhalt ab Resume-Position, Lautstärke `start_volume` |
+| Bekannte Figur aufgelegt | Start-Ton → Inhalt ab Resume-Position (oder einmal ab einem neuen `start_at`, §3.9), Lautstärke `start_volume` |
 | Unbekannte Figur | Freundlicher "Kenn ich nicht"-Ton, Event `token_unknown` |
 | Figur entfernt | Gemäß `on_token_removed`, Position sichern |
 | Inhalt zu Ende | Stille, Position auf Anfang; bei `repeat` entsprechend weiter |
@@ -677,6 +691,13 @@ Der Agent wird in M0 gegen einen **Mock-Server** entwickelt, der die Endpunkte a
 ---
 
 ## 14. Änderungen
+
+**v0.11 (2026-09-26)** — Radio und Startpunkt aus der App; Protokollversion bleibt `v1`, alle Änderungen additiv.
+- §3.4: `stream` gehört zum Standard von `providers_enabled`.
+- §3.9, §5.4: optionales `binding.start_at`, einmal beim nächsten Auflegen übernommen.
+- §6.5: Code `stream_error`.
+- §8.3: Radio.
+- §9.1: Startpunkt aus der App beim Auflegen.
 
 **v0.10 (2026-09-26)** — Spotify-Suche in der Web-UI; keine Änderung am Protokoll oder am Datenmodell der Box.
 - §3.6: eigene Spotify-App des Haushalts (Web API, PKCE) für Suche, Bibliothek, Titel und Cover; die Box bleibt ohne Web API.

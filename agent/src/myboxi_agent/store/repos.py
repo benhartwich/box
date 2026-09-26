@@ -6,6 +6,7 @@ Only complete states are active: a snapshot whose assets are still downloading w
 
 from __future__ import annotations
 
+import dataclasses
 import datetime as dt
 import json
 import sqlite3
@@ -30,7 +31,14 @@ from myboxi_agent.core.model import (
 )
 from myboxi_agent.ids import uuid7
 from myboxi_agent.store.podcasts import PodcastRepo
-from myboxi_protocol.state import DeviceConfig, PodcastSource, SpotifySource, StateResponse
+from myboxi_protocol.state import (
+    DeviceConfig,
+    PodcastSource,
+    SpotifySource,
+    StartAt,
+    StateResponse,
+    StreamSource,
+)
 
 Origin = Literal["server", "local"]
 
@@ -212,7 +220,7 @@ class LibraryRepo:
     def resolve(self, uid: str) -> Resolution:
         c = self.db.conn
         rows = c.execute(
-            "SELECT t.id AS token_id, b.content_id, b.resume, b.shuffle, b.repeat,"
+            "SELECT t.id AS token_id, b.content_id, b.resume, b.shuffle, b.repeat, b.start_at,"
             " ct.kind, ct.origin, ct.source"
             " FROM token t JOIN binding b ON b.token_id = t.id"
             " JOIN content ct ON ct.id = b.content_id"
@@ -220,7 +228,10 @@ class LibraryRepo:
             (uid,),
         ).fetchall()
         if rows:
-            return self._plan(rows[0])
+            resolution = self._plan(rows[0])
+            if isinstance(resolution, Playable):
+                return self._start_point(rows[0], resolution)
+            return resolution
         staged = self._staged_token(uid)
         if staged is not None:
             return Loading(staged)
@@ -232,8 +243,9 @@ class LibraryRepo:
             return self._podcast(row, token_id, content_id)
         if row["kind"] == "spotify":
             return self._spotify(row, token_id, content_id)
+        if row["kind"] == "stream":
+            return self._stream(row, token_id, content_id)
         if row["kind"] != "collection":
-            # Streams are not available on the box yet.
             return Unavailable(
                 token_id, content_id, provider=_provider(row["kind"]), code="not_available"
             )
@@ -258,6 +270,28 @@ class LibraryRepo:
             shuffle=bool(row["shuffle"]),
             repeat=row["repeat"],
         )
+
+    def _start_point(self, row: sqlite3.Row, plan: Playable) -> Playable:
+        """SPEC v0.11 §3.9: a new start point from the app applies once, at this placement."""
+        if not row["start_at"] or plan.provider == "stream":
+            return plan
+        try:
+            start = StartAt.model_validate_json(row["start_at"])
+        except ValidationError:
+            return plan
+        applied = self.db.conn.execute(
+            "SELECT start_id FROM start_applied WHERE token_id = ?", (row["token_id"],)
+        ).fetchone()
+        if applied is not None and applied["start_id"] == str(start.id):
+            return plan
+        with self.db.tx() as c:
+            c.execute(
+                "INSERT INTO start_applied (token_id, start_id) VALUES (?, ?)"
+                " ON CONFLICT (token_id) DO UPDATE SET start_id = excluded.start_id",
+                (row["token_id"], str(start.id)),
+            )
+        index = start.item_index if plan.context or start.item_index < len(plan.items) else 0
+        return dataclasses.replace(plan, start=ResumePoint(index, start.position_ms))
 
     def _podcast(self, row: sqlite3.Row, token_id: uuid.UUID, content_id: uuid.UUID) -> Resolution:
         """SPEC v0.8 §8.2, table "Figur auflegen"."""
@@ -303,6 +337,24 @@ class LibraryRepo:
             repeat=row["repeat"],
             provider="spotify",
             context=True,
+        )
+
+    def _stream(self, row: sqlite3.Row, token_id: uuid.UUID, content_id: uuid.UUID) -> Resolution:
+        """SPEC v0.11 §8.3: live, no cache, no resume."""
+        if "stream" not in StateRepo(self.db).device_config().providers_enabled:
+            return Unavailable(token_id, content_id, provider="stream", code="disabled")
+        try:
+            source = StreamSource.model_validate_json(row["source"])
+        except ValidationError:
+            return Unavailable(token_id, content_id, provider="stream", code="not_available")
+        return Playable(
+            token_id=token_id,
+            content_id=content_id,
+            items=(PlanItem(source.url, source.url, 0),),
+            resume=False,
+            shuffle=False,
+            repeat="off",
+            provider="stream",
         )
 
     def _staged_token(self, uid: str) -> uuid.UUID | None:
@@ -367,9 +419,17 @@ class LibraryRepo:
                 )
             for b in state.upserts.binding:
                 c.execute(
-                    "INSERT INTO binding (token_id, content_id, resume, shuffle, repeat, origin)"
-                    " VALUES (?, ?, ?, ?, ?, 'server')",
-                    (str(b.token_id), str(b.content_id), b.resume, b.shuffle, b.repeat),
+                    "INSERT INTO binding"
+                    " (token_id, content_id, resume, shuffle, repeat, start_at, origin)"
+                    " VALUES (?, ?, ?, ?, ?, ?, 'server')",
+                    (
+                        str(b.token_id),
+                        str(b.content_id),
+                        b.resume,
+                        b.shuffle,
+                        b.repeat,
+                        b.start_at.model_dump_json() if b.start_at else None,
+                    ),
                 )
             _prune_podcasts(c)
             c.execute(
@@ -408,7 +468,8 @@ class LibraryRepo:
                     (str(content_id), pos, sha, size, item_title, duration),
                 )
             c.execute(
-                "INSERT INTO binding VALUES (?, ?, 1, 0, 'off', 'local')",
+                "INSERT INTO binding (token_id, content_id, resume, shuffle, repeat, origin)"
+                " VALUES (?, ?, 1, 0, 'off', 'local')",
                 (str(token_id), str(content_id)),
             )
         return token_id

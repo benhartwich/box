@@ -157,9 +157,11 @@ class Controller:
 
     def player_error(self, code: str = "player_error") -> None:
         s = self.session
-        if s is not None and s.plan.provider == "spotify":
+        if s is not None and s.plan.provider in ("spotify", "stream"):
             # SPEC §4.1: no cache, typically offline: "Das geht gerade leider nicht" + tone.
             self.announcer.announce(Prompt.UNAVAILABLE, Prompt.TONE_ERROR)
+            if s.plan.provider == "stream" and code == "decode_error":
+                code = "stream_error"  # SPEC v0.11 §8.3
         else:
             self.announcer.announce(Prompt.TONE_ERROR)
         if s is not None:
@@ -308,7 +310,9 @@ class Controller:
             return
         n = len(plan.items)
         start = ResumePoint(0, 0)
-        if plan.resume:
+        if plan.start is not None and 0 <= plan.start.item_index < n:
+            start = plan.start  # SPEC v0.11 §3.9: once, set in the app
+        elif plan.resume:
             saved = self.resume_store.get(plan.token_id)
             index = plan.start_index(saved) if saved is not None else None
             if saved is not None and index is not None:
@@ -334,7 +338,11 @@ class Controller:
         """SPEC v0.9 §8.1: the provider walks the tracks; resume by track index and URI,
         not with shuffle."""
         start = ResumePoint(0, 0)
-        if plan.resume and not plan.shuffle:
+        if plan.shuffle:
+            pass  # Spotify shuffles: no track to go back to
+        elif plan.start is not None:
+            start = plan.start  # SPEC v0.11 §3.9
+        elif plan.resume:
             start = self.resume_store.get(plan.token_id) or start
         now = self.clock.monotonic()
         self.session = Session(plan=plan, order=[0], play_started=now, last_saved=now)
@@ -386,6 +394,9 @@ class Controller:
         if s.plan.context:
             self.player.skip()
             s.playing = True
+            return
+        if s.plan.provider == "stream":
+            self.announcer.announce(Prompt.TONE_ERROR)  # SPEC v0.11 §8.3: no next title
             return
         pos = self.player.position()
         current = pos.item_index if pos else 0

@@ -118,6 +118,14 @@ MIGRATIONS: list[str] = [
     );
     CREATE INDEX podcast_episode_sha ON podcast_episode (sha256);
     """,
+    # 3: SPEC v0.11 §3.9: start points from the app, each applied once.
+    """
+    ALTER TABLE binding ADD COLUMN start_at TEXT;
+    CREATE TABLE start_applied (
+        token_id TEXT PRIMARY KEY,
+        start_id TEXT NOT NULL
+    );
+    """,
 ]
 
 

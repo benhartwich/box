@@ -53,7 +53,9 @@ def validate(form: dict[str, str]) -> Submission:
         raise InvalidInput("Das WLAN-Passwort muss 8 bis 63 Zeichen haben.")
     url = form.get("server_url", "").strip()
     parts = urlsplit(url)
-    if parts.scheme not in ("https", "http") or not parts.netloc or len(url) > 200:
+    # SPEC v0.12 §9.3: HTTPS only, the box's credentials must never cross the network in
+    # plain text.
+    if parts.scheme != "https" or not parts.netloc or len(url) > 200:
         raise InvalidInput("Bitte eine Server-Adresse wie https://app.myboxi.eu angeben.")
     key = form.get("soloist_key", "").strip() or None
     if key is not None and not (8 <= len(key) <= 512 and all(33 <= ord(c) <= 126 for c in key)):

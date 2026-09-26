@@ -25,6 +25,8 @@ def test_defaults_follow_spec_paths() -> None:
         "GET /api/v1/pairing/poll?poll_token=abc123SECRET",
         "soloist_key=abc123SECRET",
         "Authorization: Bearer abc123SECRET.x.y",
+        "mqtt_password=abc123SECRET",
+        '{"pairing_key": "abc123SECRET"}',
     ],
 )
 def test_secrets_are_redacted(raw: str) -> None:
@@ -36,7 +38,11 @@ def test_secrets_are_redacted(raw: str) -> None:
 def test_json_formatter_redacts_extras() -> None:
     record = logging.LogRecord("t", logging.INFO, __file__, 1, "x", (), None)
     record.device_secret = "abc123SECRET"
-    assert json.loads(JsonFormatter().format(record))["device_secret"] == REDACTED
+    record.mqtt_password = "abc123SECRET"
+    record.token_id = "not-a-secret"
+    out = json.loads(JsonFormatter().format(record))
+    assert out["device_secret"] == out["mqtt_password"] == REDACTED
+    assert out["token_id"] == "not-a-secret"
 
 
 def test_cli_version(capsys: pytest.CaptureFixture[str]) -> None:

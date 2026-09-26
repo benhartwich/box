@@ -1,0 +1,21 @@
+#!/bin/sh
+# /etc/letsencrypt/renewal-hooks/deploy/myboxi-mosquitto: give Mosquitto the renewed
+# certificate of the Myboxi MQTT host (readable only for the mosquitto user), then restart it
+# (boxes reconnect on their own). The host is the one boxes connect to, from the server's
+# env file: MYBOXI_SERVER_MQTT_PUBLIC_HOST, else MYBOXI_SERVER_MQTT_HOST.
+set -eu
+ENV_FILE=/etc/myboxi-server/myboxi-server.env
+setting() {
+    sed -n "s/^$1=//p" "$ENV_FILE" 2>/dev/null | tail -n 1 | tr -d "\"' "
+}
+host=$(setting MYBOXI_SERVER_MQTT_PUBLIC_HOST)
+[ -n "$host" ] || host=$(setting MYBOXI_SERVER_MQTT_HOST)
+[ -n "$host" ] || exit 0
+case "${RENEWED_LINEAGE:-}" in
+    */"$host") ;;
+    *) exit 0 ;;
+esac
+install -d -o root -g mosquitto -m 0750 /etc/mosquitto/certs/myboxi
+install -o root -g mosquitto -m 0640 "$RENEWED_LINEAGE/fullchain.pem" /etc/mosquitto/certs/myboxi/fullchain.pem
+install -o root -g mosquitto -m 0640 "$RENEWED_LINEAGE/privkey.pem" /etc/mosquitto/certs/myboxi/privkey.pem
+systemctl restart mosquitto.service

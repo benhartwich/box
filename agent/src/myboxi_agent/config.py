@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     # against production by accident.
     default_server_url: str | None = None
     sim: bool = False
+    # SPEC v0.12 §9.3: the device secret and tokens travel only over HTTPS. Development only
+    # (implied by --sim): allow an http:// server.
+    allow_http_server: bool = False
 
     # Hardware (docs/hardware.md): BCM pin numbers, buttons wired to GND.
     pin_play_pause: int = 17
@@ -41,6 +44,10 @@ class Settings(BaseSettings):
     # SPEC v0.8 §8.2: feeds and episodes only from public addresses. Development only: allow
     # a feed on the local network or on this machine.
     podcast_allow_private: bool = False
+
+    # MQTT (SPEC §6): TLS always on the box; off only against a local test broker.
+    mqtt_tls: bool = True
+    mqtt_ca_file: Path | None = None
 
     # Spotify (SPEC v0.9 §8.1): Soloist's WebSocket, only on 127.0.0.1.
     soloist_ws_port: int = Field(default=24879, ge=1024, le=65535)

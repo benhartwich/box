@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Callable
 from pathlib import Path
 
 from pydantic import BaseModel
@@ -19,6 +20,7 @@ class EventOutbox:
         self.repo = repo
         self.clock = clock
         self.boot_id = boot_id
+        self.on_emit: Callable[[], None] | None = None  # e.g. MQTT sends at once
 
     def emit(self, event_type: EventType, data: BaseModel) -> None:
         event_id = ulid()
@@ -34,6 +36,8 @@ class EventOutbox:
         }
         event_adapter.validate_python(envelope)  # never queue something the server rejects
         self.repo.add(event_id, envelope)
+        if self.on_emit is not None:
+            self.on_emit()
 
 
 def read_boot_id() -> uuid.UUID:

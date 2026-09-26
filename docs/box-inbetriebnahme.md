@@ -64,7 +64,11 @@ Unter **Inhalte → Radio** die Stream-Adresse eines Senders eintragen (`https:/
 
 Auf der Seite einer Figur zeigt **Weiterhören**, wo sie zuletzt war. Mit „Von vorn beginnen“ oder „Ab diesem Titel“ legt ihr fest, wo sie beim nächsten Auflegen startet. Das gilt einmal; danach spielt sie wieder dort weiter, wo das Kind aufgehört hat. Die Box übernimmt es beim nächsten Abgleich, spätestens nach 15 Minuten.
 
-## 9. Spotify
+## 9. Fernbedienung
+
+Ist der Server mit MQTT eingerichtet (bei app.myboxi.eu der Fall), zeigt die Box-Seite eine **Fernbedienung**: Stopp, Lautstärke, eine Figur abspielen, „Welche Box ist das?“ (die Box meldet sich hörbar), jetzt abgleichen und nach Updates sehen. Änderungen in der App kommen dann sofort auf die Box statt spätestens nach 15 Minuten. Befehle verfallen nach einer Minute; Höchstlautstärke und Ruhezeiten gelten auch hier. Die Verbindung ist verschlüsselt, jede Box hat eigene Zugangsdaten und sieht nur ihre eigenen Nachrichten. Boxen, die schon vorher gekoppelt waren, bekommen die Fernbedienung nach einmaligem Neu-Koppeln (`play_pause` + `next` 5 Sekunden halten).
+
+## 10. Spotify
 
 Voraussetzungen:
 - Spotify Premium.

@@ -5,6 +5,8 @@
 set -eu
 set -a
 . /etc/myboxi-server/myboxi-server.env
+# the broker password, for "myboxi-server mqtt-setup" (docs/betrieb-debian13.md, "MQTT")
+if [ -r /etc/myboxi-server/mqtt.env ]; then . /etc/myboxi-server/mqtt.env; fi
 set +a
 cd /opt/myboxi-server
 exec runuser -u myboxi-server -- /opt/myboxi-server/.venv/bin/myboxi-server "$@"

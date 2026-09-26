@@ -126,6 +126,12 @@ MIGRATIONS: list[str] = [
         start_id TEXT NOT NULL
     );
     """,
+    # 4: SPEC §6, §7.1 (M2): the broker account from pairing; the password lives in secret.
+    """
+    ALTER TABLE sync_state ADD COLUMN mqtt_host TEXT;
+    ALTER TABLE sync_state ADD COLUMN mqtt_port INTEGER;
+    ALTER TABLE sync_state ADD COLUMN mqtt_username TEXT;
+    """,
 ]
 
 

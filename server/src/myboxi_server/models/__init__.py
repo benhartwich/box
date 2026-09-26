@@ -2,7 +2,7 @@
 
 from myboxi_server.models.base import Base
 from myboxi_server.models.case import CaseRequest
-from myboxi_server.models.device import Device, DeviceConfig, Pairing
+from myboxi_server.models.device import Device, DeviceCommand, DeviceConfig, Pairing
 from myboxi_server.models.event import Event, RateLimit
 from myboxi_server.models.library import (
     Asset,
@@ -24,6 +24,7 @@ __all__ = [
     "Content",
     "ContentItem",
     "Device",
+    "DeviceCommand",
     "DeviceConfig",
     "Event",
     "Invitation",

@@ -1,4 +1,4 @@
-# Myboxi — Spezifikation v0.11: Datenmodell & Geräteprotokoll
+# Myboxi — Spezifikation v0.12: Datenmodell & Geräteprotokoll
 
 Status: Entwurf · Stand: 2026-09-25 · Änderungen: §14
 Scope: Der Vertrag zwischen **Box-Agent** (Raspberry Pi) und **Server**.
@@ -288,6 +288,29 @@ Broker: Mosquitto 2 mit Dynamic-Security-Plugin, TLS direkt auf Port 8883 (Zerti
 Topic-Präfix: `myboxi/v1/{device_id}/`
 ACL: Eine Box darf ausschließlich unter ihrem eigenen Präfix lesen und schreiben. Der Server legt beim Pairing pro Box einen Dynsec-Client (Username = `device_id`) und eine Rolle mit genau diesem Präfix an und entfernt beide beim Unpair.
 
+**Umsetzung (v0.12)**
+
+| Topic unter `myboxi/v1/{device_id}/` | Richtung | QoS | Retained |
+|---|---|---|---|
+| `notify` | Server → Box | 1 | nein |
+| `cmd` | Server → Box | 1 | nein |
+| `cmd/ack` | Box → Server | 1 | nein |
+| `reported` | Box → Server | 1 | ja |
+| `events` | Box → Server | 1 | nein, ein Event je Nachricht |
+| `online` | Box → Server | 1 | ja, `1` bzw. `0` als Last Will |
+
+- **Zugang:** Die Box bekommt beim Pairing eigene Zugangsdaten (§7.1): Username = `device_id`, Passwort mit 256 Bit Zufall, genau einmal ausgeliefert. Der Server legt das Broker-Konto wenige Sekunden danach an; bis dahin wiederholt die Box den Verbindungsaufbau. Entkoppeln löscht das Konto.
+- **Rechte (ACL):** Die Box darf nur `reported`, `events`, `cmd/ack` und `online` unter ihrem Präfix senden und nur `notify` und `cmd` darunter abonnieren und empfangen. Empfangen ist standardmäßig verboten; jeder Client bekommt nur, was seine Rolle erlaubt. Der Server ordnet eingehende Nachrichten allein über das Topic zu, das der Broker so absichert, und prüft jede Nachricht mit den Protokollmodellen.
+- **Client-ID = Username.** Der Broker erzwingt das (`use_username_as_clientid`, dazu die Client-ID im Dynsec-Konto). So kann kein Client die Sitzung einer anderen Box oder des Servers übernehmen.
+- **Verbindung der Box:** TLS ab Version 1.2 mit Prüfung von Zertifikat und Hostname; Client-ID = `device_id`; Keepalive 60 s; Clean Session, damit nichts nachgeliefert wird, was während einer Offline-Zeit eingereiht wurde; neuer Versuch nach 5 s, verdoppelt bis 2 min.
+- **Nach jedem Verbindungsaufbau** fragt die Box den State ab (§5.2); `notify` wird deshalb nicht gespeichert.
+- **Server:** genau ein Prozess spricht mit dem Broker. Er sendet `notify`, sobald sich `config_rev` oder `device_rev` einer Box ändern, und Kommandos aus der App.
+  - Seine Sitzung ist persistent (keine Clean Session): Was Boxen senden, während der Dienst neu startet, hält der Broker bereit (bis 10 000 Nachrichten, 2 Tage). Events gehen so nicht verloren, obwohl die Box sie nach dem PUBACK des Brokers löscht (§6.5).
+  - Retained-Kopien (`reported`, `online`) wertet er nicht aus, nur live gesendete Nachrichten.
+  - Pro Box verarbeitet er höchstens 200 Nachrichten am Stück und danach 2 pro Sekunde; der Rest wird verworfen.
+  - Nachrichten sind höchstens 16 KiB groß.
+- Ohne MQTT-Verbindung nutzt die Box für `reported` und Events weiter HTTPS (§7.3).
+
 ### 6.0 Envelope (alle Nachrichten)
 ```json
 { "v": 1, "id": "01J8Z...ULID", "ts": "2026-09-24T18:02:11Z", "type": "…", "data": { } }
@@ -317,11 +340,19 @@ Jedes Kommando hat ein Ablaufdatum. **Abgelaufene Kommandos werden verworfen**, 
 
 Standard-TTL: 60 Sekunden.
 
+- Kommandos sendet die App nur für Rollen ≥ `admin` (§3.2), höchstens 30 pro Minute und Nutzer.
+- Ein Kommando geht nur an die Box, solange sie zu dem Haushalt gehört, der es geschickt hat. Entkoppeln lässt offene Kommandos ablaufen. Gesendete Kommandos ohne `cmd/ack` gelten 30 s nach `expires_at` als abgelaufen.
+- Ohne verlässliche Uhrzeit (§5.6) kann die Box das Ablaufdatum nicht prüfen und führt das Kommando aus; die Clean Session (§6) verhindert, dass alte Kommandos nachgeliefert werden.
+- `play_token` wirkt wie das Auflegen der Figur: Ruhezeiten, Lautstärke-Policy und `start_volume` gelten. Das Abnehmen einer anderen Figur pausiert sie nicht.
+- `set_volume` geht wie jede Lautstärke durch die Policy (§9.2).
+- `stop` pausiert und sichert die Position.
+- `identify` bleibt während Ruhezeiten mit `lock` stumm und wird mit `quiet_hours` abgelehnt.
+
 ### 6.3 `cmd/ack` — Box → Server, QoS 1
 ```json
 { "type": "cmd_ack", "data": { "cmd_id": "01J8Z...", "result": "ok" } }
 ```
-`result`: `ok` \| `expired` \| `rejected` \| `error`, optional `message`.
+`result`: `ok` \| `expired` \| `rejected` \| `error`, optional `message`. `message` ist immer ein Maschinencode (`[a-z0-9_]{1,32}`), nie Freitext. Bei `rejected`: `invalid`, `unknown_token`, `loading`, `quiet_hours` oder ein Code aus §6.5.
 
 ### 6.4 `reported` — Box → Server, QoS 1, retained
 Bei Änderung, höchstens alle 30 s (in der Einrichtungsphase alle 5 s, §9.6), mindestens alle 10 min. Ohne MQTT-Verbindung sendet die Box denselben Envelope per `POST /device/reported` (§7.3).
@@ -414,7 +445,7 @@ Basis: `{server_url}/api/v1`. Alle Antworten JSON, außer Assets.
 Die Box hat kein Display, der Kopplungscode wird **per Sprachausgabe** angesagt.
 
 1. Box: `POST /pairing/start`
-   Body: `{ "device_id": "...", "hw_model": "rpi-zero2w", "agent_version": "0.3.1" }`
+   Body: `{ "device_id": "...", "hw_model": "rpi-zero2w", "agent_version": "0.3.1", "pairing_key": "..." }`
    Antwort: `{ "code": "471193", "expires_in": 600, "poll_token": "..." }`
    → Box sagt an: "Dein Code ist: vier – sieben – eins – eins – neun – drei" und wiederholt bei Tastendruck.
 2. Nutzer (Rolle ≥ `admin`) in der App: `POST /tenants/{tid}/devices/claim` mit `{ "code": "471193", "name": "Kinderzimmer" }`
@@ -437,6 +468,12 @@ Claim-Antwort: `200 { "device_id": "...", "name": "Kinderzimmer" }`. Der Claim-E
 Schutz: Codes 6-stellig, 10 min gültig, einmal verwendbar. Claim-Versuche pro Nutzer rate-limitiert (5/min, 20/h), zusätzlich 30/h pro Mandant. `/pairing/start` höchstens 10/h pro IP.
 Das Device-Secret entsteht erst beim ausliefernden Poll und wird nur als Argon2id-Hash gespeichert.
 
+Kopplungsschlüssel (v0.12): Die Box erzeugt einmal zusammen mit ihrer `device_id` 256 Bit Zufall (`pairing_key`, Base64url ohne Padding, 43 Zeichen) und sendet ihn bei jedem `/pairing/start` mit. Er bleibt beim Entkoppeln erhalten.
+- Der erste Start mit Schlüssel bindet die `device_id` daran (Trust on First Use); der Server speichert nur den SHA-256-Hash.
+- Danach wird jeder Start mit anderem oder ohne Schlüssel mit `403 pairing_denied` abgelehnt. Wer nur eine `device_id` kennt, kann so keine Kopplung für fremde Boxen starten.
+- Boxen vor v0.12 senden keinen Schlüssel; ihre `device_id` bleibt ungebunden, bis sie einen senden.
+- Eine neu aufgesetzte Box (leere Datenbank) hat eine neue `device_id` und einen neuen Schlüssel.
+
 Erneutes Pairing:
 - Eine bereits gekoppelte Box darf `/pairing/start` erneut aufrufen (z. B. wenn die Poll-Antwort verloren ging). Beanspruchen darf den Code dann nur derselbe Mandant, sonst `409 device_paired_elsewhere`. Ein Mandantenwechsel erfordert vorher `unpair` (durch die Box oder in der App).
 - Pro Box dürfen mehrere Codes gleichzeitig offen sein; ein erfolgreicher Claim entwertet alle anderen offenen Codes dieser Box.
@@ -444,7 +481,8 @@ Erneutes Pairing:
 
 ### 7.2 Authentifizierung
 `POST /device/token` mit `{ "device_id", "device_secret" }` → `{ "access_token": "<JWT>", "token_type": "Bearer", "expires_in": 3600 }`.
-Unbekannte Box, falsches Secret und entkoppelte Box ergeben einheitlich `401 invalid_credentials`. Höchstens 10 Versuche pro Minute und Box.
+Unbekannte Box, falsches Secret und entkoppelte Box ergeben einheitlich `401 invalid_credentials`. Höchstens 10 Versuche pro Minute und Box, dazu 30 pro Minute und 300 pro Stunde je IP-Adresse.
+Anfragen an `/api/v1` sind höchstens 256 KiB groß (sonst `413`); der Server prüft das vor dem Lesen des Bodys.
 Alle weiteren Geräte-Endpunkte erwarten `Authorization: Bearer <JWT>`. Nach `unpair` oder erneutem Pairing werden bestehende Tokens sofort abgelehnt (`401 unauthorized`).
 Das JWT gilt nur für HTTPS. MQTT nutzt die beim Pairing angelegten eigenen Zugangsdaten (§6), damit der Broker ohne Auth-Plugin auskommt.
 
@@ -474,7 +512,7 @@ Alle Fehlerantworten der Geräte-API:
 ```json
 { "error": { "code": "pairing_expired", "message": "Pairing code expired" } }
 ```
-Codes: `invalid_request`, `unauthorized`, `invalid_credentials`, `not_found`, `rate_limited` (mit `Retry-After`), `pairing_expired`, `pairing_consumed`, `code_invalid`, `device_paired_elsewhere`.
+Codes: `invalid_request`, `unauthorized`, `invalid_credentials`, `not_found`, `rate_limited` (mit `Retry-After`), `pairing_expired`, `pairing_consumed`, `code_invalid`, `device_paired_elsewhere`, `pairing_denied` (v0.12, §7.1).
 
 ---
 
@@ -595,9 +633,11 @@ Details:
 - Der Setup-Modus startet automatisch, wenn kein WLAN konfiguriert ist oder das konfigurierte WLAN 2 min lang nicht erreichbar ist und keine Ethernet-Verbindung besteht; außerdem mit `volume_up` + `volume_down` 5 s gehalten (§9.4).
 - Offenes WLAN `Myboxi-NNNN` (vier Ziffern aus der Seriennummer, damit die Box den Namen mit ihren Ziffern-Ansagen vorlesen kann), Seite unter `http://10.42.0.1/`; alle DNS-Anfragen zeigen dorthin (Captive Portal).
 - Felder: WLAN (Liste oder manuell), Server-URL (Vorgabe `https://app.myboxi.eu`) und optional der Soloist-API-Key (§8.1).
+  - Die Server-URL muss mit `https://` beginnen (v0.12): Device-Secret und Tokens gehen nie unverschlüsselt über das Netz. Nur für die Entwicklung (`--sim` oder `allow_http_server`) nimmt die Box `http://` an.
   - Der Key ist ein Passwortfeld. Die Seite zeigt ihn nie an, nur „gespeichert“.
   - Leer lassen: der gespeicherte Key bleibt. Das Häkchen „Key löschen“ entfernt ihn.
 - **Ausnahme (v0.9):** Mit aktiviertem Spotify bietet Soloist (nicht der Agent) Spotify Connect im Heimnetz an: mDNS auf UDP 5353 und einen Zeroconf-Port. Alle anderen Dienste bleiben auf `127.0.0.1`, auch die Soloist-WebSocket-API.
+- Firewall (v0.12): Aus dem Heimnetz sind nur UDP 5353, TCP 22 (falls SSH aktiviert ist) und die unprivilegierten TCP-Ports (Zeroconf-Port von Soloist) sowie Ping erreichbar; DNS, DHCP und die Setup-Seite nur aus dem Setup-Netz `10.42.0.0/24`.
 - Die Box sagt Beginn und Ende des Setup-Modus an und ob die Verbindung geklappt hat.
 
 ### 9.4 Tasten
@@ -630,7 +670,8 @@ Die ersten 60 min nach einer erfolgreichen Kopplung, gemessen ab `paired_at` (Wa
 - Soloist-WebSocket ausschließlich auf `127.0.0.1` gebunden.
 - Spotify Connect (Ausnahme nach §9.3): Die Firewall der Box (nftables) nimmt eingehende Verbindungen nur aus privaten, Link-Local- und ULA-Netzen an.
 - Soloist nimmt den API-Key nur als Kommandozeilenargument an. Er ist damit für lokale Prozesse der Box lesbar, nie für das Netz; die Box hat keine weiteren Benutzerkonten mit Login.
-- Soloist-Key und Device-Secret nie in Logs, Crash-Reports oder Sync-Payloads.
+- Soloist-Key, Device-Secret, MQTT-Passwort und Kopplungsschlüssel nie in Logs, Crash-Reports oder Sync-Payloads. Der Log-Filter erkennt diese Schlüssel auch mit Präfix (z. B. `mqtt_password`).
+- Das Passwort des Broker-Admins kennt nur der MQTT-Dienst des Servers (eigene Env-Datei), nicht Web-UI und Worker.
 - v1 ohne Mikrofon. Kommt Sprache in v2, bleibt die Verarbeitung vollständig lokal; kein Audio zum Server.
 - Events: nur die Liste in §6.5, 30 Tage Aufbewahrung.
 - `button_test` enthält nur Tastennamen, keine Zeitpunkte, und nur während der Einrichtungsphase (§9.6).
@@ -668,7 +709,7 @@ Die Box aktualisiert den Agent (samt Ansagen) selbst, sobald sie online ist.
 |---|---|---|
 | M0 | Agent offline: RFID, Tasten, lokale Assets aus einem Ordner, SQLite, Lautstärkeregeln, Resume | nein |
 | M1 | Server-MVP: Mandanten, Nutzer, Rollen, Upload + Transkodierung, Figuren, Bindings; Pairing; `GET /device/state`; Asset-Download | ja |
-| M2 | MQTT: `notify`, `cmd` mit TTL, `reported`, `events`, Outbox | ja |
+| M2 | MQTT: `notify`, `cmd` mit TTL, `reported`, `events`, Outbox (umgesetzt mit v0.12) | ja |
 | M3 | Podcast-Provider | ja |
 | M4 | Spotify-Provider inkl. Update-Job und Katalog-Wächter | nein |
 | M5 | Image-Build in CI (read-only Root, Setup-Modus) | – |
@@ -691,6 +732,17 @@ Der Agent wird in M0 gegen einen **Mock-Server** entwickelt, der die Endpunkte a
 ---
 
 ## 14. Änderungen
+
+**v0.12 (2026-09-26)** — MQTT umgesetzt (M2); Protokollversion bleibt `v1`, alle Änderungen additiv.
+- §6: Topics, QoS, ACL, Konten je Box, Verbindung der Box (TLS, Clean Session), ein Serverprozess.
+- §6.2: Kommandos nur ab `admin`, ohne verlässliche Zeit, Verhalten von `play_token`, `set_volume`, `stop`.
+- §6.3: `message` nur als Maschinencode; Codes für `rejected`.
+- §6: Client-ID = Username (vom Broker erzwungen), Empfangen standardmäßig verboten, persistente Sitzung des Servers, Retained-Kopien ignoriert, Grenzen pro Box.
+- §6.2: Kommandos nur an Boxen des sendenden Haushalts, Rate-Limit, Ablauf beim Entkoppeln, `identify` in Ruhezeiten stumm.
+- §7.1, §7.4: `pairing_key` (Trust on First Use), Fehler `pairing_denied`.
+- §7.2: Rate-Limit je IP, 256 KiB je Anfrage.
+- §9.3: Server-URL nur mit `https://`; Firewall nur mit den nötigen Ports.
+- §10: weitere Geheimnisse im Log-Filter, Broker-Admin-Passwort nur im MQTT-Dienst.
 
 **v0.11 (2026-09-26)** — Radio und Startpunkt aus der App; Protokollversion bleibt `v1`, alle Änderungen additiv.
 - §3.4: `stream` gehört zum Standard von `providers_enabled`.

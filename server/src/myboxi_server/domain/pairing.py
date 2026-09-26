@@ -9,6 +9,8 @@
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
+import hmac
 import secrets
 import uuid
 from dataclasses import dataclass
@@ -40,14 +42,38 @@ class StartedPairing:
     expires_in: int
 
 
+class PairingDeniedError(DomainError):
+    """SPEC v0.12 §7.1: the device id is known with another pairing key."""
+
+
+def _key_hash(key: str) -> str:
+    return hashlib.sha256(key.encode()).hexdigest()  # 256 random bits: no slow hash needed
+
+
 async def start(
-    db: AsyncSession, *, device_id: uuid.UUID, hw_model: str, agent_version: str
+    db: AsyncSession,
+    *,
+    device_id: uuid.UUID,
+    hw_model: str,
+    agent_version: str,
+    pairing_key: str | None = None,
 ) -> StartedPairing:
-    """SPEC §7.1 step 1. The caller commits."""
-    device = await db.get(Device, device_id)
+    """SPEC §7.1 step 1. The caller commits.
+
+    The first start with a pairing key binds the device id to it (trust on first use); later
+    starts must present the same key, so knowing a device id is not enough to take a box."""
+    device = await db.get(Device, device_id, with_for_update=True)
     if device is None:
-        db.add(Device(id=device_id, hw_model=hw_model, agent_version=agent_version))
-        await db.flush()
+        device = Device(id=device_id, hw_model=hw_model, agent_version=agent_version)
+        db.add(device)
+    if device.pairing_key_hash is not None:
+        if pairing_key is None or not hmac.compare_digest(
+            device.pairing_key_hash, _key_hash(pairing_key)
+        ):
+            raise PairingDeniedError("pairing key does not match")
+    elif pairing_key is not None:
+        device.pairing_key_hash = _key_hash(pairing_key)
+    await db.flush()
     # Retire expired open codes so their numbers can be reused.
     await db.execute(
         update(Pairing)
@@ -146,6 +172,7 @@ class PollPending:
 class PollClaimed:
     device_secret: str
     tenant_id: uuid.UUID
+    device_id: uuid.UUID
 
 
 class PairingExpiredError(DomainError):
@@ -181,7 +208,7 @@ async def poll(db: AsyncSession, poll_token: str) -> PollPending | PollClaimed:
     device.secret_hash = await hash_secret_async(secret)
     pairing.delivered_at = now
     await db.flush()
-    return PollClaimed(device_secret=secret, tenant_id=device.tenant_id)
+    return PollClaimed(device_secret=secret, tenant_id=device.tenant_id, device_id=device.id)
 
 
 async def authenticate_device(db: AsyncSession, device_id: uuid.UUID, secret: str) -> Device | None:

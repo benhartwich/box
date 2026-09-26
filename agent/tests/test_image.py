@@ -124,6 +124,10 @@ def test_firewall_only_lets_the_home_network_in() -> None:
     assert "policy drop;" in rules
     assert "192.168.0.0/16" in rules
     assert "fc00::/7" in rules
+    # SPEC v0.12 §9.3: no blanket "accept" for the home network, only the listed ports
+    assert "ip saddr @home4 accept" not in rules
+    assert "ip6 saddr @home6 accept" not in rules
+    assert "tcp dport { 22, 1024-65535 }" in rules
     if shutil.which("nft") and os.geteuid() == 0:  # nft -c needs netlink, even to only check
         subprocess.run(["nft", "-c", "-f", str(FILES / "etc" / "nftables.conf")], check=True)
 

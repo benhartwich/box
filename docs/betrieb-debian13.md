@@ -156,12 +156,55 @@ systemctl --no-pager --lines=0 status myboxi-server-api.service myboxi-server-wo
 
 Danach ist die Web-UI unter `https://<Domain>/` erreichbar. Anmelden mit der E-Mail-Adresse und dem Passwort aus Schritt 8.
 
+## MQTT: sofortiger Abgleich und Fernbedienung (optional)
+
+Ohne MQTT fragen die Boxen alle 15 Minuten nach Änderungen (SPEC §5.2). Mit MQTT gleichen sie sofort ab, und die App kann Befehle schicken (Stopp, Lautstärke, Figur abspielen, „Welche Box ist das?“). Der Broker ist Mosquitto aus Debian, nur mit TLS auf Port 8883, und jede Box bekommt ein eigenes Konto, das nur ihre eigenen Topics nutzen darf (SPEC §6). Die Client-ID ist immer der Benutzername, so kann niemand die Sitzung einer anderen Box oder des Servers übernehmen.
+
+1. Paket, Zertifikat, Konfiguration. Das Zertifikat ist das der Web-UI; der Deploy-Hook kopiert es bei jeder Erneuerung für Mosquitto.
+   ```text
+   apt-get install -y --no-install-recommends mosquitto mosquitto-clients
+   install -m 0755 /opt/myboxi-server/deploy/mosquitto/certbot-deploy-hook \
+     /etc/letsencrypt/renewal-hooks/deploy/myboxi-mosquitto
+   RENEWED_LINEAGE=/etc/letsencrypt/live/$MYBOXI_DOMAIN /etc/letsencrypt/renewal-hooks/deploy/myboxi-mosquitto
+   install -m 0644 /opt/myboxi-server/deploy/mosquitto/myboxi.conf /etc/mosquitto/conf.d/myboxi.conf
+   install -m 0644 /opt/myboxi-server/deploy/logrotate/mosquitto /etc/logrotate.d/mosquitto
+   ```
+   Der Hook liest den Hostnamen aus `MYBOXI_SERVER_MQTT_HOST` (Schritt 2); vor Schritt 2 also erst die Zeile `MYBOXI_SERVER_MQTT_HOST=…` eintragen oder den Hook nach Schritt 2 noch einmal ausführen. Das Log von Mosquitto (mit IP-Adressen) bleibt 14 Tage.
+2. Konto des Servers anlegen. Das Passwort steht nur in `mqtt.env`, die allein der MQTT-Dienst liest (Web-UI und Worker brauchen es nicht).
+   ```text
+   MQTT_PASSWORD=$(openssl rand -base64 32)
+   mosquitto_ctrl dynsec init /var/lib/mosquitto/dynamic-security.json myboxi-server "$MQTT_PASSWORD"
+   chown mosquitto:mosquitto /var/lib/mosquitto/dynamic-security.json
+   chmod 0600 /var/lib/mosquitto/dynamic-security.json
+   systemctl restart mosquitto
+   echo "MYBOXI_SERVER_MQTT_HOST=$MYBOXI_DOMAIN" >> /etc/myboxi-server/myboxi-server.env
+   install -m 0640 -g myboxi-server /dev/null /etc/myboxi-server/mqtt.env
+   echo "MYBOXI_SERVER_MQTT_PASSWORD=$MQTT_PASSWORD" > /etc/myboxi-server/mqtt.env
+   myboxi-server mqtt-setup
+   ```
+   `mqtt-setup` gibt dem Server-Konto seine Rechte und stellt den Broker so ein, dass ein Client nur empfängt, was seine Rolle erlaubt. Es läuft einmal, bevor der Dienst startet.
+3. Dienst starten und die Web-UI neu starten (sie gibt Boxen ab jetzt beim Koppeln MQTT-Zugangsdaten).
+   ```text
+   install -m 0644 /opt/myboxi-server/deploy/systemd/myboxi-server-mqtt.service /etc/systemd/system/
+   systemctl daemon-reload
+   systemctl enable --now myboxi-server-mqtt.service
+   systemctl restart myboxi-server-api.service
+   ```
+4. Prüfen: Der Port 8883 antwortet nur mit TLS, ein anonymer Zugang wird abgewiesen.
+   ```text
+   mosquitto_sub -h "$MYBOXI_DOMAIN" -p 8883 -t 'myboxi/#' -W 3 --capath /etc/ssl/certs   # "not authorised"
+   mosquitto_sub -h "$MYBOXI_DOMAIN" -p 8883 -t 'myboxi/#' -W 3   # ohne TLS: keine Verbindung
+   journalctl -u myboxi-server-mqtt -n 20
+   ```
+
+Schon gekoppelte Boxen bekommen MQTT-Zugangsdaten beim nächsten Koppeln (`play_pause` + `next` 5 Sekunden halten). Bis dahin arbeiten sie wie bisher über HTTPS.
+
 ## Betrieb
 
 **Logs:** strukturiert (JSON) im Journal. Secrets werden gefiltert, Query-Strings nicht geloggt.
 
 ```text
-journalctl -u myboxi-server-api -u myboxi-server-worker -f
+journalctl -u myboxi-server-api -u myboxi-server-worker -u myboxi-server-mqtt -f
 ```
 
 **Update:**
@@ -172,6 +215,7 @@ git pull
 UV_PYTHON_DOWNLOADS=never uv sync --frozen --no-dev --package myboxi-server
 myboxi-server migrate
 systemctl restart myboxi-server-api.service myboxi-server-worker.service
+systemctl try-restart myboxi-server-mqtt.service
 ```
 
 **Backup:** Datenbank und Asset-Verzeichnis gehören zusammen. Die Assets sind content-adressiert und ändern sich nie, ein inkrementelles `rsync` genügt.

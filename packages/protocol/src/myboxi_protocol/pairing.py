@@ -13,10 +13,17 @@ PairingCode = Annotated[str, StringConstraints(pattern=r"^\d{6}$")]
 DeviceName = Annotated[str, StringConstraints(min_length=1, max_length=64, strip_whitespace=True)]
 
 
+# SPEC v0.12 §7.1: 256 random bits the box creates once; proves on every pairing start that
+# the caller is the box that first used this device id (base64url, no padding).
+PairingKey = Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9_-]{43}$")]
+
+
 class PairingStartRequest(ProtocolModel):
     device_id: UUID
     hw_model: Annotated[str, StringConstraints(min_length=1, max_length=64)]
     agent_version: Annotated[str, StringConstraints(min_length=1, max_length=32)]
+    # Omitted (not null) by boxes before v0.12.
+    pairing_key: PairingKey | None = Field(default=None, repr=False, exclude_if=lambda v: v is None)
 
 
 class PairingStartResponse(ProtocolModel):

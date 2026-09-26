@@ -42,6 +42,8 @@ class Device(Timestamps, Base):
     agent_version: Mapped[str] = mapped_column(Text)
     # Argon2id hash of the device secret (SPEC §10); NULL while unpaired.
     secret_hash: Mapped[str | None] = mapped_column(Text)
+    # SPEC v0.12 §7.1: SHA-256 of the box's pairing key, bound at the first pairing start.
+    pairing_key_hash: Mapped[str | None] = mapped_column(Text)
     # Bumped on every pairing and unpair; device JWTs carry it and become invalid on change.
     auth_generation: Mapped[int] = mapped_column(Integer, server_default="0")
     # SPEC §5.1: raised by database triggers only.
@@ -49,6 +51,12 @@ class Device(Timestamps, Base):
     reported: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     reported_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
     mqtt_provisioned: Mapped[bool] = mapped_column(server_default="false")
+    # SPEC §6 (M2): set at pairing (sealed), the MQTT service creates the broker account and
+    # clears it; mqtt_revoke asks the service to delete the account (unpair).
+    mqtt_password: Mapped[bytes | None] = mapped_column(LargeBinary)
+    mqtt_revoke: Mapped[bool] = mapped_column(server_default="false")
+    # SPEC §6.6: the box's last will; None until it connected once.
+    mqtt_online: Mapped[bool | None] = mapped_column()
     last_seen_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
     paired_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
 
@@ -122,3 +130,34 @@ class Pairing(UuidPk, Timestamps, Base):
     device_name: Mapped[str | None] = mapped_column(Text)
     delivered_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
     invalidated_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class DeviceCommand(Timestamps, Base):
+    """A remote command (SPEC §6.2), written by the web UI, sent by the MQTT service.
+
+    ``id`` is the envelope id (ULID) the box acknowledges with ``cmd/ack`` (§6.3).
+    """
+
+    __tablename__ = "device_command"
+    __table_args__ = (
+        Index("ix_device_command_device_created", "device_id", "created_at"),
+        # The MQTT service looks for waiting commands every second.
+        Index(
+            "ix_device_command_waiting",
+            "created_at",
+            postgresql_where=text("result IS NULL"),
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    # Not a composite key with the device: unpairing clears device.tenant_id.
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenant.id", ondelete="CASCADE"))
+    device_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("device.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(Text)
+    args: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default="{}")
+    expires_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True))
+    sent_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    # ok, expired, rejected, error (SPEC §6.3); None while waiting.
+    result: Mapped[str | None] = mapped_column(Text)
+    message: Mapped[str | None] = mapped_column(Text)
+    acked_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))

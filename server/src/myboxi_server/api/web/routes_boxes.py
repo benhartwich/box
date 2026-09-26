@@ -28,8 +28,9 @@ from myboxi_server.api.web.deps import (
 )
 from myboxi_server.api.web.render import render
 from myboxi_server.api.web.routes_setup import render_start
+from myboxi_server.auth import ratelimit
 from myboxi_server.auth.sessions import SessionInfo
-from myboxi_server.domain import devices, events
+from myboxi_server.domain import commands, devices, events, tokens
 from myboxi_server.domain.authz import TenantContext
 from myboxi_server.domain.errors import DomainError, NotFoundError
 from myboxi_server.domain.setup import health_hints
@@ -47,6 +48,33 @@ PROVIDERS = [
 LOCALES = ["de-AT", "de-DE", "de-CH", "en-GB", "en-US"]
 TIMEZONES = ["Europe/Vienna", "Europe/Berlin", "Europe/Zurich", "Europe/London", "UTC"]
 SOLOIST_WARN = dt.timedelta(days=14)
+COMMAND_LABELS = {
+    "stop": "Stopp",
+    "set_volume": "Lautstärke",
+    "play_token": "Figur abspielen",
+    "identify": "Welche Box ist das?",
+    "sync_now": "Jetzt abgleichen",
+    "update_check": "Nach Updates sehen",
+}
+RESULT_LABELS = {
+    "ok": "erledigt",
+    "expired": "verfallen",
+    "rejected": "abgelehnt",
+    "error": "Fehler",
+}
+# SPEC v0.12 §6.3: why the box refused a command.
+REASON_LABELS = {
+    "unknown_token": "die Figur hat noch keinen Inhalt",
+    "loading": "der Inhalt lädt noch",
+    "quiet_hours": "gerade ist Ruhezeit",
+    "invalid": "ungültiger Befehl",
+    "disabled": "diese Quelle ist für die Box aus",
+    "not_configured": "Spotify ist nicht eingerichtet",
+    "not_logged_in": "kein Spotify-Konto verbunden",
+    "not_running": "Spotify startet noch",
+    "feed_error": "der Podcast-Feed lässt sich nicht laden",
+    "no_episodes": "keine passende Podcast-Folge",
+}
 PROVIDER_NAMES = dict(PROVIDERS)
 # SPEC v0.8 §6.5: known playback_error codes; unknown ones are shown neutrally.
 PROBLEM_TEXTS = {
@@ -224,6 +252,7 @@ async def _box_page(
     cfg = await devices.get_config(db, ctx, device_id)
     tenant = await db.get(Tenant, ctx.tenant_id)
     latest = request.app.state.update_channel.latest()
+    remote = request.app.state.settings.mqtt_enabled and device.mqtt_provisioned
     return render(
         request,
         "box.html",
@@ -237,10 +266,76 @@ async def _box_page(
             "timezones": TIMEZONES,
             "error": error,
             "notice": notice,
+            "remote": remote,
+            "commands": await commands.recent_commands(db, ctx, device_id) if remote else [],
+            "figures": await tokens.list_tokens(db, ctx) if remote else [],
+            "command_labels": COMMAND_LABELS,
+            "result_labels": RESULT_LABELS,
+            "reason_labels": REASON_LABELS,
         },
         session=session,
         ctx=ctx,
         status_code=status_code,
+    )
+
+
+@router.post("/{device_id}/command")
+async def send_command(
+    request: Request,
+    db: DbSession,
+    session: CurrentSession,
+    ctx: ConfigCtx,
+    device_id: uuid.UUID,
+    name: Annotated[str, Form(max_length=32)],
+    volume: Annotated[int | None, Form()] = None,
+    token_id: Annotated[uuid.UUID | None, Form()] = None,
+) -> Response:
+    """SPEC §6.2 (M2): the MQTT service sends it; it expires after 60 seconds."""
+    try:
+        await ratelimit.hit(
+            request.app.state.engine, f"command:{session.user.id}", ratelimit.COMMAND_PER_USER
+        )
+    except ratelimit.RateLimitedError:
+        return await _box_page(
+            request, db, session, ctx, device_id,
+            error="Zu viele Befehle. Bitte kurz warten.", status_code=429,
+        )  # fmt: skip
+    args: dict[str, Any] = {}
+    if name == "set_volume":
+        args["volume"] = volume
+    elif name == "play_token":
+        args["token_id"] = str(token_id) if token_id else None
+    try:
+        await commands.send_command(db, ctx, device_id, name, args)
+    except NotFoundError:
+        raise
+    except DomainError as exc:
+        await db.rollback()
+        return await _box_page(
+            request, db, session, ctx, device_id, error=exc.message, status_code=400
+        )
+    await db.commit()
+    return RedirectResponse(f"/t/{ctx.tenant_id}/boxes/{device_id}#remote", status_code=303)
+
+
+@router.get("/{device_id}/commands")
+async def command_list(
+    request: Request, db: DbSession, session: CurrentSession, ctx: ReadCtx, device_id: uuid.UUID
+) -> Response:
+    """HTMX: the command results while they arrive."""
+    await devices.get_device(db, ctx, device_id)
+    return render(
+        request,
+        "_commands.html",
+        {
+            "device_id": device_id,
+            "commands": await commands.recent_commands(db, ctx, device_id),
+            "command_labels": COMMAND_LABELS,
+            "result_labels": RESULT_LABELS,
+            "reason_labels": REASON_LABELS,
+        },
+        session=session,
+        ctx=ctx,
     )
 
 

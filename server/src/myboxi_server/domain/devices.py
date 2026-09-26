@@ -2,17 +2,19 @@
 
 from __future__ import annotations
 
+import datetime as dt
 import uuid
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from myboxi_protocol.reported import ReportedData
 from myboxi_protocol.state import DeviceConfig as DeviceConfigMsg
 from myboxi_server.domain.authz import Perm, TenantContext
 from myboxi_server.domain.errors import InvalidInputError, NotFoundError
 from myboxi_server.domain.state import device_config_message
-from myboxi_server.models import Device, DeviceConfig
+from myboxi_server.models import Device, DeviceCommand, DeviceConfig
 from myboxi_server.models.enums import OnTokenRemoved
 
 
@@ -27,6 +29,15 @@ async def unpair(db: AsyncSession, device: Device) -> None:
                 DeviceConfig.device_id == device.id, DeviceConfig.tenant_id == device.tenant_id
             )
         )
+    if device.mqtt_provisioned or device.mqtt_password is not None:
+        device.mqtt_revoke = True  # the MQTT service deletes the broker account (SPEC §6)
+    # Commands of the old household never reach the box (SPEC §6.2).
+    await db.execute(
+        update(DeviceCommand)
+        .where(DeviceCommand.device_id == device.id, DeviceCommand.result.is_(None))
+        .values(result="expired")
+    )
+    device.mqtt_password = None
     device.tenant_id = None
     device.secret_hash = None
     device.name = ""
@@ -34,6 +45,15 @@ async def unpair(db: AsyncSession, device: Device) -> None:
     device.reported_at = None
     device.auth_generation += 1
     await db.flush()
+
+
+def store_reported(device: Device, data: ReportedData, now: dt.datetime) -> None:
+    """SPEC §6.4: over MQTT or ``POST /device/reported``; the server only stores it."""
+    device.reported = data.model_dump(mode="json")
+    device.reported_at = now
+    device.last_seen_at = now
+    device.agent_version = data.agent_version
+    device.hw_model = data.hw_model
 
 
 async def list_devices(db: AsyncSession, ctx: TenantContext) -> list[Device]:

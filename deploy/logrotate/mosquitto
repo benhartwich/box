@@ -1,0 +1,16 @@
+# Mosquitto's log (connections with IP addresses): kept 14 days (today + 13), like the nginx
+# logs of Myboxi. Replaces the package's /etc/logrotate.d/mosquitto (7 rotations of 100 kB).
+/var/log/mosquitto/mosquitto.log {
+        daily
+        rotate 13
+        missingok
+        notifempty
+        compress
+        delaycompress
+        nocreate
+        postrotate
+                if systemctl is-active --quiet mosquitto.service; then
+                        systemctl reload mosquitto.service
+                fi
+        endscript
+}

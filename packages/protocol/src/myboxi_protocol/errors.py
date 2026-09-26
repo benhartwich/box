@@ -17,6 +17,7 @@ class ErrorCode(StrEnum):
     PAIRING_CONSUMED = "pairing_consumed"
     CODE_INVALID = "code_invalid"
     DEVICE_PAIRED_ELSEWHERE = "device_paired_elsewhere"
+    PAIRING_DENIED = "pairing_denied"  # SPEC v0.12 §7.1: wrong or missing pairing key
 
 
 class ErrorBody(ProtocolModel):

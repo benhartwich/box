@@ -132,6 +132,10 @@ MIGRATIONS: list[str] = [
     ALTER TABLE sync_state ADD COLUMN mqtt_port INTEGER;
     ALTER TABLE sync_state ADD COLUMN mqtt_username TEXT;
     """,
+    # 5: SPEC v0.13 §9.3: the own CA of a self-hosted server (PEM, not secret).
+    """
+    ALTER TABLE sync_state ADD COLUMN server_ca TEXT;
+    """,
 ]
 
 

@@ -32,7 +32,9 @@ class SetupNetwork(Protocol):
 class AgentLink(Protocol):
     async def announce(self, *prompts: str) -> None: ...
 
-    async def set_server_url(self, url: str) -> None: ...
+    async def set_server_url(
+        self, url: str, ca: str | None = None, ca_clear: bool = False
+    ) -> None: ...
 
     async def set_soloist_key(self, key: str | None) -> None: ...
 
@@ -52,8 +54,15 @@ class SocketAgentLink:
     async def announce(self, *prompts: str) -> None:
         await self._send({"cmd": "announce", "prompts": [str(p) for p in prompts]})
 
-    async def set_server_url(self, url: str) -> None:
-        await self._send({"cmd": "set_server_url", "url": url})
+    async def set_server_url(self, url: str, ca: str | None = None, ca_clear: bool = False) -> None:
+        """SPEC v0.13 §9.3: ``ca`` replaces the own CA, ``ca_clear`` removes it; neither
+        keeps it (unless the server changes)."""
+        payload: dict[str, object] = {"cmd": "set_server_url", "url": url}
+        if ca is not None:
+            payload["ca"] = ca
+        elif ca_clear:
+            payload["ca_clear"] = True
+        await self._send(payload)
 
     async def set_soloist_key(self, key: str | None) -> None:
         """SPEC v0.9 §9.3: the key goes straight to the agent's ``secret`` table."""
@@ -77,6 +86,7 @@ async def run_setup(
     port: int = 80,
     inactivity_s: float = INACTIVITY_S,
     soloist_key_set: bool = False,
+    server_ca_set: bool = False,
 ) -> bool:
     networks = await asyncio.to_thread(nm.scan)  # before the radio becomes an access point
     error: str | None = None
@@ -86,7 +96,7 @@ async def run_setup(
             await agent.announce(Prompt.SETUP_FAILED)
             return False
         await agent.announce(Prompt.SETUP_START, *spoken_name(ssid))
-        portal = Portal(networks, server_url, error, soloist_key_set)
+        portal = Portal(networks, server_url, error, soloist_key_set, server_ca_set)
         server = await portal.serve(host, port)
         try:
             submission = await _wait(portal, inactivity_s)
@@ -101,7 +111,9 @@ async def run_setup(
             await agent.set_soloist_key(submission.soloist_key)
             soloist_key_set = submission.soloist_key is not None
         if await asyncio.to_thread(nm.connect_wifi, submission.ssid, submission.password):
-            await agent.set_server_url(submission.server_url)
+            await agent.set_server_url(
+                submission.server_url, submission.server_ca, submission.server_ca_clear
+            )
             await agent.announce(Prompt.SETUP_CONNECTED)
             log.info("setup finished", extra={"ssid": submission.ssid})
             return True
@@ -109,6 +121,7 @@ async def run_setup(
         error = "Die Verbindung hat nicht geklappt. Bitte WLAN und Passwort prüfen."
         server_url = submission.server_url
         networks = await asyncio.to_thread(nm.scan)
+        # the CA was not handed over yet: ask for it again rather than keep it in memory
 
 
 async def _wait(portal: Portal, inactivity_s: float) -> Submission | None:

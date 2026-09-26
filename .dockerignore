@@ -1,0 +1,15 @@
+# Build context of deploy/docker/Dockerfile: the repository without local state and secrets.
+.git
+.github
+.dev
+.venv
+**/.venv
+**/__pycache__
+**/*.py[cod]
+.pytest_cache
+.ruff_cache
+.pyright
+**/.env
+**/*.env
+deploy/docker/certs
+image

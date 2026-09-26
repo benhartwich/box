@@ -121,14 +121,25 @@ class StateRepo:
         )
 
     def set_server_url(self, url: str | None) -> None:
-        """A different server means different credentials (SPEC §1.5): pair again."""
+        """A different server means different credentials (SPEC §1.5): pair again. Its own
+        CA belonged to the old server and is dropped (SPEC v0.13 §9.3)."""
         current = self.get()
         if current.server_url == url:
             return
         if current.tenant_id is not None:
             self.clear_tenant()
         with self.db.tx() as c:
-            c.execute("UPDATE sync_state SET server_url = ? WHERE id = 1", (url,))
+            c.execute("UPDATE sync_state SET server_url = ?, server_ca = NULL WHERE id = 1", (url,))
+
+    def server_ca(self) -> str | None:
+        """SPEC v0.13 §9.3: extra trust anchor, only for the server's API and broker."""
+        row = self.db.conn.execute("SELECT server_ca FROM sync_state WHERE id = 1").fetchone()
+        return row["server_ca"] if row and row["server_ca"] else None
+
+    def set_server_ca(self, pem: str | None) -> None:
+        self.get()  # the row exists
+        with self.db.tx() as c:
+            c.execute("UPDATE sync_state SET server_ca = ? WHERE id = 1", (pem,))
 
     def pairing_key(self) -> str:
         """SPEC v0.12 §7.1: 256 random bits, created once with the device id and kept when

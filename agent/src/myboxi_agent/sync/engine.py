@@ -136,7 +136,7 @@ class SyncEngine:
         self._report_wake = asyncio.Event()
         self._repair = False
         self._api: Api | None = None
-        self._api_url: str | None = None
+        self._api_key: tuple[str, str | None] | None = None
         self._last_report: dict[str, Any] | None = None
         self._last_report_at = -math.inf
         self._storage_full_for: int | None = None
@@ -232,10 +232,12 @@ class SyncEngine:
             self.on_credentials()
 
     async def _api_for(self, url: str) -> Api:
-        if self._api is None or self._api_url != url:
+        """A new client when the server or its own CA changes (SPEC v0.13 §9.3)."""
+        key = (url, self.state.server_ca())
+        if self._api is None or self._api_key != key:
             if self._api is not None:
                 await self._api.aclose()
-            self._api, self._api_url = self.api_factory(url), url
+            self._api, self._api_key = self.api_factory(url), key
         return self._api
 
     # --- pairing (SPEC §7.1, §9.5) -----------------------------------------------------------

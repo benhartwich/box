@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import ssl
 import time
 import uuid
 from pathlib import Path
@@ -53,10 +54,16 @@ def _error(response: httpx.Response) -> ApiError:
 
 
 class DeviceApi:
-    def __init__(self, base_url: str, client: httpx.AsyncClient | None = None) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        client: httpx.AsyncClient | None = None,
+        verify: ssl.SSLContext | bool = True,
+    ) -> None:
+        """``verify``: with a self-hosted server's own CA, see ``sync/tls.py``."""
         self.base_url = base_url.rstrip("/")
         self.http = client or httpx.AsyncClient(
-            timeout=httpx.Timeout(30, read=60), follow_redirects=False
+            timeout=httpx.Timeout(30, read=60), follow_redirects=False, verify=verify
         )
         self._token: str | None = None
         self._token_until = 0.0

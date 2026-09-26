@@ -68,7 +68,12 @@ def _cmd_repair(args: argparse.Namespace, settings: Settings) -> int:
 
 
 def _cmd_server(args: argparse.Namespace, settings: Settings) -> int:
-    return _control(settings, {"cmd": "set_server_url", "url": args.url})
+    req: dict[str, Any] = {"cmd": "set_server_url", "url": args.url}
+    if args.ca is not None:  # SPEC v0.13 §9.3: a self-hosted server's own CA
+        req["ca"] = Path(args.ca).read_text(encoding="utf-8")
+    elif args.clear_ca:
+        req["ca_clear"] = True
+    return _control(settings, req)
 
 
 def _cmd_sim(args: argparse.Namespace, settings: Settings) -> int:
@@ -139,6 +144,7 @@ def _cmd_setupd(args: argparse.Namespace, settings: Settings) -> int:
             host=args.host,
             port=args.port,
             soloist_key_set=bool(status.get("soloist_key_set")),
+            server_ca_set=bool(status.get("server_ca_set")),
         )
 
     return 0 if asyncio.run(main()) else 1
@@ -268,6 +274,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p = sub.add_parser("server", help="set the server URL (pairs again if it changes)")
     p.add_argument("url")
+    ca = p.add_mutually_exclusive_group()
+    ca.add_argument("--ca", metavar="PEM", help="own CA certificate of a self-hosted server")
+    ca.add_argument("--clear-ca", action="store_true", help="forget the own CA certificate")
     p.set_defaults(func=_cmd_server)
 
     p = sub.add_parser("sim", help="drive a simulated agent (run --sim)")

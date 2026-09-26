@@ -1,0 +1,183 @@
+# Myboxi server for self-hosting (docs/selbst-hosten.md):
+#   cp env.example .env   # fill in, then put the certificate into ./certs
+#   docker compose up -d --build
+# Optional: COMPOSE_PROFILES=mqtt (instant sync, remote control), letsencrypt (certificate
+# via HTTP-01 when ports 80 and 443 are reachable from the internet).
+name: myboxi
+
+x-image: &image
+  image: myboxi-server:local
+  build:
+    context: ../..
+    dockerfile: deploy/docker/Dockerfile
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "5" }
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: [ALL]
+  # The entry point prepares folders as root, then drops to the service user.
+  cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+
+# Server settings shared by the API and the worker (server/src/myboxi_server/settings.py).
+x-server-env: &server-env
+  MYBOXI_SERVER_ENV: prod
+  MYBOXI_SERVER_BASE_URL: ${MYBOXI_BASE_URL:-https://${MYBOXI_DOMAIN}}
+  MYBOXI_SERVER_DATABASE_URL: postgresql://myboxi:${POSTGRES_PASSWORD}@db:5432/myboxi
+  MYBOXI_SERVER_DEVICE_JWT_KEY: ${MYBOXI_DEVICE_JWT_KEY:?set MYBOXI_DEVICE_JWT_KEY in .env}
+  MYBOXI_SERVER_ACCEL_REDIRECT_PREFIX: /_assets/
+  MYBOXI_SERVER_TRUST_PROXY_HEADERS: "true"
+  MYBOXI_SERVER_MAX_UPLOAD_MB: ${MYBOXI_MAX_UPLOAD_MB:-500}
+  MYBOXI_SERVER_MAIL_BACKEND: ${MYBOXI_MAIL_BACKEND:-log}
+  MYBOXI_SERVER_MAIL_FROM: ${MYBOXI_MAIL_FROM:-}
+  MYBOXI_SERVER_SMTP_HOST: ${MYBOXI_SMTP_HOST:-}
+  MYBOXI_SERVER_SMTP_PORT: ${MYBOXI_SMTP_PORT:-587}
+  MYBOXI_SERVER_SMTP_USER: ${MYBOXI_SMTP_USER:-}
+  MYBOXI_SERVER_SMTP_PASSWORD: ${MYBOXI_SMTP_PASSWORD:-}
+  MYBOXI_SERVER_WORKER_CONCURRENCY: ${MYBOXI_WORKER_CONCURRENCY:-1}
+  # With a broker (profile mqtt) boxes get MQTT credentials when they pair.
+  MYBOXI_SERVER_MQTT_HOST: ${MYBOXI_MQTT_PASSWORD:+${MYBOXI_DOMAIN}}
+  MYBOXI_SERVER_MQTT_PORT: ${MYBOXI_MQTT_PORT:-8883}
+  MYBOXI_SERVER_LOG_LEVEL: ${MYBOXI_LOG_LEVEL:-INFO}
+
+# The MQTT service reaches the broker under the public name (see the alias below), so the
+# certificate's host name is checked like on a box. Only it knows the broker password.
+x-mqtt-env: &mqtt-env
+  MYBOXI_SERVER_ENV: prod
+  MYBOXI_SERVER_DATABASE_URL: postgresql://myboxi:${POSTGRES_PASSWORD}@db:5432/myboxi
+  MYBOXI_SERVER_DEVICE_JWT_KEY: ${MYBOXI_DEVICE_JWT_KEY}
+  MYBOXI_SERVER_MQTT_HOST: ${MYBOXI_DOMAIN}
+  MYBOXI_SERVER_MQTT_PORT: "8883"
+  MYBOXI_SERVER_MQTT_PASSWORD: ${MYBOXI_MQTT_PASSWORD:-}
+  MYBOXI_SERVER_LOG_LEVEL: ${MYBOXI_LOG_LEVEL:-INFO}
+
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: myboxi
+      POSTGRES_DB: myboxi
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes: [db:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "myboxi", "-d", "myboxi"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+
+  migrate:
+    <<: *image
+    command: migrate
+    restart: "no"
+    environment: *server-env
+    depends_on:
+      db: { condition: service_healthy }
+
+  api:
+    <<: *image
+    command: api
+    environment: *server-env
+    volumes:
+      - data:/var/lib/myboxi-server
+      - assets:/var/lib/myboxi-server/assets
+      - run:/run/myboxi-server
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    healthcheck:
+      test: ["CMD", "test", "-S", "/run/myboxi-server/api.sock"]
+      interval: 5s
+      retries: 30
+
+  worker:
+    <<: *image
+    command: worker
+    environment: *server-env
+    volumes:
+      - data:/var/lib/myboxi-server
+      - assets:/var/lib/myboxi-server/assets
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+  nginx:
+    <<: *image
+    command: nginx
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID, NET_BIND_SERVICE, KILL]
+    environment:
+      MYBOXI_DOMAIN: ${MYBOXI_DOMAIN:?set MYBOXI_DOMAIN in .env}
+    ports:
+      - "${MYBOXI_LISTEN:+${MYBOXI_LISTEN}:}${MYBOXI_HTTP_PORT:-80}:80"
+      - "${MYBOXI_LISTEN:+${MYBOXI_LISTEN}:}${MYBOXI_HTTPS_PORT:-443}:443"
+    volumes:
+      - assets:/var/lib/myboxi-server/assets:ro
+      - run:/run/myboxi-server
+      - acme:/var/www/certbot
+      - ${MYBOXI_CERTS_DIR:-./certs}:/etc/myboxi/certs:ro
+    depends_on:
+      api: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "curl", "-fsk", "--resolve", "${MYBOXI_DOMAIN}:443:127.0.0.1",
+             "https://${MYBOXI_DOMAIN}/healthz"]
+      interval: 10s
+      retries: 30
+
+  certbot:
+    <<: *image
+    profiles: [letsencrypt]
+    command: certbot
+    environment:
+      MYBOXI_DOMAIN: ${MYBOXI_DOMAIN}
+      MYBOXI_LETSENCRYPT_EMAIL: ${MYBOXI_LETSENCRYPT_EMAIL:-}
+    volumes:
+      - letsencrypt:/etc/letsencrypt
+      - acme:/var/www/certbot
+      - ${MYBOXI_CERTS_DIR:-./certs}:/etc/myboxi/certs
+    depends_on:
+      nginx: { condition: service_started }
+
+  mosquitto:
+    <<: *image
+    profiles: [mqtt]
+    command: mosquitto
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID, KILL]
+    environment:
+      MYBOXI_MQTT_PASSWORD: ${MYBOXI_MQTT_PASSWORD:-}
+    ports: ["${MYBOXI_LISTEN:+${MYBOXI_LISTEN}:}${MYBOXI_MQTT_PORT:-8883}:8883"]
+    volumes:
+      - mosquitto:/var/lib/mosquitto
+      - ${MYBOXI_CERTS_DIR:-./certs}:/etc/myboxi/certs:ro
+    networks:
+      default:
+        aliases: ["${MYBOXI_DOMAIN}"]
+
+  mqtt-setup:
+    <<: *image
+    profiles: [mqtt]
+    command: mqtt-setup
+    restart: "no"
+    environment: *mqtt-env
+    volumes: ["${MYBOXI_CERTS_DIR:-./certs}:/etc/myboxi/certs:ro"]
+    depends_on:
+      mosquitto: { condition: service_started }
+
+  mqtt:
+    <<: *image
+    profiles: [mqtt]
+    command: mqtt
+    environment: *mqtt-env
+    volumes: ["${MYBOXI_CERTS_DIR:-./certs}:/etc/myboxi/certs:ro"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      mqtt-setup: { condition: service_completed_successfully }
+
+volumes:
+  db:
+  data:
+  assets:
+  run:
+  acme:
+  letsencrypt:
+  mosquitto:

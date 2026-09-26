@@ -5,6 +5,7 @@ Raspberry Pi als Box, optionaler Server mit Mandanten für die zentrale Verwaltu
 
 - Spezifikation (Vertrag zwischen Box und Server): [`docs/SPEC.md`](docs/SPEC.md)
 - Arbeitsregeln und Stack: [`CLAUDE.md`](CLAUDE.md)
+- Server selbst betreiben (Docker Compose oder Debian 13): [`docs/selbst-hosten.md`](docs/selbst-hosten.md)
 
 ## Lizenz
 

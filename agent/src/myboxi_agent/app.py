@@ -55,6 +55,7 @@ from myboxi_agent.store.repos import (
 from myboxi_agent.sync.client import DeviceApi
 from myboxi_agent.sync.engine import Api, SyncEngine, server_url_ok
 from myboxi_agent.sync.mqtt import MqttLink
+from myboxi_agent.sync.tls import normalize_ca, server_verify, valid_ca
 from myboxi_agent.update.installer import read_state
 from myboxi_protocol.messages import (
     CmdMessage,
@@ -133,7 +134,7 @@ class App:
             outbox=self.outbox,
             controller=self.controller,
             clock=clock,
-            api_factory=api_factory or DeviceApi,
+            api_factory=api_factory or self._device_api,
             default_server_url=settings.default_server_url,
             allow_http=settings.allow_http_server or settings.sim,
             hw_model=self.hw_model,
@@ -355,6 +356,7 @@ class App:
             "health": self.adapters.health.snapshot(),
             "setup_phase": self.setup_phase.active(),
             "soloist_key_set": self.state.soloist_key() is not None,
+            "server_ca_set": self.state.server_ca() is not None,
             "soloist": self.spotify.status() if self.spotify is not None else None,
             "sim": self.settings.sim,
         }
@@ -379,7 +381,14 @@ class App:
             url = str(req["url"]) or None
             if url is not None and not server_url_ok(url, allow_http=self._allow_http()):
                 return {"ok": False, "error": "the server url must start with https://"}
-            self.state.set_server_url(url)
+            ca = req.get("ca")
+            if ca is not None and not valid_ca(ca):
+                return {"ok": False, "error": "the CA certificate is not valid PEM"}
+            self.state.set_server_url(url)  # a new server drops the old one's CA
+            if isinstance(ca, str):
+                self.state.set_server_ca(normalize_ca(ca))
+            elif req.get("ca_clear"):
+                self.state.set_server_ca(None)
             self.mqtt.trigger()  # another server means other credentials
             self.sync.trigger()
             return self.status()
@@ -413,6 +422,10 @@ class App:
                 return {"ok": False, "error": f"unknown command {cmd!r}"}
         await asyncio.sleep(0.2)  # let the loops react before reporting
         return self.status()
+
+    def _device_api(self, url: str) -> DeviceApi:
+        """SPEC v0.13 §9.3: a self-hosted server's own CA applies to this client only."""
+        return DeviceApi(url, verify=server_verify(self.state.server_ca()))
 
     def _allow_http(self) -> bool:
         return self.settings.allow_http_server or self.settings.sim

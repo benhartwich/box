@@ -1,6 +1,6 @@
-# Myboxi — Spezifikation v0.12: Datenmodell & Geräteprotokoll
+# Myboxi — Spezifikation v0.13: Datenmodell & Geräteprotokoll
 
-Status: Entwurf · Stand: 2026-09-25 · Änderungen: §14
+Status: Entwurf · Stand: 2026-09-26 · Änderungen: §14
 Scope: Der Vertrag zwischen **Box-Agent** (Raspberry Pi) und **Server**.
 Nicht im Scope: Web-UI, Gehäuse, Image-Build, Rechtliches (eigene Dokumente).
 
@@ -183,10 +183,10 @@ Tabellen spiegeln den für die Box relevanten Ausschnitt: `token`, `content`, `c
 | Tabelle | Zweck |
 |---|---|
 | `local_asset` | sha256, path, bytes, verified_at, last_played_at |
-| `sync_state` | applied_config_rev, applied_device_rev, server_url |
+| `sync_state` | applied_config_rev, applied_device_rev, server_url, `server_ca` (eigene CA eines selbst betriebenen Servers, §9.3), MQTT-Host, -Port und -Benutzer (§6) |
 | `staged_change` | Empfangene, noch nicht aktivierte Änderungen (wartet auf Assets) |
 | `outbox` | Ausstehende Events, bis vom Server bestätigt |
-| `secret` | `device_secret`; `soloist_api_key` (**nie** synchronisiert, nie geloggt) |
+| `secret` | `device_secret`, `mqtt_password`, `pairing_key` (§7.1); `soloist_api_key` (**nie** synchronisiert, nie geloggt) |
 | `podcast_feed` | Je Podcast-Inhalt: Feed-URL, ETag, Last-Modified, letzte Abfrage, Fehlercode (§8.2) |
 | `podcast_episode` | Abspielbare Folgen eines Podcasts (§8.2): `episode_key`, Titel, Enclosure-URL, Datum, Rang (0 = neueste), `selected` (gehört zu den neuesten `keep_latest`), sha256, `gain_db` |
 
@@ -634,6 +634,11 @@ Details:
 - Offenes WLAN `Myboxi-NNNN` (vier Ziffern aus der Seriennummer, damit die Box den Namen mit ihren Ziffern-Ansagen vorlesen kann), Seite unter `http://10.42.0.1/`; alle DNS-Anfragen zeigen dorthin (Captive Portal).
 - Felder: WLAN (Liste oder manuell), Server-URL (Vorgabe `https://app.myboxi.eu`) und optional der Soloist-API-Key (§8.1).
   - Die Server-URL muss mit `https://` beginnen (v0.12): Device-Secret und Tokens gehen nie unverschlüsselt über das Netz. Nur für die Entwicklung (`--sim` oder `allow_http_server`) nimmt die Box `http://` an.
+  - Optional (v0.13) ein eigenes CA-Zertifikat für einen selbst betriebenen Server ohne öffentliches Zertifikat, z. B. nur im Heimnetz.
+    - Format: 1 bis 3 Zertifikate im PEM-Format, höchstens 8 KiB.
+    - Die Box vertraut ihm zusätzlich zu den üblichen CAs, aber nur für die Verbindungen zu diesem Server: Geräte-API (§7) und Broker (§6). Podcast-Feeds, Soloist und Software-Updates nutzen es nie.
+    - Gespeichert in `sync_state.server_ca`. Leer lassen behält das gespeicherte Zertifikat, „Zertifikat entfernen“ löscht es.
+    - Eine andere Server-URL verwirft es, außer im selben Formular kommt ein neues.
   - Der Key ist ein Passwortfeld. Die Seite zeigt ihn nie an, nur „gespeichert“.
   - Leer lassen: der gespeicherte Key bleibt. Das Häkchen „Key löschen“ entfernt ihn.
 - **Ausnahme (v0.9):** Mit aktiviertem Spotify bietet Soloist (nicht der Agent) Spotify Connect im Heimnetz an: mDNS auf UDP 5353 und einen Zeroconf-Port. Alle anderen Dienste bleiben auf `127.0.0.1`, auch die Soloist-WebSocket-API.
@@ -672,6 +677,7 @@ Die ersten 60 min nach einer erfolgreichen Kopplung, gemessen ab `paired_at` (Wa
 - Soloist nimmt den API-Key nur als Kommandozeilenargument an. Er ist damit für lokale Prozesse der Box lesbar, nie für das Netz; die Box hat keine weiteren Benutzerkonten mit Login.
 - Soloist-Key, Device-Secret, MQTT-Passwort und Kopplungsschlüssel nie in Logs, Crash-Reports oder Sync-Payloads. Der Log-Filter erkennt diese Schlüssel auch mit Präfix (z. B. `mqtt_password`).
 - Das Passwort des Broker-Admins kennt nur der MQTT-Dienst des Servers (eigene Env-Datei), nicht Web-UI und Worker.
+- Ein eigenes CA-Zertifikat (§9.3, v0.13) gilt nur für die Verbindungen zum gewählten Server. Wer es erstellt hat, könnte sonst beliebige HTTPS-Verbindungen der Box fälschen, etwa den Soloist-Download.
 - v1 ohne Mikrofon. Kommt Sprache in v2, bleibt die Verarbeitung vollständig lokal; kein Audio zum Server.
 - Events: nur die Liste in §6.5, 30 Tage Aufbewahrung.
 - `button_test` enthält nur Tastennamen, keine Zeitpunkte, und nur während der Einrichtungsphase (§9.6).
@@ -732,6 +738,11 @@ Der Agent wird in M0 gegen einen **Mock-Server** entwickelt, der die Endpunkte a
 ---
 
 ## 14. Änderungen
+
+**v0.13 (2026-09-26)** — Selbst betriebene Server ohne öffentliches Zertifikat; keine Änderung am Protokoll.
+- §4: `sync_state.server_ca`; `secret` nennt `mqtt_password` und `pairing_key`.
+- §9.3: optionales eigenes CA-Zertifikat im Setup-Portal, nur für die Verbindungen zum Server.
+- §10: Grenzen des eigenen CA-Zertifikats.
 
 **v0.12 (2026-09-26)** — MQTT umgesetzt (M2); Protokollversion bleibt `v1`, alle Änderungen additiv.
 - §6: Topics, QoS, ACL, Konten je Box, Verbindung der Box (TLS, Clean Session), ein Serverprozess.

@@ -26,6 +26,7 @@ from myboxi_server.api.web import (
     routes_figures,
     routes_members,
     routes_setup,
+    routes_spotify,
 )
 from myboxi_server.api.web.deps import LoginRequiredError
 from myboxi_server.api.web.render import render
@@ -34,6 +35,7 @@ from myboxi_server.db import create_engine, create_sessionmaker
 from myboxi_server.domain.authz import PermissionDeniedError
 from myboxi_server.domain.case_builds import CaseBuilds
 from myboxi_server.domain.errors import NotFoundError
+from myboxi_server.domain.spotify import SpotifyWeb
 from myboxi_server.domain.updates import UpdateChannel
 from myboxi_server.jobs.app import open_job_app
 from myboxi_server.settings import Settings, get_settings
@@ -46,8 +48,10 @@ SECURITY_HEADERS = {
     b"x-frame-options": b"DENY",
     b"referrer-policy": b"same-origin",
     b"content-security-policy": (
-        b"default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; "
-        b"frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+        # Spotify (SPEC v0.10 §3.6): covers in search results, the login of the household app.
+        b"default-src 'self'; img-src 'self' data: https://i.scdn.co https://*.spotifycdn.com; "
+        b"style-src 'self'; script-src 'self'; frame-ancestors 'none'; base-uri 'self'; "
+        b"form-action 'self' https://accounts.spotify.com"
     ),
 }
 
@@ -197,6 +201,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.update_channel = UpdateChannel(settings.update_manifest_url)
     app.state.case_builds = CaseBuilds(settings.case_cache_mb * 1024 * 1024)
     app.state.asset_store = FilesystemAssetStore(settings.asset_dir, settings.accel_redirect_prefix)
+    app.state.spotify = SpotifyWeb()
     app.add_middleware(AccessLogMiddleware)
     _install_error_handlers(app)
 
@@ -207,6 +212,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(routes_setup.router)
     app.include_router(routes_figures.router)
     app.include_router(routes_contents.router)
+    app.include_router(routes_spotify.router)
     app.include_router(routes_case.router)
     app.include_router(device_router.router)
     app.include_router(device_claim.router)

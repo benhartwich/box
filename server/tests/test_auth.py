@@ -254,6 +254,7 @@ def test_role_matrix_spec_3_2() -> None:
         Perm.DEVICE_RENAME,
         Perm.DEVICE_CONFIG,
         Perm.DEVICE_REMOVE,
+        Perm.SPOTIFY_CONNECT,  # SPEC v0.10 §3.6: the household's Spotify app
     }
     expect[Role.OWNER] = set(Perm)
     for role, perms in expect.items():

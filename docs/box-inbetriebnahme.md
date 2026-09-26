@@ -68,7 +68,9 @@ Einrichten:
 2. In der Web-UI auf der Box-Seite unter **Quellen** „Spotify“ einschalten.
 3. Die Box lädt Spotify Soloist selbst von Spotify herunter (etwa 13 MB). Die Box-Seite zeigt „Spotify wird eingerichtet …“, danach „Noch kein Spotify-Konto verbunden“.
 4. Einmal anmelden: Handy im selben WLAN, in der Spotify-App unten auf das Geräte-Symbol tippen und **Myboxi NNNN** wählen. Danach steht auf der Box-Seite „bereit“.
-5. Unter **Inhalte → Spotify** ein Album oder eine Playlist anlegen (Link aus der Spotify-App teilen und einfügen) und einer Figur zuordnen.
+5. Unter **Inhalte → Spotify** ein Album oder eine Playlist anlegen und einer Figur zuordnen: entweder den Link aus der Spotify-App einfügen („Teilen → Link kopieren“) oder, bequemer, direkt suchen.
+
+Suchen in der App: Unter **Inhalte → Spotify → „Spotify verbinden“** führt die App einmal durch die Einrichtung einer eigenen Spotify-App im [Spotify-Entwicklerportal](https://developer.spotify.com/dashboard), mit Premium-Konto, Redirect URI `https://app.myboxi.eu/spotify/callback`, Häkchen bei „Web API“. Danach die Client-ID eintragen und verbinden. Dann gibt es eine Suche, „Meine Playlists“ und „Meine Alben“; Titel und Cover kommen von Spotify. Das geht mit demselben Entwicklerkonto wie der Spotify-Schlüssel der Box.
 
 So verhält sich die Box:
 - Figur auflegen: Das Album spielt, beim nächsten Mal an derselben Stelle weiter. Die Weiter-Taste springt zum nächsten Titel.

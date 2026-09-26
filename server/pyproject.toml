@@ -18,6 +18,10 @@ dependencies = [
   "pydantic-settings>=2.10",
   "python-multipart>=0.0.20",
   "pyjwt>=2.10",
+  # AES-GCM for stored Spotify refresh tokens (auth/secretbox.py).
+  "cryptography>=44",
+  # Spotify Web API for searching in the web UI (domain/spotify.py).
+  "httpx>=0.28",
   "myboxi-case",
 ]
 

@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% import "_icons.html" as icon %}
+{% block title %}Spotify verbinden · Myboxi{% endblock %}
+{% block content %}
+<a class="back" href="/t/{{ tid }}/contents">{{ icon.back() }}Inhalte</a>
+<h1>Spotify verbinden</h1>
+<p>Mit einer eigenen Spotify-App sucht ihr Alben und Playlists direkt hier, samt Cover, und seht eure eigenen Playlists. Die Box selbst braucht das nicht: Abspielen kann sie, sobald ihr Spotify-Schlüssel eingetragen ist (Einrichtungsmodus der Box).</p>
+
+{% if account and account.refresh_token %}
+<section class="card stack">
+  <h2>Verbunden</h2>
+  <p>Mit dem Spotify-Konto <strong>{{ account.display_name or "unbekannt" }}</strong>{% if account.connected_at %} seit {{ account.connected_at | localtime }}{% endif %}.</p>
+  <p class="actions">
+    <a class="button small" href="/t/{{ tid }}/contents/new?kind=spotify">Spotify durchsuchen</a>
+    {% if ctx.can(Perm.SPOTIFY_CONNECT) %}
+    <form method="post" action="/t/{{ tid }}/spotify/disconnect"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="small secondary">Trennen</button></form>
+    {% endif %}
+  </p>
+</section>
+{% elif account %}
+<section class="card stack">
+  <h2>Noch nicht verbunden</h2>
+  <p class="muted">Client-ID {{ account.client_id }} ist eingetragen.</p>
+</section>
+{% endif %}
+
+{% if ctx.can(Perm.SPOTIFY_CONNECT) %}
+<ol class="guide">
+  <li class="card">
+    <span class="num">1</span>
+    <h2>Spotify-App anlegen</h2>
+    <ol>
+      <li>Das <a href="https://developer.spotify.com/dashboard" rel="noopener" target="_blank">Spotify-Entwicklerportal</a> öffnen und mit dem Spotify-Konto anmelden, das Spotify Premium hat. Beim ersten Mal die Bedingungen bestätigen.</li>
+      <li>„Create app“ wählen. Name zum Beispiel „Myboxi“, Beschreibung beliebig.</li>
+      <li>Bei „Redirect URIs“ genau diese Adresse eintragen und „Add“ tippen:
+        <input class="copy" type="text" readonly value="{{ callback_url }}" aria-label="Redirect URI"></li>
+      <li>Bei „Which API/SDKs are you planning to use?“ „Web API“ ankreuzen, den Bedingungen zustimmen und speichern.</li>
+    </ol>
+  </li>
+  <li class="card">
+    <span class="num">2</span>
+    <h2>Client-ID eintragen</h2>
+    <p>In der neuen App unter „Settings“ bei „Basic Information“ die „Client ID“ kopieren. Das „Client secret“ braucht Myboxi nicht.</p>
+    <form method="post" action="/t/{{ tid }}/spotify/app" class="row">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input class="grow copy" name="client_id" value="{{ account.client_id if account else '' }}" maxlength="64" placeholder="32 Zeichen, z. B. 3f2a…" required aria-label="Client-ID" autocomplete="off" spellcheck="false">
+      <button class="small">Speichern</button>
+    </form>
+  </li>
+  <li class="card">
+    <span class="num">3</span>
+    <h2>Mit Spotify verbinden</h2>
+    <p>Spotify fragt, ob Myboxi eure Playlists und gespeicherten Alben lesen darf. Mehr kann Myboxi damit nicht: nichts abspielen, nichts ändern.</p>
+    <form method="post" action="/t/{{ tid }}/spotify/connect">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button {% if not account %}disabled{% endif %}>{% if account and account.refresh_token %}Neu verbinden{% else %}Mit Spotify verbinden{% endif %}</button>
+    </form>
+    <p class="muted">Meldet Spotify, das Konto sei für die App nicht freigeschaltet: in der App unter „User Management“ Name und E-Mail des Spotify-Kontos eintragen. Spotify erlaubt dort höchstens 5 Konten.</p>
+  </li>
+</ol>
+<p class="muted">Den Spotify-Schlüssel für die Box gibt es im selben Portal unter „Spotify Soloist API Key“. Er wird nur im Einrichtungsmodus der Box eingetragen, nie hier.</p>
+{% endif %}
+{% endblock %}

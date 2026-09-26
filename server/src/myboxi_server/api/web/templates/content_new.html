@@ -20,12 +20,30 @@
   <p class="muted">Die Titel werden für die Box umgewandelt und in der Lautstärke angeglichen. Später kannst du weitere hinzufügen.</p>
 </form>
 {% else %}
+{% if kind == 'spotify' and spotify_ready %}
+<section class="card stack" aria-label="Spotify durchsuchen">
+  <label>Album oder Playlist suchen
+    <input type="search" name="q" placeholder="z. B. Bibi Blocksberg" autocomplete="off"
+           hx-get="/t/{{ tid }}/spotify/search" hx-trigger="input changed delay:400ms, search" hx-target="#spotify-results" hx-swap="outerHTML">
+  </label>
+  <p class="actions">
+    <button type="button" class="small secondary" hx-get="/t/{{ tid }}/spotify/library?what=playlists" hx-target="#spotify-results" hx-swap="outerHTML">Meine Playlists</button>
+    <button type="button" class="small secondary" hx-get="/t/{{ tid }}/spotify/library?what=albums" hx-target="#spotify-results" hx-swap="outerHTML">Meine Alben</button>
+  </p>
+  <div id="spotify-results"></div>
+  <p class="muted">Tipp: Eine eigene Playlist in der Spotify-App pflegen und hier hinzufügen. Die Figur spielt immer ihren aktuellen Stand, in eurer Reihenfolge.</p>
+</section>
+<details class="tech"><summary>Oder einen Link einfügen</summary>
+{% elif kind == 'spotify' %}
+<p class="muted"><a href="/t/{{ tid }}/spotify">Spotify verbinden</a>, dann könnt ihr hier direkt suchen und eure Playlists auswählen.</p>
+{% endif %}
 <form method="post" action="/t/{{ tid }}/contents" class="card stack">
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   <input type="hidden" name="kind" value="{{ kind.value }}">
-  <label>Titel <input name="title" value="{{ form.title or '' }}" maxlength="200" required></label>
+  <label>Titel <input name="title" value="{{ form.title or '' }}" maxlength="200" {% if kind == 'spotify' and spotify_ready %}placeholder="leer lassen: kommt von Spotify"{% else %}required{% endif %}></label>
   {% include "_source_fields.html" %}
   <button type="submit">Anlegen</button>
 </form>
+{% if kind == 'spotify' and spotify_ready %}</details>{% endif %}
 {% endif %}
 {% endblock %}

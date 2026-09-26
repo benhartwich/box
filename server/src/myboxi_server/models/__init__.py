@@ -13,6 +13,7 @@ from myboxi_server.models.library import (
     Token,
     Upload,
 )
+from myboxi_server.models.spotify import SpotifyAccount, SpotifyLogin
 from myboxi_server.models.tenant import Invitation, Membership, Tenant, User, WebSession
 
 __all__ = [
@@ -30,6 +31,8 @@ __all__ = [
     "Pairing",
     "RateLimit",
     "ResumePosition",
+    "SpotifyAccount",
+    "SpotifyLogin",
     "Tenant",
     "Token",
     "Upload",

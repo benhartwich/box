@@ -177,6 +177,7 @@
         <label class="check"><input type="checkbox" name="providers" value="{{ value }}" {% if value in cfg.providers_enabled %}checked{% endif %}> {{ label }}</label>
         {% endfor %}
         <label class="check"><input type="checkbox" name="spotify_allow_explicit" value="true" {% if cfg.spotify_allow_explicit %}checked{% endif %}> Spotify: auch Titel mit Explicit-Kennzeichnung spielen</label>
+        <p class="muted">Spotify braucht außerdem einen Schlüssel auf der Box: <a href="/t/{{ tid }}/spotify">Spotify einrichten</a>.</p>
       </fieldset>
       {% if editable %}<button type="submit">Speichern</button>{% endif %}
     </fieldset>

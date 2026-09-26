@@ -8,7 +8,9 @@ from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse, Response
+from pydantic import ValidationError
 
+from myboxi_protocol.reported import ReportedData
 from myboxi_server.api.web.deps import (
     ContentWriteCtx,
     CurrentSession,
@@ -19,7 +21,8 @@ from myboxi_server.api.web.deps import (
     csrf_protect,
 )
 from myboxi_server.api.web.render import render
-from myboxi_server.domain import contents, spotify, uploads
+from myboxi_server.api.web.routes_boxes import spotify_view
+from myboxi_server.domain import contents, devices, spotify, uploads
 from myboxi_server.domain.authz import TenantContext
 from myboxi_server.domain.errors import DomainError
 from myboxi_server.ids import uuid7
@@ -50,12 +53,35 @@ async def spotify_page(
         {
             "account": await spotify.get_account(db, ctx),
             "callback_url": spotify.callback_url(settings),
+            "boxes": await _boxes(db, ctx),
             "error": error,
             "notice": notice,
         },
         session=session,
         ctx=ctx,
     )
+
+
+async def _boxes(db: DbSession, ctx: TenantContext) -> list[dict[str, str]]:
+    """Where each box stands with Spotify (SPEC v0.9 §6.4), so the page says what is left."""
+    rows: list[dict[str, str]] = []
+    for device in await devices.list_devices(db, ctx):
+        cfg = await devices.get_config(db, ctx, device.id)
+        level, text = "", ""
+        if "spotify" not in cfg.providers_enabled:
+            level, text = "warn", "Spotify ist aus: auf der Box-Seite unter „Quellen“ einschalten."
+        else:
+            try:
+                data = ReportedData.model_validate(device.reported) if device.reported else None
+            except ValidationError:
+                data = None
+            view = spotify_view(data, expiring=False) if data is not None else None
+            if view is None:
+                text = "Eingeschaltet. Die Box meldet ihren Stand, sobald sie online ist."
+            else:
+                level, text = view["level"], view["text"]
+        rows.append({"id": str(device.id), "name": device.name, "level": level, "text": text})
+    return rows
 
 
 def _back(ctx: TenantContext, **query: str) -> RedirectResponse:

@@ -14,6 +14,7 @@ from myboxi_protocol.state import (
     ContentItemUpsert,
     ContentUpsert,
     QuietHours,
+    StartAt,
     StateResponse,
     TokenUpsert,
     Upserts,
@@ -119,6 +120,7 @@ async def _snapshot(db: AsyncSession, tenant_id: uuid.UUID, device_id: uuid.UUID
                     resume=b.resume,
                     shuffle=b.shuffle,
                     repeat=b.repeat.value,
+                    start_at=StartAt.model_validate(b.start_at) if b.start_at else None,
                 )
                 for b in bindings
             ],

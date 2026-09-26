@@ -574,6 +574,61 @@ async def test_spotify_state_on_the_box_page(ui: Ui, soloist: dict[str, Any], te
     assert text in page.text
 
 
+async def test_start_point_from_the_figure_page(ui: Ui) -> None:
+    """SPEC v0.11 §3.9: "ab Titel 2" reaches the box once; the page shows it as waiting."""
+    dev = await pair_device(ui.app, ui.client, ui.tid)
+    rev = await ui.config_rev()
+    r = await ui.post(f"/figures/{ui.lib.token_id}/start", item_index="1")
+    assert "beginnt die Figur ab Titel 2" in r.text
+    assert "Beim nächsten Auflegen: ab „Teil 2“" in r.text
+    assert await ui.config_rev() == rev + 1  # the box syncs it (SPEC §5.1)
+    state = StateResponse.model_validate_json(
+        (await ui.client.get("/api/v1/device/state", headers=dev.auth)).content
+    )
+    (binding,) = state.upserts.binding
+    assert binding.start_at is not None
+    assert (binding.start_at.item_index, binding.start_at.position_ms) == (1, 0)
+    assert "set_at" not in binding.model_dump(mode="json")["start_at"]
+    # the box reports playing from there: the page no longer shows it as waiting
+    await ui.client.post(
+        "/api/v1/device/events",
+        headers=dev.auth,
+        json={"events": [event("resume_position", {"token_id": str(ui.lib.token_id),
+                                                   "item_index": 1, "position_ms": 65_000})
+                         | {"ts": "2099-01-01T00:00:00Z"}]},
+    )  # fmt: skip
+    page = await ui.client.get(ui.url(f"/figures/{ui.lib.token_id}"))
+    assert "Zuletzt: „Teil 2“ bei 1:05" in page.text
+    assert "Beim nächsten Auflegen" not in page.text
+
+
+async def test_new_content_drops_the_start_point(ui: Ui) -> None:
+    await ui.post(f"/figures/{ui.lib.token_id}/start", item_index="1")
+    await ui.post(
+        "/contents", kind="stream", title="Kinderradio", url="https://radio.example.org/s"
+    )
+    async with sessionmaker_of(ui.app)() as db:
+        radio = await db.scalar(select(Content).where(Content.kind == ContentKind.STREAM))
+        assert radio is not None
+    await ui.post(f"/figures/{ui.lib.token_id}/binding", content_id=str(radio.id), repeat="off")
+    async with sessionmaker_of(ui.app)() as db:
+        binding = await db.get(Binding, ui.lib.token_id)
+        assert binding is not None
+        assert binding.start_at is None
+
+
+async def test_radio_is_ready_and_on_by_default(ui: Ui) -> None:
+    """SPEC v0.11 §3.4, §8.3."""
+    page = await ui.client.get(ui.url("/contents"))
+    radio = page.text.split("Radio</strong>")[1].split("</li>")[0]
+    assert "bald auf der Box" not in radio
+    dev = await pair_device(ui.app, ui.client, ui.tid)
+    state = StateResponse.model_validate_json(
+        (await ui.client.get("/api/v1/device/state", headers=dev.auth)).content
+    )
+    assert "stream" in state.device_config.providers_enabled
+
+
 async def test_spotify_is_ready(ui: Ui) -> None:
     page = await ui.client.get(ui.url("/contents"))
     spotify = page.text.split("Spotify</strong>")[1].split("</li>")[0]

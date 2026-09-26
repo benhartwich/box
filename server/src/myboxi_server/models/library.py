@@ -136,6 +136,8 @@ class Binding(Timestamps, Base):
     repeat: Mapped[RepeatMode] = mapped_column(
         pg_enum(RepeatMode, "repeat_mode"), server_default=RepeatMode.OFF.value
     )
+    # SPEC v0.11 §3.9: {"id", "item_index", "position_ms", "set_at"}; the box applies it once.
+    start_at: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
 
 
 class Upload(UuidPk, Timestamps, Base):

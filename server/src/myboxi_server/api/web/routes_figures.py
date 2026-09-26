@@ -22,7 +22,7 @@ from myboxi_server.auth.sessions import SessionInfo
 from myboxi_server.domain import bindings, contents, tokens
 from myboxi_server.domain.authz import TenantContext
 from myboxi_server.domain.errors import DomainError, NotFoundError
-from myboxi_server.models.enums import RepeatMode
+from myboxi_server.models.enums import ContentKind, RepeatMode
 
 router = APIRouter(prefix="/t/{tid}/figures", dependencies=[Depends(csrf_protect)])
 
@@ -127,12 +127,20 @@ async def _figure_page(
     status_code: int = 200,
 ) -> Response:
     token = await tokens.get_token(db, ctx, token_id)
+    binding = await bindings.get_binding(db, ctx, token_id)
+    content = await contents.get_content(db, ctx, binding.content_id) if binding else None
+    titles: list[str] = []
+    if content is not None and content.kind == ContentKind.COLLECTION:
+        titles = [item.title for item, _ in await contents.list_items(db, ctx, content.id)]
     return render(
         request,
         "figure.html",
         {
             "token": token,
-            "binding": await bindings.get_binding(db, ctx, token_id),
+            "binding": binding,
+            "content": content,
+            "titles": titles,
+            "listening": await bindings.listening(db, ctx, token_id),
             "contents": await contents.list_contents(db, ctx),
             "repeat_labels": REPEAT_LABELS,
             "error": error,
@@ -208,3 +216,28 @@ async def delete_binding(db: DbSession, ctx: BindingWriteCtx, token_id: uuid.UUI
     await bindings.delete_binding(db, ctx, token_id)
     await db.commit()
     return RedirectResponse(f"/t/{ctx.tenant_id}/figures/{token_id}", status_code=303)
+
+
+@router.post("/{token_id}/start")
+async def set_start(
+    request: Request,
+    db: DbSession,
+    session: CurrentSession,
+    ctx: BindingWriteCtx,
+    token_id: uuid.UUID,
+    item_index: Annotated[int, Form()] = 0,
+) -> Response:
+    """SPEC v0.11 §3.9: "von vorn" or "ab Titel N" at the next placement."""
+    try:
+        await bindings.set_start(db, ctx, token_id, item_index)
+    except DomainError as exc:
+        await db.rollback()
+        return await _figure_page(
+            request, db, session, ctx, token_id, error=exc.message, status_code=400
+        )
+    await db.commit()
+    what = "von vorn" if item_index == 0 else f"ab Titel {item_index + 1}"
+    return await _figure_page(
+        request, db, session, ctx, token_id,
+        notice=f"Beim nächsten Auflegen beginnt die Figur {what}.",
+    )  # fmt: skip

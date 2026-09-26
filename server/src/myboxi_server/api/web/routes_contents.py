@@ -77,7 +77,7 @@ KIND_CHOICES = (
     ),
     KindChoice(
         ContentKind.STREAM, "radio", "Radio",
-        "Internetradio über eine Stream-Adresse.", ready=False,
+        "Internetradio über eine Stream-Adresse. Spielt nur mit Internet.", ready=True,
     ),
 )  # fmt: skip
 PROFILES = (

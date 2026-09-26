@@ -72,7 +72,7 @@ server/                 FastAPI-Server (ab M1)
     domain/             Mandanten, Figuren, Inhalte, Bindings, Revisionen
     storage/            Asset-Store-Schnittstelle + Dateisystem-Backend
     jobs/               procrastinate-Tasks
-    mqtt/               Dynsec-Provisionierung, notify/cmd
+    mqtt/               Dynsec-Provisionierung, notify/cmd (Dienst `myboxi-server mqtt`)
   migrations/           Alembic
 tools/mock-server/      Statischer Mock der Geräte-API aus SPEC §7
 hardware/case/          Gehäuse-Generator „Box gestalten“ (manifold3d), docs/gehaeuse.md
@@ -148,4 +148,4 @@ Vor jedem Commit: Tests, ruff, pyright und `reuse lint` grün.
 
 ## Aktueller Stand
 
-Agent: **M0**, Podcasts (**M3**), Spotify (**M4**) · Server: **M1** (siehe SPEC §12). Offene Punkte: SPEC §13. Spec-Version: v0.11.
+Agent: **M0**, **M2** (MQTT), Podcasts (**M3**), Spotify (**M4**) · Server: **M1**, **M2** (siehe SPEC §12). Offene Punkte: SPEC §13. Spec-Version: v0.12.

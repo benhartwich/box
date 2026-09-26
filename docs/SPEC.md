@@ -1,4 +1,4 @@
-# Myboxi — Spezifikation v0.11: Datenmodell & Geräteprotokoll
+# Myboxi — Spezifikation v0.12: Datenmodell & Geräteprotokoll
 
 Status: Entwurf · Stand: 2026-09-25 · Änderungen: §14
 Scope: Der Vertrag zwischen **Box-Agent** (Raspberry Pi) und **Server**.
@@ -288,6 +288,24 @@ Broker: Mosquitto 2 mit Dynamic-Security-Plugin, TLS direkt auf Port 8883 (Zerti
 Topic-Präfix: `myboxi/v1/{device_id}/`
 ACL: Eine Box darf ausschließlich unter ihrem eigenen Präfix lesen und schreiben. Der Server legt beim Pairing pro Box einen Dynsec-Client (Username = `device_id`) und eine Rolle mit genau diesem Präfix an und entfernt beide beim Unpair.
 
+**Umsetzung (v0.12)**
+
+| Topic unter `myboxi/v1/{device_id}/` | Richtung | QoS | Retained |
+|---|---|---|---|
+| `notify` | Server → Box | 1 | nein |
+| `cmd` | Server → Box | 1 | nein |
+| `cmd/ack` | Box → Server | 1 | nein |
+| `reported` | Box → Server | 1 | ja |
+| `events` | Box → Server | 1 | nein, ein Event je Nachricht |
+| `online` | Box → Server | 1 | ja, `1` bzw. `0` als Last Will |
+
+- **Zugang:** Die Box bekommt beim Pairing eigene Zugangsdaten (§7.1): Username = `device_id`, Passwort mit 256 Bit Zufall, genau einmal ausgeliefert. Der Server legt das Broker-Konto wenige Sekunden danach an; bis dahin wiederholt die Box den Verbindungsaufbau. Entkoppeln löscht das Konto.
+- **Rechte (ACL):** Die Box darf nur `reported`, `events`, `cmd/ack` und `online` unter ihrem Präfix senden und nur `notify` und `cmd` darunter abonnieren. Der Server ordnet eingehende Nachrichten allein über das Topic zu, das der Broker so absichert, und prüft jede Nachricht mit den Protokollmodellen.
+- **Verbindung der Box:** TLS ab Version 1.2 mit Prüfung von Zertifikat und Hostname; Client-ID `box-{device_id}`; Keepalive 60 s; Clean Session, damit nichts nachgeliefert wird, was während einer Offline-Zeit eingereiht wurde; neuer Versuch nach 5 s, verdoppelt bis 2 min.
+- **Nach jedem Verbindungsaufbau** fragt die Box den State ab (§5.2); `notify` wird deshalb nicht gespeichert.
+- **Server:** genau ein Prozess spricht mit dem Broker. Er sendet `notify`, sobald sich `config_rev` oder `device_rev` einer Box ändern, und Kommandos aus der App.
+- Ohne MQTT-Verbindung nutzt die Box für `reported` und Events weiter HTTPS (§7.3).
+
 ### 6.0 Envelope (alle Nachrichten)
 ```json
 { "v": 1, "id": "01J8Z...ULID", "ts": "2026-09-24T18:02:11Z", "type": "…", "data": { } }
@@ -317,11 +335,17 @@ Jedes Kommando hat ein Ablaufdatum. **Abgelaufene Kommandos werden verworfen**, 
 
 Standard-TTL: 60 Sekunden.
 
+- Kommandos sendet die App nur für Rollen ≥ `admin` (§3.2).
+- Ohne verlässliche Uhrzeit (§5.6) kann die Box das Ablaufdatum nicht prüfen und führt das Kommando aus; die Clean Session (§6) verhindert, dass alte Kommandos nachgeliefert werden.
+- `play_token` wirkt wie das Auflegen der Figur: Ruhezeiten, Lautstärke-Policy und `start_volume` gelten. Das Abnehmen einer anderen Figur pausiert sie nicht.
+- `set_volume` geht wie jede Lautstärke durch die Policy (§9.2).
+- `stop` pausiert und sichert die Position.
+
 ### 6.3 `cmd/ack` — Box → Server, QoS 1
 ```json
 { "type": "cmd_ack", "data": { "cmd_id": "01J8Z...", "result": "ok" } }
 ```
-`result`: `ok` \| `expired` \| `rejected` \| `error`, optional `message`.
+`result`: `ok` \| `expired` \| `rejected` \| `error`, optional `message`. Bei `rejected` ist `message` ein Maschinencode: `invalid`, `unknown_token`, `loading`, `quiet_hours` oder ein Code aus §6.5.
 
 ### 6.4 `reported` — Box → Server, QoS 1, retained
 Bei Änderung, höchstens alle 30 s (in der Einrichtungsphase alle 5 s, §9.6), mindestens alle 10 min. Ohne MQTT-Verbindung sendet die Box denselben Envelope per `POST /device/reported` (§7.3).
@@ -668,7 +692,7 @@ Die Box aktualisiert den Agent (samt Ansagen) selbst, sobald sie online ist.
 |---|---|---|
 | M0 | Agent offline: RFID, Tasten, lokale Assets aus einem Ordner, SQLite, Lautstärkeregeln, Resume | nein |
 | M1 | Server-MVP: Mandanten, Nutzer, Rollen, Upload + Transkodierung, Figuren, Bindings; Pairing; `GET /device/state`; Asset-Download | ja |
-| M2 | MQTT: `notify`, `cmd` mit TTL, `reported`, `events`, Outbox | ja |
+| M2 | MQTT: `notify`, `cmd` mit TTL, `reported`, `events`, Outbox (umgesetzt mit v0.12) | ja |
 | M3 | Podcast-Provider | ja |
 | M4 | Spotify-Provider inkl. Update-Job und Katalog-Wächter | nein |
 | M5 | Image-Build in CI (read-only Root, Setup-Modus) | – |
@@ -691,6 +715,11 @@ Der Agent wird in M0 gegen einen **Mock-Server** entwickelt, der die Endpunkte a
 ---
 
 ## 14. Änderungen
+
+**v0.12 (2026-09-26)** — MQTT umgesetzt (M2); Protokollversion bleibt `v1`, alle Änderungen additiv.
+- §6: Topics, QoS, ACL, Konten je Box, Verbindung der Box (TLS, Clean Session), ein Serverprozess.
+- §6.2: Kommandos nur ab `admin`, ohne verlässliche Zeit, Verhalten von `play_token`, `set_volume`, `stop`.
+- §6.3: Codes für `rejected`.
 
 **v0.11 (2026-09-26)** — Radio und Startpunkt aus der App; Protokollversion bleibt `v1`, alle Änderungen additiv.
 - §3.4: `stream` gehört zum Standard von `providers_enabled`.

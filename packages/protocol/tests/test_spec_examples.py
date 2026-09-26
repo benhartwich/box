@@ -535,3 +535,13 @@ def test_binding_start_at_v0_11() -> None:
         BindingUpsert.model_validate(
             {"token_id": TOKEN, "content_id": CONTENT, "start_at": {"id": TOKEN, "item_index": -1}}
         )
+
+
+def test_mqtt_topics_6() -> None:
+    from myboxi_protocol.topics import parse, topic
+
+    device = uuid.UUID(TOKEN)
+    assert topic(device, "cmd/ack") == f"myboxi/v1/{TOKEN}/cmd/ack"
+    assert parse(f"myboxi/v1/{TOKEN}/cmd/ack") == (device, "cmd/ack")
+    assert parse("myboxi/v1/not-a-uuid/events") is None
+    assert parse(f"box/v1/{TOKEN}/events") is None

@@ -1,4 +1,4 @@
-# Myboxi — Spezifikation v0.9: Datenmodell & Geräteprotokoll
+# Myboxi — Spezifikation v0.10: Datenmodell & Geräteprotokoll
 
 Status: Entwurf · Stand: 2026-09-25 · Änderungen: §14
 Scope: Der Vertrag zwischen **Box-Agent** (Raspberry Pi) und **Server**.
@@ -117,7 +117,7 @@ Hinweis: UIDs sind nicht geheim und klonbar. Sie haben **keine** Sicherheitsfunk
 `source` je `kind`:
 - `collection`: `{}` — Einträge in `content_item`
 - `podcast`: `{ "feed_url": "...", "keep_latest": 5, "order": "newest_first" }`
-- `spotify`: `{ "uri": "spotify:album:..." }` — nur die URI, kein Web-API-Zugriff nötig
+- `spotify`: `{ "uri": "spotify:album:..." }` — nur die URI; die Box nutzt nie die Spotify Web API (§8.1)
 - `stream`: `{ "url": "https://..." }` — nur online spielbar
 
 ### 3.7 `content_item` (Titel einer `collection`)
@@ -135,6 +135,13 @@ content_id, position (int), asset_id, title, duration_ms.
 | duration_ms | int | Nur Audio |
 
 Cover (`content.cover_asset_id`) sind Bild-Assets (JPEG, 512×512) und nur für die App bestimmt; sie erscheinen nicht im State (§5.4), weil die Box kein Display hat.
+
+**Spotify in der Web-UI (v0.10):** Ein Haushalt kann seine eigene Spotify-App verbinden, um Alben und Playlists zu suchen, eigene Playlists und gespeicherte Alben zu sehen und Titel und Cover zu übernehmen.
+- Web API mit Authorization Code und PKCE; der Server kennt nur die Client-ID dieser App, kein Client-Secret.
+- Spotify erlaubt Apps im Entwicklungsmodus für höchstens 5 Konten, deren Besitzer Premium hat. Deshalb legt jeder Haushalt eine eigene App an.
+- Scopes: `playlist-read-private`, `playlist-read-collaborative`, `user-library-read`. Nichts abspielen, nichts ändern.
+- Der Refresh-Token liegt nur verschlüsselt auf dem Server; Access-Tokens nur im Arbeitsspeicher. Nichts davon erreicht die Box; sie bekommt weiterhin nur `source.uri`.
+- Verbinden und Trennen: Rolle ≥ `admin`; suchen und übernehmen: Rolle ≥ `contributor`.
 
 Uploads werden serverseitig auf Opus (Mono, 48 kbit/s für Sprache, 96 kbit/s Stereo für Musik) transkodiert und loudness-normalisiert (EBU R128, −16 LUFS). Die Box bekommt nur transkodierte Assets.
 
@@ -670,6 +677,9 @@ Der Agent wird in M0 gegen einen **Mock-Server** entwickelt, der die Endpunkte a
 ---
 
 ## 14. Änderungen
+
+**v0.10 (2026-09-26)** — Spotify-Suche in der Web-UI; keine Änderung am Protokoll oder am Datenmodell der Box.
+- §3.6: eigene Spotify-App des Haushalts (Web API, PKCE) für Suche, Bibliothek, Titel und Cover; die Box bleibt ohne Web API.
 
 **v0.9 (2026-09-25)** — Spotify-Provider (M4); Protokollversion bleibt `v1`, alle Änderungen additiv.
 - §3.4: `spotify_allow_explicit`.

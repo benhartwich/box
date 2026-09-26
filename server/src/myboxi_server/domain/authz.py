@@ -21,6 +21,7 @@ class Perm(StrEnum):
     DEVICE_REMOVE = "device.remove"
     MEMBER_INVITE = "member.invite"
     MEMBER_MANAGE = "member.manage"
+    SPOTIFY_CONNECT = "spotify.connect"
 
 
 MIN_ROLE: dict[Perm, RoleRank] = {
@@ -35,6 +36,8 @@ MIN_ROLE: dict[Perm, RoleRank] = {
     Perm.DEVICE_RENAME: RoleRank.ADMIN,
     Perm.DEVICE_CONFIG: RoleRank.ADMIN,
     Perm.DEVICE_REMOVE: RoleRank.ADMIN,
+    # SPEC v0.10 §3.6: the household's own Spotify app for searching
+    Perm.SPOTIFY_CONNECT: RoleRank.ADMIN,
     # owner: "alles inkl. Abrechnung, Mandant löschen, Nutzer einladen"
     Perm.MEMBER_INVITE: RoleRank.OWNER,
     Perm.MEMBER_MANAGE: RoleRank.OWNER,

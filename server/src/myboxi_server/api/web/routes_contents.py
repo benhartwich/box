@@ -23,8 +23,9 @@ from myboxi_server.api.web.deps import (
     is_htmx,
 )
 from myboxi_server.api.web.render import render
+from myboxi_server.api.web.routes_spotify import add_spotify_content
 from myboxi_server.auth.sessions import SessionInfo
-from myboxi_server.domain import contents, uploads
+from myboxi_server.domain import contents, spotify, uploads
 from myboxi_server.domain.authz import TenantContext
 from myboxi_server.domain.errors import DomainError, InvalidInputError, NotFoundError
 from myboxi_server.ids import uuid7
@@ -71,8 +72,8 @@ KIND_CHOICES = (
     ),
     KindChoice(
         ContentKind.SPOTIFY, "disc", "Spotify",
-        "Album oder Playlist. Braucht Spotify Premium, einen Spotify-Schlüssel auf der Box und "
-        "Internet.", ready=True,
+        "Album oder Playlist suchen oder Link einfügen. Braucht Spotify Premium und Internet.",
+        ready=True,
     ),
     KindChoice(
         ContentKind.STREAM, "radio", "Radio",
@@ -110,20 +111,32 @@ async def content_list(
     )
 
 
+async def _spotify_ready(db: DbSession, ctx: TenantContext) -> bool:
+    """The household connected its own Spotify app (SPEC v0.10 §3.6)."""
+    account = await spotify.get_account(db, ctx)
+    return account is not None and account.refresh_token is not None
+
+
 @router.get("/contents/new")
 async def new_content_form(
     request: Request,
+    db: DbSession,
     session: CurrentSession,
     ctx: ContentWriteCtx,
     kind: ContentKind = ContentKind.COLLECTION,
+    error: str | None = None,
 ) -> Response:
     return render(
         request,
         "content_new.html",
-        {"kind": kind, "kind_headings": KIND_HEADINGS, "profiles": PROFILES, "form": {}},
+        {
+            "kind": kind, "kind_headings": KIND_HEADINGS, "profiles": PROFILES, "form": {},
+            "spotify_ready": kind == ContentKind.SPOTIFY and await _spotify_ready(db, ctx),
+            "error": error,
+        },
         session=session,
         ctx=ctx,
-    )
+    )  # fmt: skip
 
 
 def _source(kind: ContentKind, form: dict[str, str]) -> dict[str, Any]:
@@ -157,13 +170,16 @@ async def create_content(
     ctx: ContentWriteCtx,
     settings: SettingsDep,
     kind: Annotated[ContentKind, Form()],
-    title: Annotated[str, Form(max_length=300)],
+    title: Annotated[str, Form(max_length=300)] = "",
     files: Annotated[list[UploadFile] | None, File()] = None,
     profile: Annotated[UploadProfile, Form()] = UploadProfile.MUSIC,
 ) -> Response:
     """Create a content; a collection comes with its first files in the same form."""
     fields = await _form_fields(request)
     try:
+        if kind == ContentKind.SPOTIFY:
+            content_id = await _create_spotify(request, db, ctx, settings, title, fields)
+            return RedirectResponse(f"/t/{ctx.tenant_id}/contents/{content_id}", status_code=303)
         content = await contents.create_content(
             db, ctx, kind=kind, title=title, source=_source(kind, fields)
         )
@@ -178,6 +194,7 @@ async def create_content(
                 "profiles": PROFILES,
                 "form": fields,
                 "error": exc.message,
+                "spotify_ready": kind == ContentKind.SPOTIFY and await _spotify_ready(db, ctx),
             },
             session=session,
             ctx=ctx,
@@ -187,6 +204,32 @@ async def create_content(
     if kind == ContentKind.COLLECTION and files:
         return await _accept_files(request, db, settings, session, ctx, content.id, files, profile)
     return RedirectResponse(f"/t/{ctx.tenant_id}/contents/{content.id}", status_code=303)
+
+
+async def _create_spotify(
+    request: Request,
+    db: DbSession,
+    ctx: TenantContext,
+    settings: Settings,
+    title: str,
+    fields: dict[str, str],
+) -> uuid.UUID:
+    """A pasted link; with a connected Spotify app title and cover come from Spotify."""
+    link = fields.get("uri", "")
+    item: spotify.Item | None = None
+    if await _spotify_ready(db, ctx):
+        web: spotify.SpotifyWeb = request.app.state.spotify
+        try:
+            item = await web.lookup(db, ctx, settings, link)
+        except DomainError:
+            item = None  # the link alone is enough (SPEC §3.6)
+    title = title.strip() or (item.name if item else "")
+    if not title:
+        raise InvalidInputError("Bitte einen Titel angeben.")
+    return await add_spotify_content(
+        request, db, ctx, settings,
+        uri=item.uri if item else link, title=title, image=item.image_large if item else None,
+    )  # fmt: skip
 
 
 async def _tracks_context(

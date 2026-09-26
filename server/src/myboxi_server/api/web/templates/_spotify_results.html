@@ -1,0 +1,26 @@
+{# Search results and library lists (SPEC v0.10 §3.6); HTMX partial. #}
+{% import "_icons.html" as icon %}
+<div id="spotify-results">
+{% if error %}
+  <p class="msg error" role="alert">{{ error }}</p>
+{% elif items %}
+  <ul class="list card">
+    {% for item in items %}
+    <li class="row nowrap">
+      {% if item.image %}<img class="thumb" src="{{ item.image }}" alt="" width="48" height="48" loading="lazy" referrerpolicy="no-referrer">
+      {% else %}<span class="thumb-ph" aria-hidden="true">{{ icon.disc(22) }}</span>{% endif %}
+      <span class="stack-0 grow"><strong>{{ item.name }}</strong><span class="muted">{{ item.subtitle }}{% if item.tracks %} · {{ item.tracks }} Titel{% endif %}</span></span>
+      <form method="post" action="/t/{{ tid }}/spotify/add">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="uri" value="{{ item.uri }}">
+        <input type="hidden" name="title" value="{{ item.name }}">
+        <input type="hidden" name="image" value="{{ item.image_large or '' }}">
+        <button class="small">Hinzufügen</button>
+      </form>
+    </li>
+    {% endfor %}
+  </ul>
+{% elif query or what %}
+  <p class="muted">Nichts gefunden.</p>
+{% endif %}
+</div>

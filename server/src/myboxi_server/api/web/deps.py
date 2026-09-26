@@ -101,6 +101,7 @@ ClaimCtx = Annotated[TenantContext, Depends(require(Perm.DEVICE_CLAIM))]
 RenameCtx = Annotated[TenantContext, Depends(require(Perm.DEVICE_RENAME))]
 ConfigCtx = Annotated[TenantContext, Depends(require(Perm.DEVICE_CONFIG))]
 RemoveCtx = Annotated[TenantContext, Depends(require(Perm.DEVICE_REMOVE))]
+SpotifyCtx = Annotated[TenantContext, Depends(require(Perm.SPOTIFY_CONNECT))]
 
 
 def is_htmx(request: Request) -> bool:

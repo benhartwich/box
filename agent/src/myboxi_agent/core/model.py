@@ -37,6 +37,8 @@ class Playable:
     shuffle: bool
     repeat: RepeatMode
     provider: ProviderName = "local"
+    # SPEC v0.11 §3.9: a start point from the app, used once instead of the resume position.
+    start: ResumePoint | None = None
     # SPEC v0.9 §8.1: the provider walks the tracks itself (a Spotify context); ``items`` holds
     # the context URI only and resume points carry the track index and URI.
     context: bool = False

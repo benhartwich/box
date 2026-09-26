@@ -148,4 +148,4 @@ Vor jedem Commit: Tests, ruff, pyright und `reuse lint` grün.
 
 ## Aktueller Stand
 
-Agent: **M0**, Podcasts (**M3**), Spotify (**M4**) · Server: **M1** (siehe SPEC §12). Offene Punkte: SPEC §13. Spec-Version: v0.10.
+Agent: **M0**, Podcasts (**M3**), Spotify (**M4**) · Server: **M1** (siehe SPEC §12). Offene Punkte: SPEC §13. Spec-Version: v0.11.

@@ -85,7 +85,7 @@ class DeviceConfig(Timestamps, Base):
     locale: Mapped[str] = mapped_column(Text, server_default="de-AT")
     timezone: Mapped[str] = mapped_column(Text, server_default="Europe/Vienna")
     providers_enabled: Mapped[list[str]] = mapped_column(
-        ARRAY(Text), server_default=text("ARRAY['local','podcast']::text[]")
+        ARRAY(Text), server_default=text("ARRAY['local','podcast','stream']::text[]")
     )
     auto_update: Mapped[bool] = mapped_column(server_default=text("true"))  # SPEC v0.7 §3.4
     spotify_allow_explicit: Mapped[bool] = mapped_column(server_default=text("false"))  # v0.9

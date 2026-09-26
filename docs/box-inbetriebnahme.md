@@ -56,7 +56,15 @@ Gut zu wissen:
 - Feed und Folgen kommen direkt vom Anbieter des Podcasts, nicht über den Myboxi-Server. Der Anbieter sieht dabei die IP-Adresse eures Anschlusses.
 - Lässt sich ein Feed nicht lesen, steht das auf der Box-Seite unter „Probleme bei der Wiedergabe“.
 
-## 7. Spotify
+## 7. Radio
+
+Unter **Inhalte → Radio** die Stream-Adresse eines Senders eintragen (`https://…`, auch `.m3u` oder `.pls`) und einer Figur zuordnen. Radio spielt nur mit Internet und immer live; die Weiter-Taste hat hier keinen nächsten Titel. Radio ist auf jeder Box eingeschaltet und lässt sich auf der Box-Seite unter **Quellen** abschalten.
+
+## 8. Von vorn oder ab einem bestimmten Titel
+
+Auf der Seite einer Figur zeigt **Weiterhören**, wo sie zuletzt war. Mit „Von vorn beginnen“ oder „Ab diesem Titel“ legt ihr fest, wo sie beim nächsten Auflegen startet. Das gilt einmal; danach spielt sie wieder dort weiter, wo das Kind aufgehört hat. Die Box übernimmt es beim nächsten Abgleich, spätestens nach 15 Minuten.
+
+## 9. Spotify
 
 Voraussetzungen:
 - Spotify Premium.

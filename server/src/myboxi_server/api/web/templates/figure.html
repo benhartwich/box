@@ -45,6 +45,41 @@
   {% endif %}
 </section>
 
+{% if binding and content and content.kind.value != 'stream' %}
+{% set unit = {"podcast": "Folge", "spotify": "Titel"}.get(content.kind.value, "Titel") %}
+<section class="card stack" aria-labelledby="listening">
+  <h2 id="listening">Weiterhören</h2>
+  {% set pos = listening.position %}
+  {% if pos %}
+  <p>Zuletzt: {% if titles and pos.item_index < titles | length %}„{{ titles[pos.item_index] }}“{% else %}{{ unit }} {{ pos.item_index + 1 }}{% endif %}{% if pos.position_ms %} bei {{ (pos.position_ms // 60000) }}:{{ "%02d" | format((pos.position_ms // 1000) % 60) }}{% endif %} <span class="muted">({{ pos.updated_at | localtime }})</span></p>
+  {% else %}
+  <p class="muted">Die Box hat noch keine Position gemeldet.</p>
+  {% endif %}
+  {% if listening.pending_index is not none %}
+  <p class="msg ok">Beim nächsten Auflegen: {% if listening.pending_index == 0 %}von vorn{% elif titles and listening.pending_index < titles | length %}ab „{{ titles[listening.pending_index] }}“{% else %}ab {{ unit }} {{ listening.pending_index + 1 }}{% endif %}.</p>
+  {% endif %}
+  {% if ctx.can(Perm.BINDING_WRITE) %}
+  <div class="actions">
+    <form method="post" action="/t/{{ tid }}/figures/{{ token.id }}/start">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="item_index" value="0">
+      <button class="small secondary">Von vorn beginnen</button>
+    </form>
+    {% if titles | length > 1 %}
+    <form method="post" action="/t/{{ tid }}/figures/{{ token.id }}/start" class="row">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <select name="item_index" aria-label="Titel">
+        {% for t in titles %}<option value="{{ loop.index0 }}">{{ loop.index }}. {{ t }}</option>{% endfor %}
+      </select>
+      <button class="small secondary">Ab diesem Titel</button>
+    </form>
+    {% endif %}
+  </div>
+  <p class="muted">Gilt einmal, beim nächsten Auflegen der Figur{% if content.kind.value == 'podcast' %} (Folge 1 ist die erste in der eingestellten Reihenfolge){% endif %}.</p>
+  {% endif %}
+</section>
+{% endif %}
+
 {% if ctx.can(Perm.TOKEN_WRITE) %}
 <section class="card">
   <h2>Figur bearbeiten</h2>

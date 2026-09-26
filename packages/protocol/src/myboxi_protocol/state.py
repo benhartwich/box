@@ -55,8 +55,8 @@ class DeviceConfig(ProtocolModel):
     locale: Annotated[str, StringConstraints(pattern=r"^[a-z]{2,3}(?:-[A-Z]{2})?$")] = "de-AT"
     timezone: Annotated[str, StringConstraints(min_length=1, max_length=64)] = "Europe/Vienna"
     providers_enabled: list[ProviderName] = Field(
-        default_factory=lambda: ["local", "podcast"]  # pyright: ignore[reportUnknownLambdaType]
-    )
+        default_factory=lambda: ["local", "podcast", "stream"]  # pyright: ignore[reportUnknownLambdaType]
+    )  # SPEC v0.11: stream is on by default
     auto_update: bool = True  # SPEC v0.7 §3.4
     spotify_allow_explicit: bool = False  # SPEC v0.9 §3.4, §8.1
 
@@ -130,12 +130,22 @@ class ContentItemUpsert(ProtocolModel):
     duration_ms: NonNegativeInt
 
 
+class StartAt(ProtocolModel):
+    """SPEC v0.11 §3.9: where the next placement starts, set in the app; applied once per id."""
+
+    id: UUID
+    item_index: NonNegativeInt = 0
+    position_ms: NonNegativeInt = 0
+
+
 class BindingUpsert(ProtocolModel):
     token_id: UUID
     content_id: UUID
     resume: bool = True
     shuffle: bool = False
     repeat: RepeatMode = "off"
+    # Omitted (not null) when not set, as before v0.11.
+    start_at: StartAt | None = Field(default=None, exclude_if=lambda v: v is None)
 
 
 class Upserts(ProtocolModel):

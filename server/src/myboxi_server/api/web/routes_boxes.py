@@ -42,7 +42,7 @@ PROVIDERS = [
     ("local", "Eigene Dateien"),
     ("podcast", "Podcasts"),
     ("spotify", "Spotify"),
-    ("stream", "Streams"),
+    ("stream", "Radio"),
 ]
 LOCALES = ["de-AT", "de-DE", "de-CH", "en-GB", "en-US"]
 TIMEZONES = ["Europe/Vienna", "Europe/Berlin", "Europe/Zurich", "Europe/London", "UTC"]
